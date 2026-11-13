@@ -41,6 +41,34 @@ export function formatDate(dateInput: string | Date | null | undefined): string 
 }
 
 /**
+ * Format service period date range.
+ * Example: ("2026-11-01", "2026-11-30") -> "01 November 2026 – 30 November 2026"
+ */
+export function formatServicePeriod(startDate?: string, endDate?: string): string {
+  if (!startDate || !endDate) return '';
+  try {
+    const s = new Date(startDate);
+    const e = new Date(endDate);
+    if (isNaN(s.getTime()) || isNaN(e.getTime())) return `${startDate} – ${endDate}`;
+
+    const formatDateLong = (d: Date) => {
+      const day = String(d.getDate()).padStart(2, '0');
+      const monthNames = [
+        'January', 'February', 'March', 'April', 'May', 'June',
+        'July', 'August', 'September', 'October', 'November', 'December'
+      ];
+      const month = monthNames[d.getMonth()];
+      const year = d.getFullYear();
+      return `${day} ${month} ${year}`;
+    };
+
+    return `${formatDateLong(s)} – ${formatDateLong(e)}`;
+  } catch {
+    return `${startDate} – ${endDate}`;
+  }
+}
+
+/**
  * Format datetime in DD/MM/YYYY, HH:mm
  */
 export function formatDateTime(dateInput: string | Date | null | undefined): string {

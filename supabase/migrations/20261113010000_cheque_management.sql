@@ -153,3 +153,4 @@ CREATE POLICY "Allow authenticated read/write reminders"
 CREATE POLICY "Allow authenticated read/write notification_preferences"
   ON public.notification_preferences FOR ALL
   TO authenticated USING (true) WITH CHECK (true);
+

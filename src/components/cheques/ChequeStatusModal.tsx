@@ -290,3 +290,4 @@ export function ChequeStatusModal({ cheque, isOpen, onClose, onUpdated }: Cheque
     </div>
   );
 }
+

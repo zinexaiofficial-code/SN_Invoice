@@ -3,7 +3,7 @@
 import React from "react";
 import Image from "next/image";
 import { Invoice } from "@/types";
-import { formatLKR, formatDate, numberToWordsLKR } from "@/lib/utils";
+import { formatLKR, formatDate, numberToWordsLKR, formatServicePeriod } from "@/lib/utils";
 
 interface InvoiceTemplateRendererProps {
   invoice: Invoice;
@@ -72,7 +72,11 @@ export function InvoiceTemplateRenderer({ invoice, printMode = false }: InvoiceT
     advancePercentage,
     specialNotes,
     paymentInstructions,
-    templateKey = 'standard'
+    templateKey = 'standard',
+    includeServicePeriod,
+    servicePeriodStart,
+    servicePeriodEnd,
+    showVatSeparately = true
   } = invoice;
 
   const entityName = billingSnapshot?.displayName || billingSnapshot?.name || "SN Advertising";
@@ -215,6 +219,14 @@ export function InvoiceTemplateRenderer({ invoice, printMode = false }: InvoiceT
                       <span className="font-bold text-slate-900">{product}</span>
                     </div>
                   )}
+                  {includeServicePeriod && servicePeriodStart && servicePeriodEnd && (
+                    <div className="flex justify-end space-x-2 text-xs">
+                      <span className="text-slate-500 font-medium">Service Period:</span>
+                      <span className="font-bold text-emerald-800 font-mono">
+                        {formatServicePeriod(servicePeriodStart, servicePeriodEnd)}
+                      </span>
+                    </div>
+                  )}
                 </div>
 
                 <div className="pt-2 border-t border-slate-200">
@@ -283,17 +295,21 @@ export function InvoiceTemplateRenderer({ invoice, printMode = false }: InvoiceT
 
               <div className="w-full md:w-72 border border-slate-300 rounded-lg overflow-hidden text-sm bg-slate-50">
                 <div className="flex justify-between py-2 px-3 border-b border-slate-200 text-xs">
-                  <span className="text-slate-600 font-medium">Total / Subtotal:</span>
+                  <span className="text-slate-600 font-medium">
+                    {vatApplicable && showVatSeparately === false ? "Subtotal (Net Amount):" : "Total / Subtotal:"}
+                  </span>
                   <span className="font-bold text-slate-900 font-mono">{formatLKR(subtotal)}</span>
                 </div>
-                {vatApplicable && (
+                {vatApplicable && showVatSeparately !== false && (
                   <div className="flex justify-between py-2 px-3 border-b border-slate-200 text-xs bg-amber-50/60">
                     <span className="text-slate-700 font-medium">VAT ({vatRate}%):</span>
                     <span className="font-bold text-amber-900 font-mono">{formatLKR(vatAmount)}</span>
                   </div>
                 )}
                 <div className="flex justify-between py-2.5 px-3 bg-navy-950 text-white font-bold">
-                  <span className="tracking-wide">Grand Total:</span>
+                  <span className="tracking-wide">
+                    {vatApplicable && showVatSeparately === false ? "Total (Including VAT):" : "Grand Total:"}
+                  </span>
                   <span className="font-mono text-base">{formatLKR(grandTotal)}</span>
                 </div>
               </div>
@@ -426,6 +442,14 @@ export function InvoiceTemplateRenderer({ invoice, printMode = false }: InvoiceT
                       <span className="font-bold text-slate-900">{product}</span>
                     </div>
                   )}
+                  {includeServicePeriod && servicePeriodStart && servicePeriodEnd && (
+                    <div className="flex justify-end space-x-2 text-xs">
+                      <span className="text-slate-500">Service Period:</span>
+                      <span className="font-bold text-emerald-800 font-mono">
+                        {formatServicePeriod(servicePeriodStart, servicePeriodEnd)}
+                      </span>
+                    </div>
+                  )}
                 </div>
 
                 <div className="pt-2 border-t border-slate-200">
@@ -487,12 +511,16 @@ export function InvoiceTemplateRenderer({ invoice, printMode = false }: InvoiceT
                   <span className="text-slate-600">Subtotal (Net Value):</span>
                   <span className="font-bold text-slate-900 font-mono">{formatLKR(subtotal)}</span>
                 </div>
-                <div className="flex justify-between py-2 px-3 border-b border-slate-200 text-xs bg-amber-50">
-                  <span className="text-amber-900 font-semibold">Value Added Tax ({vatRate}%):</span>
-                  <span className="font-bold text-amber-950 font-mono">{formatLKR(vatAmount)}</span>
-                </div>
+                {vatApplicable && showVatSeparately !== false && (
+                  <div className="flex justify-between py-2 px-3 border-b border-slate-200 text-xs bg-amber-50">
+                    <span className="text-amber-900 font-semibold">Value Added Tax ({vatRate}%):</span>
+                    <span className="font-bold text-amber-950 font-mono">{formatLKR(vatAmount)}</span>
+                  </div>
+                )}
                 <div className="flex justify-between py-2.5 px-3 bg-navy-950 text-white font-bold">
-                  <span className="tracking-wide">Gross Total (Rs.):</span>
+                  <span className="tracking-wide">
+                    {vatApplicable && showVatSeparately === false ? "Total (Including VAT):" : "Gross Total (Rs.):"}
+                  </span>
                   <span className="font-mono text-base">{formatLKR(grandTotal)}</span>
                 </div>
               </div>
@@ -607,12 +635,19 @@ export function InvoiceTemplateRenderer({ invoice, printMode = false }: InvoiceT
                     <span className="font-bold text-navy-900 font-mono">{regNo}</span>
                   </div>
                 )}
-                {invoice.servicePeriodText && (
+                {includeServicePeriod && servicePeriodStart && servicePeriodEnd ? (
+                  <div className="flex justify-end space-x-2">
+                    <span className="text-slate-500">Service Period:</span>
+                    <span className="font-bold text-emerald-800 font-mono">
+                      {formatServicePeriod(servicePeriodStart, servicePeriodEnd)}
+                    </span>
+                  </div>
+                ) : invoice.servicePeriodText ? (
                   <div className="flex justify-end space-x-2">
                     <span className="text-slate-500">Campaign Period:</span>
                     <span className="font-bold text-emerald-800 font-mono">{invoice.servicePeriodText}</span>
                   </div>
-                )}
+                ) : null}
                 <div className="flex justify-end space-x-2 pt-2 border-t border-slate-200">
                   <span className="text-slate-500">Billing Entity:</span>
                   <span className="font-bold text-navy-950">{entityName}</span>
@@ -668,14 +703,14 @@ export function InvoiceTemplateRenderer({ invoice, printMode = false }: InvoiceT
                   <span className="text-slate-600">Package Subtotal:</span>
                   <span className="font-bold text-slate-900 font-mono">{formatLKR(subtotal)}</span>
                 </div>
-                {vatApplicable && (
+                {vatApplicable && showVatSeparately !== false && (
                   <div className="flex justify-between py-2 px-3 border-b border-slate-200 text-xs bg-amber-50">
                     <span className="text-slate-700">VAT ({vatRate}%):</span>
                     <span className="font-bold text-amber-900 font-mono">{formatLKR(vatAmount)}</span>
                   </div>
                 )}
                 <div className="flex justify-between py-2.5 px-3 bg-navy-950 text-white font-bold">
-                  <span>Grand Total:</span>
+                  <span>{vatApplicable && showVatSeparately === false ? "Total (Including VAT):" : "Grand Total:"}</span>
                   <span className="font-mono text-base">{formatLKR(grandTotal)}</span>
                 </div>
               </div>
@@ -787,6 +822,14 @@ export function InvoiceTemplateRenderer({ invoice, printMode = false }: InvoiceT
                     <span className="font-bold">{yourRef}</span>
                   </div>
                 )}
+                {includeServicePeriod && servicePeriodStart && servicePeriodEnd && (
+                  <div className="flex justify-between pt-1 border-t border-slate-200">
+                    <span className="text-slate-500">Service Period:</span>
+                    <span className="font-bold text-emerald-800 font-mono">
+                      {formatServicePeriod(servicePeriodStart, servicePeriodEnd)}
+                    </span>
+                  </div>
+                )}
               </div>
             </div>
 
@@ -838,14 +881,14 @@ export function InvoiceTemplateRenderer({ invoice, printMode = false }: InvoiceT
                   <span className="text-slate-600">Subtotal:</span>
                   <span className="font-bold font-mono">{formatLKR(subtotal)}</span>
                 </div>
-                {vatApplicable && (
+                {vatApplicable && showVatSeparately !== false && (
                   <div className="flex justify-between py-2 px-3 border-b border-slate-200 text-xs">
                     <span className="text-slate-600">VAT ({vatRate}%):</span>
                     <span className="font-bold font-mono">{formatLKR(vatAmount)}</span>
                   </div>
                 )}
                 <div className="flex justify-between py-2.5 px-3 bg-slate-900 text-white font-bold">
-                  <span>Grand Total:</span>
+                  <span>{vatApplicable && showVatSeparately === false ? "Total (Including VAT):" : "Grand Total:"}</span>
                   <span className="font-mono text-base">{formatLKR(grandTotal)}</span>
                 </div>
               </div>

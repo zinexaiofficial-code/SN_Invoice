@@ -227,12 +227,13 @@ export interface Invoice {
   templateKey?: InvoiceTemplateKey;
   status: InvoiceStatus;
   
-  // Dates
+  // Dates & Optional Service Period
   invoiceDate: string; // YYYY-MM-DD
   dueDate?: string; // YYYY-MM-DD
   issuedAt?: string;
   sentAt?: string;
   paidAt?: string;
+  includeServicePeriod?: boolean;
   servicePeriodStart?: string;
   servicePeriodEnd?: string;
   servicePeriodText?: string;
@@ -242,11 +243,13 @@ export interface Invoice {
   regNo?: string;
   yourRef?: string;
   
-  // Financials
+  // Financials & VAT Presentation
   subtotal: number;
   vatApplicable: boolean;
   vatRate: number;
   vatAmount: number;
+  taxableBase?: number;
+  showVatSeparately?: boolean; // default: true (MODE A). If false: MODE B (Total Including VAT without separate line)
   grandTotal: number;
   
   // Advance & Notes

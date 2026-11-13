@@ -12,7 +12,7 @@ import {
   InvoiceTemplateKey 
 } from "@/types";
 import { storage } from "@/lib/storage";
-import { formatLKR, formatDate } from "@/lib/utils";
+import { formatLKR, formatDate, formatServicePeriod } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -31,7 +31,9 @@ import {
   Building2, 
   Layers, 
   Sparkles,
-  AlertCircle
+  AlertCircle,
+  Calendar,
+  AlertTriangle
 } from "lucide-react";
 
 interface InvoiceFormProps {
@@ -83,6 +85,14 @@ export function InvoiceForm({ initialInvoice }: InvoiceFormProps) {
   const [specialNotes, setSpecialNotes] = useState<string>("");
   const [paymentInstructions, setPaymentInstructions] = useState<string>("");
 
+  // Service Period (Optional)
+  const [includeServicePeriod, setIncludeServicePeriod] = useState<boolean>(false);
+  const [servicePeriodStart, setServicePeriodStart] = useState<string>("");
+  const [servicePeriodEnd, setServicePeriodEnd] = useState<string>("");
+
+  // VAT Display Presentation (MODE A: separate line, MODE B: included without separate line)
+  const [showVatSeparately, setShowVatSeparately] = useState<boolean>(true);
+
   // Load references and set initial data
   useEffect(() => {
     const clis = storage.getClients();
@@ -115,6 +125,10 @@ export function InvoiceForm({ initialInvoice }: InvoiceFormProps) {
       setAdvancePercentage(initialInvoice.advancePercentage || 0);
       setSpecialNotes(initialInvoice.specialNotes || "");
       setPaymentInstructions(initialInvoice.paymentInstructions || "");
+      setIncludeServicePeriod(initialInvoice.includeServicePeriod ?? Boolean(initialInvoice.servicePeriodStart && initialInvoice.servicePeriodEnd));
+      setServicePeriodStart(initialInvoice.servicePeriodStart || "");
+      setServicePeriodEnd(initialInvoice.servicePeriodEnd || "");
+      setShowVatSeparately(initialInvoice.showVatSeparately ?? true);
     } else {
       // New Invoice: Default to first active billing entity and its sequence
       const activeEntities = ents.filter(e => e.isActive && e.status !== 'archived');
@@ -324,11 +338,16 @@ export function InvoiceForm({ initialInvoice }: InvoiceFormProps) {
       product: product.trim() || undefined,
       regNo: regNo.trim() || undefined,
       yourRef: yourRef.trim() || undefined,
+      includeServicePeriod,
+      servicePeriodStart: includeServicePeriod && servicePeriodStart ? servicePeriodStart : undefined,
+      servicePeriodEnd: includeServicePeriod && servicePeriodEnd ? servicePeriodEnd : undefined,
       servicePeriodText: servicePeriodText.trim() || undefined,
       subtotal,
       vatApplicable,
       vatRate,
       vatAmount,
+      taxableBase: subtotal,
+      showVatSeparately: vatApplicable ? showVatSeparately : true,
       grandTotal,
       advancePercentage,
       advanceAmount,
@@ -368,6 +387,13 @@ export function InvoiceForm({ initialInvoice }: InvoiceFormProps) {
     if (hasZeroPrice) {
       setError("Enter a valid unit price greater than 0 for all services.");
       return;
+    }
+
+    if (includeServicePeriod && servicePeriodStart && servicePeriodEnd) {
+      if (servicePeriodEnd < servicePeriodStart) {
+        setError("Service Period: 'To Date' cannot be earlier than 'From Date'.");
+        return;
+      }
     }
 
     const payload = buildInvoicePayload(targetStatus);
@@ -665,6 +691,76 @@ export function InvoiceForm({ initialInvoice }: InvoiceFormProps) {
           </CardContent>
         </Card>
       </div>
+
+      {/* Service Period (Optional) */}
+      <Card className="border-slate-200 shadow-sm bg-white overflow-hidden">
+        <CardHeader className="py-3.5 px-4 sm:px-6 bg-slate-50/70 border-b border-slate-100 flex flex-row items-center justify-between">
+          <div className="flex items-center space-x-2">
+            <Calendar className="w-4 h-4 text-emerald-600 shrink-0" />
+            <CardTitle className="text-sm sm:text-base font-bold text-navy-950">
+              Service Period (Optional)
+            </CardTitle>
+          </div>
+          <label className="flex items-center space-x-2.5 cursor-pointer select-none">
+            <span className="text-xs font-semibold text-slate-700">Include Service Period on Invoice</span>
+            <input
+              type="checkbox"
+              checked={includeServicePeriod}
+              onChange={(e) => setIncludeServicePeriod(e.target.checked)}
+              className="w-4 h-4 text-emerald-600 rounded focus:ring-emerald-500"
+            />
+          </label>
+        </CardHeader>
+
+        {includeServicePeriod && (
+          <CardContent className="p-4 sm:p-6 space-y-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 bg-slate-50 p-4 rounded-xl border border-slate-200">
+              <div>
+                <Label htmlFor="servicePeriodStart" className="text-xs font-bold text-slate-700 mb-1.5 block">
+                  From Date *
+                </Label>
+                <Input
+                  id="servicePeriodStart"
+                  type="date"
+                  value={servicePeriodStart}
+                  onChange={(e) => setServicePeriodStart(e.target.value)}
+                  className="bg-white border-slate-300 font-medium text-xs"
+                />
+              </div>
+
+              <div>
+                <Label htmlFor="servicePeriodEnd" className="text-xs font-bold text-slate-700 mb-1.5 block">
+                  To Date *
+                </Label>
+                <Input
+                  id="servicePeriodEnd"
+                  type="date"
+                  value={servicePeriodEnd}
+                  onChange={(e) => setServicePeriodEnd(e.target.value)}
+                  className="bg-white border-slate-300 font-medium text-xs"
+                />
+              </div>
+
+              {servicePeriodStart && servicePeriodEnd && servicePeriodEnd < servicePeriodStart && (
+                <div className="col-span-full text-xs text-rose-600 font-bold flex items-center space-x-1.5 bg-rose-50 p-2.5 rounded-lg border border-rose-200">
+                  <AlertTriangle className="w-4 h-4 shrink-0" />
+                  <span>Validation Error: 'To Date' cannot be earlier than 'From Date'.</span>
+                </div>
+              )}
+
+              {servicePeriodStart && servicePeriodEnd && servicePeriodEnd >= servicePeriodStart && (
+                <div className="col-span-full text-xs text-emerald-800 font-medium bg-emerald-50/80 p-2.5 rounded-lg border border-emerald-200 flex items-center justify-between">
+                  <span>Display on PDF: <strong>Service Period: {formatServicePeriod(servicePeriodStart, servicePeriodEnd)}</strong></span>
+                  <span className="text-[10px] text-emerald-700 font-bold uppercase tracking-wider bg-emerald-100 px-2 py-0.5 rounded">Active</span>
+                </div>
+              )}
+            </div>
+            <p className="text-[11px] text-slate-500">
+              Note: This is an invoice-level service period. It is completely optional and separate from the line-item Period field in Section C.
+            </p>
+          </CardContent>
+        )}
+      </Card>
 
       {/* Section C: Invoice Items (Mobile Cards + Desktop Table) */}
       <Card className="border-slate-200 shadow-sm overflow-hidden">
@@ -971,37 +1067,85 @@ export function InvoiceForm({ initialInvoice }: InvoiceFormProps) {
               <span className="text-base font-bold font-mono text-slate-900">{formatLKR(subtotal)}</span>
             </div>
 
-            <div className="p-3 bg-white border border-slate-200 rounded-xl space-y-2">
-              <div className="flex items-center justify-between">
-                <label className="flex items-center space-x-2 cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={vatApplicable}
-                    onChange={(e) => {
-                      setVatApplicable(e.target.checked);
-                      if (e.target.checked && templateKey === 'standard') {
-                        setTemplateKey('vat');
-                      }
-                    }}
-                    className="w-4 h-4 text-emerald-600 rounded"
-                  />
-                  <span className="text-sm font-bold text-slate-800">Charge VAT (18%)</span>
-                </label>
-                <span className="text-xs font-mono text-slate-500">Rate: {vatRate}%</span>
-              </div>
-
-              {vatApplicable && (
-                <div className="flex justify-between items-center text-xs pt-1 text-amber-900 font-medium">
-                  <span>VAT Amount:</span>
-                  <span className="font-bold font-mono text-sm">{formatLKR(vatAmount)}</span>
+            {activeEntity && !activeEntity.isVatRegistered ? (
+              <div className="p-3 bg-slate-100 border border-slate-200 rounded-xl space-y-1">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-bold text-slate-700">Non-VAT Entity: {activeEntity.displayName || activeEntity.name}</span>
+                  <span className="text-[10px] bg-slate-200 text-slate-700 font-bold px-2 py-0.5 rounded">0% VAT</span>
                 </div>
-              )}
-            </div>
+                <p className="text-[11px] text-slate-500">
+                  This billing entity is not registered for VAT with the IRD and cannot issue invoices charging VAT.
+                </p>
+              </div>
+            ) : (
+              <div className="p-3.5 bg-white border border-slate-200 rounded-xl space-y-3">
+                <div className="flex items-center justify-between">
+                  <label className="flex items-center space-x-2 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={vatApplicable}
+                      onChange={(e) => {
+                        setVatApplicable(e.target.checked);
+                        if (e.target.checked && templateKey === 'standard') {
+                          setTemplateKey('vat');
+                        }
+                      }}
+                      className="w-4 h-4 text-emerald-600 rounded"
+                    />
+                    <span className="text-sm font-bold text-slate-800">Charge VAT (18%)</span>
+                  </label>
+                  <span className="text-xs font-mono font-semibold text-slate-600">Rate: {vatRate}%</span>
+                </div>
+
+                {vatApplicable && (
+                  <div className="pt-2.5 border-t border-slate-200 space-y-2.5">
+                    <label className="flex items-center space-x-2 cursor-pointer select-none">
+                      <input
+                        type="checkbox"
+                        checked={showVatSeparately}
+                        onChange={(e) => setShowVatSeparately(e.target.checked)}
+                        className="w-4 h-4 text-emerald-600 rounded focus:ring-emerald-500"
+                      />
+                      <span className="text-xs font-bold text-slate-800">
+                        Show VAT as Separate Line on Invoice
+                      </span>
+                    </label>
+
+                    {/* Mode Indicator & Accounting Details */}
+                    <div className={`p-2.5 rounded-lg border text-xs ${
+                      showVatSeparately
+                        ? "bg-amber-50/80 border-amber-200 text-amber-950"
+                        : "bg-emerald-50/80 border-emerald-200 text-emerald-950"
+                    }`}>
+                      <span className="font-bold block text-[11px] uppercase tracking-wide">
+                        {showVatSeparately ? "Presentation: Mode A — Separate Line" : "Presentation: Mode B — Inclusive (No Separate Row)"}
+                      </span>
+                      <span className="text-[11px] opacity-90 block mt-0.5">
+                        {showVatSeparately
+                          ? "Subtotal, VAT (18%), and Grand Total are itemized as separate lines on the invoice PDF."
+                          : "Main total will display as 'Total (Including VAT)' with no separate VAT row. Full VAT calculation is preserved internally."}
+                      </span>
+                    </div>
+
+                    {showVatSeparately && (
+                      <div className="flex justify-between items-center text-xs pt-1 text-amber-900 font-medium">
+                        <span>VAT Amount (18%):</span>
+                        <span className="font-bold font-mono text-sm">{formatLKR(vatAmount)}</span>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
 
             <div className="p-4 bg-navy-950 text-white rounded-xl flex items-center justify-between shadow-md">
               <div>
-                <span className="text-xs uppercase tracking-wider text-slate-300 block">Grand Total</span>
-                <span className="text-xs text-emerald-400 font-medium">Sri Lankan Rupees (LKR)</span>
+                <span className="text-xs uppercase tracking-wider text-slate-300 block font-semibold">
+                  {vatApplicable && !showVatSeparately ? "Total (Including VAT)" : "Grand Total"}
+                </span>
+                <span className="text-xs text-emerald-400 font-medium">
+                  {vatApplicable && !showVatSeparately ? `Includes ${formatLKR(vatAmount)} VAT (18%)` : "Sri Lankan Rupees (LKR)"}
+                </span>
               </div>
               <div className="text-right">
                 <span className="text-2xl font-black font-mono tracking-tight">{formatLKR(grandTotal)}</span>

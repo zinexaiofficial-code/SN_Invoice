@@ -289,3 +289,4 @@ export function ChequeCalendar({ cheques, onSelectCheque }: ChequeCalendarProps)
     </div>
   );
 }
+
