@@ -9,7 +9,17 @@ import {
   BrandingSettings,
   MonthlyHistoryFilter,
   DashboardKPIs,
-  InvoiceTemplateKey
+  InvoiceTemplateKey,
+  Cheque,
+  ChequeType,
+  ChequeStatus,
+  ChequeAlertState,
+  ChequeReminder,
+  ChequeFilter,
+  ChequeKPIs,
+  NotificationPreferences,
+  ChequeInvoiceAllocation,
+  ChequeStatusHistory
 } from '@/types';
 
 // Default Seed Data based on official SN Advertising documents and Excel files
@@ -572,6 +582,458 @@ export const INITIAL_INVOICES: Invoice[] = [
   }
 ];
 
+const getRelativeDate = (offsetDays: number): string => {
+  const d = new Date();
+  d.setDate(d.getDate() + offsetDays);
+  return d.toISOString().split('T')[0];
+};
+
+export const DEFAULT_NOTIFICATION_PREFS: NotificationPreferences = {
+  emailEnabled: true,
+  emailRecipient: 'snadvertising@hotmail.com',
+  pushEnabled: true,
+  dailySummaryTime: '08:30',
+  alertOnOverdue: true,
+  alertOnReturned: true,
+  timezone: 'Asia/Colombo',
+};
+
+export const INITIAL_CHEQUES: Cheque[] = [
+  {
+    id: 'chq-001',
+    type: 'incoming',
+    chequeNumber: '458921',
+    amount: 125000,
+    currency: 'LKR',
+    chequeDate: getRelativeDate(1), // Tomorrow
+    receivedOrIssuedDate: getRelativeDate(-2),
+    expectedActionDate: getRelativeDate(1),
+    drawerBank: 'Sampath Bank',
+    branch: 'Kiribathgoda',
+    bankAccountId: 'ba-sn-1',
+    bankAccountNumber: '028013149867001',
+    payerOrPayeeName: 'Araliya Lands and Homes (Pvt) Ltd',
+    clientId: 'c1111111-1111-1111-1111-111111111111',
+    billingEntityId: 'e1111111-1111-1111-1111-111111111111',
+    billingEntityName: 'SN Advertising',
+    billingEntityPrefix: 'SN',
+    status: 'pending_deposit',
+    alertState: 'upcoming',
+    purposeOfPayment: 'Payment for Video Campaign (Invoice #23458)',
+    billReference: '23458',
+    notes: 'Cheque received at office, to deposit at Seylan Bank Kadawatha.',
+    attachments: [],
+    invoiceAllocations: [
+      {
+        id: 'alloc-001',
+        chequeId: 'chq-001',
+        invoiceId: 'inv-001',
+        invoiceNumber: '23458',
+        allocatedAmount: 125000,
+        createdAt: '2026-11-10T00:00:00Z',
+      }
+    ],
+    statusHistory: [
+      {
+        id: 'sh-001',
+        chequeId: 'chq-001',
+        newStatus: 'received',
+        changedAt: getRelativeDate(-2) + 'T10:00:00Z',
+        notes: 'Cheque received from client'
+      },
+      {
+        id: 'sh-002',
+        chequeId: 'chq-001',
+        previousStatus: 'received',
+        newStatus: 'pending_deposit',
+        changedAt: getRelativeDate(-1) + 'T09:30:00Z',
+        notes: 'Prepared for deposit'
+      }
+    ],
+    reminders: [],
+    isReminderEnabled: true,
+    createdAt: getRelativeDate(-2) + 'T10:00:00Z',
+    updatedAt: getRelativeDate(-1) + 'T09:30:00Z',
+  },
+  {
+    id: 'chq-002',
+    type: 'incoming',
+    chequeNumber: '339012',
+    amount: 85000,
+    currency: 'LKR',
+    chequeDate: getRelativeDate(-4), // Overdue
+    receivedOrIssuedDate: getRelativeDate(-7),
+    expectedActionDate: getRelativeDate(-4),
+    drawerBank: 'Commercial Bank',
+    branch: 'Kadawatha Branch',
+    bankAccountId: 'ba-sn-1',
+    bankAccountNumber: '028013149867001',
+    payerOrPayeeName: 'Chamara Motors (Pvt) Ltd',
+    clientId: 'c3333333-3333-3333-3333-333333333333',
+    billingEntityId: 'e1111111-1111-1111-1111-111111111111',
+    billingEntityName: 'SN Advertising',
+    billingEntityPrefix: 'SN',
+    status: 'received',
+    alertState: 'overdue',
+    purposeOfPayment: 'Voice Cut Production partial payment',
+    notes: 'Urgent: Cheque date has passed! Deposit immediately.',
+    attachments: [],
+    invoiceAllocations: [],
+    statusHistory: [
+      {
+        id: 'sh-003',
+        chequeId: 'chq-002',
+        newStatus: 'received',
+        changedAt: getRelativeDate(-7) + 'T11:00:00Z',
+        notes: 'Handed over by client account rep'
+      }
+    ],
+    reminders: [],
+    isReminderEnabled: true,
+    createdAt: getRelativeDate(-7) + 'T11:00:00Z',
+    updatedAt: getRelativeDate(-4) + 'T08:00:00Z',
+  },
+  {
+    id: 'chq-003',
+    type: 'incoming',
+    chequeNumber: '889900',
+    amount: 250000,
+    currency: 'LKR',
+    chequeDate: getRelativeDate(-10),
+    receivedOrIssuedDate: getRelativeDate(-12),
+    expectedActionDate: getRelativeDate(-10),
+    drawerBank: 'Hatton National Bank',
+    branch: 'Kelaniya',
+    bankAccountId: 'ba-hrp-1',
+    bankAccountNumber: '10002938475',
+    payerOrPayeeName: 'Global Media Network',
+    billingEntityId: 'e2222222-2222-2222-2222-222222222222',
+    billingEntityName: 'HARIPARA (PVT) LTD',
+    billingEntityPrefix: 'HRP',
+    status: 'returned',
+    alertState: 'action_required',
+    returnReason: 'Refer to Drawer (Insufficient funds)',
+    bankCharges: 1500,
+    followUpDate: getRelativeDate(0), // Today!
+    purposeOfPayment: 'Annual Corporate Sponsorship',
+    notes: 'Cheque returned by bank. Contacted accounts manager, requested replacement cheque.',
+    attachments: [],
+    invoiceAllocations: [],
+    statusHistory: [
+      {
+        id: 'sh-004',
+        chequeId: 'chq-003',
+        newStatus: 'received',
+        changedAt: getRelativeDate(-12) + 'T14:00:00Z',
+      },
+      {
+        id: 'sh-005',
+        chequeId: 'chq-003',
+        previousStatus: 'received',
+        newStatus: 'deposited',
+        changedAt: getRelativeDate(-9) + 'T10:00:00Z',
+      },
+      {
+        id: 'sh-006',
+        chequeId: 'chq-003',
+        previousStatus: 'deposited',
+        newStatus: 'returned',
+        changedAt: getRelativeDate(-3) + 'T16:00:00Z',
+        returnReason: 'Refer to Drawer (Insufficient funds)',
+        bankCharges: 1500,
+        notes: 'Returned by bank. Bank debited Rs. 1,500 return fee.'
+      }
+    ],
+    reminders: [],
+    isReminderEnabled: true,
+    createdAt: getRelativeDate(-12) + 'T14:00:00Z',
+    updatedAt: getRelativeDate(-3) + 'T16:00:00Z',
+  },
+  {
+    id: 'chq-004',
+    type: 'incoming',
+    chequeNumber: '782103',
+    amount: 150000,
+    currency: 'LKR',
+    chequeDate: getRelativeDate(-15),
+    receivedOrIssuedDate: getRelativeDate(-16),
+    expectedActionDate: getRelativeDate(-14),
+    actualClearanceDate: getRelativeDate(-12),
+    drawerBank: 'Nations Trust Bank',
+    branch: 'Colombo 03',
+    bankAccountId: 'ba-sn-1',
+    bankAccountNumber: '028013149867001',
+    payerOrPayeeName: 'Senkadagala Finance PLC',
+    billingEntityId: 'e1111111-1111-1111-1111-111111111111',
+    billingEntityName: 'SN Advertising',
+    billingEntityPrefix: 'SN',
+    status: 'cleared',
+    alertState: 'cleared',
+    purposeOfPayment: 'Digital Banner campaign',
+    notes: 'Successfully cleared into Seylan Bank account.',
+    attachments: [],
+    invoiceAllocations: [],
+    statusHistory: [
+      {
+        id: 'sh-007',
+        chequeId: 'chq-004',
+        newStatus: 'cleared',
+        changedAt: getRelativeDate(-12) + 'T12:00:00Z',
+        notes: 'Bank confirmed funds cleared'
+      }
+    ],
+    reminders: [],
+    isReminderEnabled: false,
+    createdAt: getRelativeDate(-16) + 'T09:00:00Z',
+    updatedAt: getRelativeDate(-12) + 'T12:00:00Z',
+  },
+  {
+    id: 'chq-005',
+    type: 'outgoing',
+    chequeNumber: '100452',
+    amount: 90000,
+    currency: 'LKR',
+    chequeDate: getRelativeDate(2), // In 2 days
+    receivedOrIssuedDate: getRelativeDate(-1),
+    expectedActionDate: getRelativeDate(2),
+    drawerBank: 'Seylan Bank',
+    branch: 'Kadawatha Branch',
+    bankAccountId: 'ba-sn-1',
+    bankAccountNumber: '028013149867001',
+    payerOrPayeeName: 'Asia Broadcasting Corporation (Pvt) Ltd',
+    supplierName: 'Asia Broadcasting Corporation (Pvt) Ltd (Hiru FM)',
+    billingEntityId: 'e1111111-1111-1111-1111-111111111111',
+    billingEntityName: 'SN Advertising',
+    billingEntityPrefix: 'SN',
+    status: 'issued',
+    alertState: 'upcoming',
+    purposeOfPayment: 'Radio Airtime Booking Nov 2026',
+    notes: 'Handed to Hiru FM media rep. Ensure account has sufficient balance before presentation date.',
+    attachments: [],
+    invoiceAllocations: [],
+    statusHistory: [
+      {
+        id: 'sh-008',
+        chequeId: 'chq-005',
+        newStatus: 'issued',
+        changedAt: getRelativeDate(-1) + 'T15:30:00Z',
+        notes: 'Cheque signed and dispatched'
+      }
+    ],
+    reminders: [],
+    isReminderEnabled: true,
+    createdAt: getRelativeDate(-1) + 'T15:30:00Z',
+    updatedAt: getRelativeDate(-1) + 'T15:30:00Z',
+  },
+  {
+    id: 'chq-006',
+    type: 'outgoing',
+    chequeNumber: '500121',
+    amount: 180000,
+    currency: 'LKR',
+    chequeDate: getRelativeDate(-8),
+    receivedOrIssuedDate: getRelativeDate(-10),
+    expectedActionDate: getRelativeDate(-8),
+    actualClearanceDate: getRelativeDate(-6),
+    drawerBank: 'Commercial Bank of Ceylon',
+    branch: 'Kelaniya Branch',
+    bankAccountId: 'ba-hrp-1',
+    bankAccountNumber: '10002938475',
+    payerOrPayeeName: 'Print Lab & Graphics Ltd',
+    supplierName: 'Print Lab & Graphics Ltd',
+    billingEntityId: 'e2222222-2222-2222-2222-222222222222',
+    billingEntityName: 'HARIPARA (PVT) LTD',
+    billingEntityPrefix: 'HRP',
+    status: 'cleared',
+    alertState: 'cleared',
+    purposeOfPayment: 'Large format printing services',
+    notes: 'Cheque presented and debited successfully.',
+    attachments: [],
+    invoiceAllocations: [],
+    statusHistory: [
+      {
+        id: 'sh-009',
+        chequeId: 'chq-006',
+        newStatus: 'cleared',
+        changedAt: getRelativeDate(-6) + 'T10:00:00Z',
+        notes: 'Cleared from Commercial Bank'
+      }
+    ],
+    reminders: [],
+    isReminderEnabled: false,
+    createdAt: getRelativeDate(-10) + 'T11:00:00Z',
+    updatedAt: getRelativeDate(-6) + 'T10:00:00Z',
+  }
+];
+
+export function calculateChequeAlertState(cheque: Cheque): ChequeAlertState {
+  if (cheque.status === 'cleared') return 'cleared';
+  if (cheque.status === 'cancelled' || cheque.status === 'replaced') return 'normal';
+  if (cheque.status === 'returned') return 'action_required';
+
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+
+  const targetDateStr = cheque.expectedActionDate || cheque.chequeDate;
+  if (!targetDateStr) return 'normal';
+
+  const targetDate = new Date(targetDateStr);
+  targetDate.setHours(0, 0, 0, 0);
+
+  const diffTime = targetDate.getTime() - today.getTime();
+  const diffDays = Math.round(diffTime / (1000 * 60 * 60 * 24));
+
+  if (diffDays < 0) return 'overdue';
+  if (diffDays === 0) return 'due_today';
+  if (diffDays <= 7) return 'upcoming';
+
+  return 'normal';
+}
+
+export function generateChequeReminders(cheque: Cheque, existingReminders: ChequeReminder[] = []): ChequeReminder[] {
+  if (!cheque.isReminderEnabled) return [];
+  if (cheque.status === 'cleared' || cheque.status === 'cancelled' || cheque.status === 'replaced') return [];
+
+  const existingMap = new Map(existingReminders.map(r => [r.reminderType, r]));
+  const targetDateStr = cheque.expectedActionDate || cheque.chequeDate;
+  if (!targetDateStr) return [];
+
+  const targetDate = new Date(targetDateStr);
+  targetDate.setHours(0, 0, 0, 0);
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+
+  const diffDays = Math.round((targetDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
+  const reminders: ChequeReminder[] = [];
+
+  const formatOffsetDate = (days: number): string => {
+    const d = new Date(targetDate);
+    d.setDate(d.getDate() - days);
+    return d.toISOString().split('T')[0];
+  };
+
+  const isIncoming = cheque.type === 'incoming';
+  const partyLabel = isIncoming ? `Client: ${cheque.payerOrPayeeName}` : `Payee: ${cheque.payerOrPayeeName}`;
+  const amountStr = `Rs. ${Number(cheque.amount).toLocaleString('en-US', { minimumFractionDigits: 2 })}`;
+
+  // 1. Returned Cheque Action Required
+  if (cheque.status === 'returned') {
+    const prev = existingMap.get('returned_action');
+    reminders.push({
+      id: prev?.id || `rem-${cheque.id}-ret`,
+      chequeId: cheque.id,
+      reminderDate: cheque.followUpDate || today.toISOString().split('T')[0],
+      reminderType: 'returned_action',
+      title: `🚨 RETURNED CHEQUE ACTION: Cheque #${cheque.chequeNumber}`,
+      message: `Cheque #${cheque.chequeNumber} for ${amountStr} (${partyLabel}) was returned. Reason: ${cheque.returnReason || 'Refer to Drawer'}. Follow up required!`,
+      priority: 'urgent',
+      isRead: prev?.isRead || false,
+      isDismissed: prev?.isDismissed || false,
+      snoozedUntil: prev?.snoozedUntil,
+      deliveryStatus: 'delivered',
+      createdAt: prev?.createdAt || new Date().toISOString()
+    });
+    return reminders;
+  }
+
+  // 2. Overdue Alert
+  if (diffDays < 0) {
+    const prev = existingMap.get('overdue');
+    reminders.push({
+      id: prev?.id || `rem-${cheque.id}-od`,
+      chequeId: cheque.id,
+      reminderDate: today.toISOString().split('T')[0],
+      reminderType: 'overdue',
+      title: `⚠️ OVERDUE: Cheque #${cheque.chequeNumber} (${partyLabel})`,
+      message: `${isIncoming ? 'Incoming cheque' : 'Outgoing cheque'} #${cheque.chequeNumber} of ${amountStr} is overdue by ${Math.abs(diffDays)} day(s)! Please ${isIncoming ? 'deposit' : 'verify account balance'} immediately.`,
+      priority: 'urgent',
+      isRead: prev?.isRead || false,
+      isDismissed: prev?.isDismissed || false,
+      snoozedUntil: prev?.snoozedUntil,
+      deliveryStatus: 'delivered',
+      createdAt: prev?.createdAt || new Date().toISOString()
+    });
+  }
+
+  // 3. Due Today
+  if (diffDays === 0) {
+    const prev = existingMap.get('due_today');
+    reminders.push({
+      id: prev?.id || `rem-${cheque.id}-today`,
+      chequeId: cheque.id,
+      reminderDate: targetDateStr,
+      reminderType: 'due_today',
+      title: `🔔 DUE TODAY: Cheque #${cheque.chequeNumber}`,
+      message: `${isIncoming ? 'Deposit incoming cheque' : 'Outgoing cheque presentation due today'} #${cheque.chequeNumber} for ${amountStr} (${partyLabel}).`,
+      priority: 'high',
+      isRead: prev?.isRead || false,
+      isDismissed: prev?.isDismissed || false,
+      snoozedUntil: prev?.snoozedUntil,
+      deliveryStatus: 'delivered',
+      createdAt: prev?.createdAt || new Date().toISOString()
+    });
+  }
+
+  // 4. Due in 1 Day (Tomorrow)
+  if (diffDays === 1 || diffDays > 0) {
+    const prev = existingMap.get('due_1_day');
+    reminders.push({
+      id: prev?.id || `rem-${cheque.id}-1d`,
+      chequeId: cheque.id,
+      reminderDate: formatOffsetDate(1),
+      reminderType: 'due_1_day',
+      title: `📅 DUE TOMORROW: Cheque #${cheque.chequeNumber}`,
+      message: `Cheque #${cheque.chequeNumber} of ${amountStr} is due tomorrow (${targetDateStr}). ${partyLabel}.`,
+      priority: 'high',
+      isRead: prev?.isRead || false,
+      isDismissed: prev?.isDismissed || false,
+      snoozedUntil: prev?.snoozedUntil,
+      deliveryStatus: diffDays <= 1 ? 'delivered' : 'pending',
+      createdAt: prev?.createdAt || new Date().toISOString()
+    });
+  }
+
+  // 5. Due in 3 Days
+  if (diffDays <= 3 && diffDays > 1) {
+    const prev = existingMap.get('due_3_days');
+    reminders.push({
+      id: prev?.id || `rem-${cheque.id}-3d`,
+      chequeId: cheque.id,
+      reminderDate: formatOffsetDate(3),
+      reminderType: 'due_3_days',
+      title: `⏳ Due in ${diffDays} days: Cheque #${cheque.chequeNumber}`,
+      message: `Cheque #${cheque.chequeNumber} for ${amountStr} is scheduled for ${targetDateStr}. ${partyLabel}.`,
+      priority: 'medium',
+      isRead: prev?.isRead || false,
+      isDismissed: prev?.isDismissed || false,
+      snoozedUntil: prev?.snoozedUntil,
+      deliveryStatus: 'delivered',
+      createdAt: prev?.createdAt || new Date().toISOString()
+    });
+  }
+
+  // 6. Due in 7 Days
+  if (diffDays <= 7 && diffDays > 3) {
+    const prev = existingMap.get('due_7_days');
+    reminders.push({
+      id: prev?.id || `rem-${cheque.id}-7d`,
+      chequeId: cheque.id,
+      reminderDate: formatOffsetDate(7),
+      reminderType: 'due_7_days',
+      title: `🗓️ Upcoming Cheque in ${diffDays} days: #${cheque.chequeNumber}`,
+      message: `Cheque #${cheque.chequeNumber} of ${amountStr} scheduled on ${targetDateStr}. ${partyLabel}.`,
+      priority: 'low',
+      isRead: prev?.isRead || false,
+      isDismissed: prev?.isDismissed || false,
+      snoozedUntil: prev?.snoozedUntil,
+      deliveryStatus: 'delivered',
+      createdAt: prev?.createdAt || new Date().toISOString()
+    });
+  }
+
+  return reminders;
+}
+
 const STORAGE_KEYS = {
   INVOICES: 'sn_invoices_data_v2',
   CLIENTS: 'sn_clients_data_v2',
@@ -580,7 +1042,9 @@ const STORAGE_KEYS = {
   TEMPLATES: 'sn_templates_v2',
   BRANDING: 'sn_branding_v2',
   NEXT_INVOICE_NUM: 'sn_next_invoice_number_v2',
-  CURRENT_USER_ROLE: 'sn_current_user_role'
+  CURRENT_USER_ROLE: 'sn_current_user_role',
+  CHEQUES: 'sn_cheques_v1',
+  NOTIFICATION_PREFS: 'sn_notification_preferences_v1'
 };
 
 class StorageService {
@@ -1323,6 +1787,405 @@ class StorageService {
   setUserRole(role: 'admin' | 'staff'): void {
     if (this.isBrowser()) {
       localStorage.setItem(STORAGE_KEYS.CURRENT_USER_ROLE, role);
+    }
+  }
+
+  // --- Cheque Management & Reminders ---
+  getNotificationPreferences(): NotificationPreferences {
+    if (!this.isBrowser()) return DEFAULT_NOTIFICATION_PREFS;
+    const data = localStorage.getItem(STORAGE_KEYS.NOTIFICATION_PREFS);
+    if (!data) {
+      localStorage.setItem(STORAGE_KEYS.NOTIFICATION_PREFS, JSON.stringify(DEFAULT_NOTIFICATION_PREFS));
+      return DEFAULT_NOTIFICATION_PREFS;
+    }
+    try {
+      return { ...DEFAULT_NOTIFICATION_PREFS, ...JSON.parse(data) };
+    } catch {
+      return DEFAULT_NOTIFICATION_PREFS;
+    }
+  }
+
+  saveNotificationPreferences(prefs: Partial<NotificationPreferences>): NotificationPreferences {
+    const current = this.getNotificationPreferences();
+    const updated = { ...current, ...prefs };
+    if (this.isBrowser()) {
+      localStorage.setItem(STORAGE_KEYS.NOTIFICATION_PREFS, JSON.stringify(updated));
+    }
+    return updated;
+  }
+
+  getCheques(filter?: ChequeFilter): Cheque[] {
+    let list: Cheque[] = [];
+    if (!this.isBrowser()) {
+      list = [...INITIAL_CHEQUES];
+    } else {
+      const data = localStorage.getItem(STORAGE_KEYS.CHEQUES);
+      if (!data) {
+        localStorage.setItem(STORAGE_KEYS.CHEQUES, JSON.stringify(INITIAL_CHEQUES));
+        list = [...INITIAL_CHEQUES];
+      } else {
+        try {
+          list = JSON.parse(data);
+        } catch {
+          list = [...INITIAL_CHEQUES];
+        }
+      }
+    }
+
+    // Always recompute dynamic alert states and reminders
+    const updatedList = list.map(c => {
+      const alertState = calculateChequeAlertState(c);
+      const reminders = generateChequeReminders(c, c.reminders || []);
+      return { ...c, alertState, reminders };
+    });
+
+    if (!filter) return updatedList;
+
+    return updatedList.filter(c => {
+      if (filter.type && filter.type !== 'all' && c.type !== filter.type) return false;
+      if (filter.entityId && filter.entityId !== 'all' && c.billingEntityId !== filter.entityId) return false;
+      if (filter.status && filter.status !== 'all' && c.status !== filter.status) return false;
+      if (filter.alertState && filter.alertState !== 'all' && c.alertState !== filter.alertState) return false;
+      if (filter.clientId && c.clientId !== filter.clientId) return false;
+      if (filter.bank && !c.drawerBank.toLowerCase().includes(filter.bank.toLowerCase())) return false;
+      if (filter.startDate && (c.expectedActionDate || c.chequeDate) < filter.startDate) return false;
+      if (filter.endDate && (c.expectedActionDate || c.chequeDate) > filter.endDate) return false;
+      if (filter.searchQuery) {
+        const q = filter.searchQuery.toLowerCase().trim();
+        const matchesNumber = c.chequeNumber.toLowerCase().includes(q);
+        const matchesParty = c.payerOrPayeeName.toLowerCase().includes(q);
+        const matchesBank = c.drawerBank.toLowerCase().includes(q);
+        const matchesPurpose = (c.purposeOfPayment || '').toLowerCase().includes(q);
+        const matchesEntity = (c.billingEntityName || '').toLowerCase().includes(q);
+        if (!matchesNumber && !matchesParty && !matchesBank && !matchesPurpose && !matchesEntity) {
+          return false;
+        }
+      }
+      return true;
+    });
+  }
+
+  getChequeById(id: string): Cheque | undefined {
+    return this.getCheques().find(c => c.id === id);
+  }
+
+  saveCheque(chequeData: Omit<Cheque, 'id' | 'createdAt' | 'updatedAt'> & { id?: string }): Cheque {
+    const list = this.getCheques();
+    const now = new Date().toISOString();
+
+    const entity = this.getEntityById(chequeData.billingEntityId);
+    const enrichedData = {
+      ...chequeData,
+      billingEntityName: entity?.displayName || entity?.name || chequeData.billingEntityName || 'SN Advertising',
+      billingEntityPrefix: entity?.prefix || chequeData.billingEntityPrefix || 'SN',
+    };
+
+    let saved: Cheque;
+    if (chequeData.id) {
+      const index = list.findIndex(c => c.id === chequeData.id);
+      if (index === -1) {
+        saved = {
+          ...enrichedData,
+          id: chequeData.id,
+          createdAt: now,
+          updatedAt: now,
+          alertState: 'normal',
+          reminders: [],
+          attachments: enrichedData.attachments || [],
+          invoiceAllocations: enrichedData.invoiceAllocations || [],
+          statusHistory: enrichedData.statusHistory || []
+        };
+        list.push(saved);
+      } else {
+        const existing = list[index];
+        saved = {
+          ...existing,
+          ...enrichedData,
+          updatedAt: now,
+        };
+        list[index] = saved;
+      }
+    } else {
+      const newId = 'chq-' + Date.now();
+      saved = {
+        ...enrichedData,
+        id: newId,
+        createdAt: now,
+        updatedAt: now,
+        alertState: 'normal',
+        reminders: [],
+        attachments: enrichedData.attachments || [],
+        invoiceAllocations: enrichedData.invoiceAllocations || [],
+        statusHistory: [
+          {
+            id: 'sh-' + Date.now(),
+            chequeId: newId,
+            newStatus: enrichedData.status,
+            changedAt: now,
+            notes: `Cheque recorded with status: ${enrichedData.status}`
+          }
+        ]
+      };
+      list.unshift(saved);
+    }
+
+    saved.alertState = calculateChequeAlertState(saved);
+    saved.reminders = generateChequeReminders(saved, saved.reminders || []);
+
+    if (this.isBrowser()) {
+      localStorage.setItem(STORAGE_KEYS.CHEQUES, JSON.stringify(list));
+    }
+    return saved;
+  }
+
+  deleteCheque(id: string): boolean {
+    const list = this.getCheques();
+    const updated = list.filter(c => c.id !== id);
+    if (this.isBrowser()) {
+      localStorage.setItem(STORAGE_KEYS.CHEQUES, JSON.stringify(updated));
+    }
+    return true;
+  }
+
+  updateChequeStatus(
+    id: string, 
+    newStatus: ChequeStatus, 
+    details?: { 
+      notes?: string; 
+      returnReason?: string; 
+      bankCharges?: number; 
+      followUpDate?: string; 
+      replacementChequeRef?: string;
+      clearedDate?: string;
+    }
+  ): Cheque {
+    const list = this.getCheques();
+    const index = list.findIndex(c => c.id === id);
+    if (index === -1) throw new Error('Cheque not found');
+
+    const cheque = list[index];
+    const prevStatus = cheque.status;
+    const now = new Date().toISOString();
+
+    const historyEntry: ChequeStatusHistory = {
+      id: 'sh-' + Date.now(),
+      chequeId: cheque.id,
+      previousStatus: prevStatus,
+      newStatus,
+      changedAt: now,
+      notes: details?.notes,
+      returnReason: details?.returnReason,
+      bankCharges: details?.bankCharges,
+      followUpDate: details?.followUpDate,
+      replacementChequeRef: details?.replacementChequeRef
+    };
+
+    const updated: Cheque = {
+      ...cheque,
+      status: newStatus,
+      updatedAt: now,
+      statusHistory: [...(cheque.statusHistory || []), historyEntry],
+      ...(details?.clearedDate ? { actualClearanceDate: details.clearedDate } : {}),
+      ...(newStatus === 'cleared' && !details?.clearedDate ? { actualClearanceDate: now.split('T')[0] } : {}),
+      ...(details?.returnReason ? { returnReason: details.returnReason } : {}),
+      ...(details?.bankCharges !== undefined ? { bankCharges: details.bankCharges } : {}),
+      ...(details?.followUpDate ? { followUpDate: details.followUpDate } : {}),
+      ...(details?.replacementChequeRef ? { replacementChequeRef: details.replacementChequeRef } : {}),
+    };
+
+    // If marked cleared AND incoming with invoice allocations, post payments
+    if (newStatus === 'cleared' && prevStatus !== 'cleared' && updated.type === 'incoming') {
+      if (updated.invoiceAllocations && updated.invoiceAllocations.length > 0) {
+        for (const alloc of updated.invoiceAllocations) {
+          try {
+            this.recordPayment(alloc.invoiceId, {
+              amount: alloc.allocatedAmount,
+              paymentDate: updated.actualClearanceDate || now.split('T')[0],
+              paymentMethod: 'cheque',
+              transactionRef: `CHQ-${updated.chequeNumber}`,
+              notes: `Cleared cheque #${updated.chequeNumber} (${updated.drawerBank})`
+            });
+          } catch (e) {
+            console.error('Failed to post payment for invoice allocation:', e);
+          }
+        }
+      }
+    }
+
+    updated.alertState = calculateChequeAlertState(updated);
+    updated.reminders = generateChequeReminders(updated, updated.reminders || []);
+
+    list[index] = updated;
+    if (this.isBrowser()) {
+      localStorage.setItem(STORAGE_KEYS.CHEQUES, JSON.stringify(list));
+    }
+    return updated;
+  }
+
+  getChequeKPIs(filter?: ChequeFilter): ChequeKPIs {
+    const list = this.getCheques(filter);
+
+    let totalIncomingAmount = 0;
+    let totalOutgoingAmount = 0;
+    let pendingChequesCount = 0;
+    let pendingChequesAmount = 0;
+    let due7DaysCount = 0;
+    let due7DaysAmount = 0;
+    let overdueCount = 0;
+    let overdueAmount = 0;
+    let clearedCount = 0;
+    let clearedAmount = 0;
+    let returnedCount = 0;
+    let returnedAmount = 0;
+
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    for (const c of list) {
+      const amt = Number(c.amount) || 0;
+      if (c.type === 'incoming') {
+        totalIncomingAmount += amt;
+      } else {
+        totalOutgoingAmount += amt;
+      }
+
+      if (c.status === 'cleared') {
+        clearedCount += 1;
+        clearedAmount += amt;
+      } else if (c.status === 'returned') {
+        returnedCount += 1;
+        returnedAmount += amt;
+      } else if (c.status !== 'cancelled' && c.status !== 'replaced') {
+        // Pending
+        pendingChequesCount += 1;
+        pendingChequesAmount += amt;
+
+        const targetDateStr = c.expectedActionDate || c.chequeDate;
+        if (targetDateStr) {
+          const targetDate = new Date(targetDateStr);
+          targetDate.setHours(0, 0, 0, 0);
+          const diffDays = Math.round((targetDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
+
+          if (diffDays < 0) {
+            overdueCount += 1;
+            overdueAmount += amt;
+          } else if (diffDays <= 7) {
+            due7DaysCount += 1;
+            due7DaysAmount += amt;
+          }
+        }
+      }
+    }
+
+    return {
+      totalIncomingAmount,
+      totalOutgoingAmount,
+      pendingChequesCount,
+      pendingChequesAmount,
+      due7DaysCount,
+      due7DaysAmount,
+      overdueCount,
+      overdueAmount,
+      clearedCount,
+      clearedAmount,
+      returnedCount,
+      returnedAmount
+    };
+  }
+
+  getChequeReminders(options?: { onlyPending?: boolean; limit?: number }): (ChequeReminder & { cheque?: Cheque })[] {
+    const cheques = this.getCheques();
+    const allReminders: (ChequeReminder & { cheque?: Cheque })[] = [];
+
+    const now = new Date().toISOString();
+
+    for (const c of cheques) {
+      if (!c.reminders || c.reminders.length === 0) continue;
+      for (const r of c.reminders) {
+        if (options?.onlyPending) {
+          if (r.isDismissed) continue;
+          if (r.snoozedUntil && r.snoozedUntil > now) continue;
+        }
+        allReminders.push({ ...r, cheque: c });
+      }
+    }
+
+    // Sort urgent first, then by date
+    const priorityWeight: Record<string, number> = {
+      urgent: 4,
+      high: 3,
+      medium: 2,
+      low: 1
+    };
+
+    allReminders.sort((a, b) => {
+      const pDiff = (priorityWeight[b.priority] || 0) - (priorityWeight[a.priority] || 0);
+      if (pDiff !== 0) return pDiff;
+      return a.reminderDate.localeCompare(b.reminderDate);
+    });
+
+    if (options?.limit && options.limit > 0) {
+      return allReminders.slice(0, options.limit);
+    }
+
+    return allReminders;
+  }
+
+  snoozeReminder(reminderId: string, days: number = 1): void {
+    const list = this.getCheques();
+    const snoozeDate = new Date();
+    snoozeDate.setDate(snoozeDate.getDate() + days);
+    const snoozedUntil = snoozeDate.toISOString();
+
+    let updated = false;
+    for (const c of list) {
+      if (!c.reminders) continue;
+      const r = c.reminders.find(rem => rem.id === reminderId);
+      if (r) {
+        r.snoozedUntil = snoozedUntil;
+        updated = true;
+        break;
+      }
+    }
+
+    if (updated && this.isBrowser()) {
+      localStorage.setItem(STORAGE_KEYS.CHEQUES, JSON.stringify(list));
+    }
+  }
+
+  dismissReminder(reminderId: string): void {
+    const list = this.getCheques();
+    let updated = false;
+    for (const c of list) {
+      if (!c.reminders) continue;
+      const r = c.reminders.find(rem => rem.id === reminderId);
+      if (r) {
+        r.isDismissed = true;
+        updated = true;
+        break;
+      }
+    }
+
+    if (updated && this.isBrowser()) {
+      localStorage.setItem(STORAGE_KEYS.CHEQUES, JSON.stringify(list));
+    }
+  }
+
+  markReminderRead(reminderId: string): void {
+    const list = this.getCheques();
+    let updated = false;
+    for (const c of list) {
+      if (!c.reminders) continue;
+      const r = c.reminders.find(rem => rem.id === reminderId);
+      if (r) {
+        r.isRead = true;
+        updated = true;
+        break;
+      }
+    }
+
+    if (updated && this.isBrowser()) {
+      localStorage.setItem(STORAGE_KEYS.CHEQUES, JSON.stringify(list));
     }
   }
 }

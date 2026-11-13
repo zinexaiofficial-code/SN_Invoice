@@ -20,10 +20,12 @@ import {
   Wifi,
   WifiOff,
   ChevronRight,
-  Sparkles
+  Sparkles,
+  CreditCard
 } from "lucide-react";
 import { storage } from "@/lib/storage";
 import { cn } from "@/lib/utils";
+import { NotificationBell } from "@/components/notifications/NotificationBell";
 
 interface AppLayoutProps {
   children: React.ReactNode;
@@ -64,6 +66,7 @@ export function AppLayout({ children }: AppLayoutProps) {
     { name: "Dashboard", href: "/", icon: LayoutDashboard },
     { name: "Clients", href: "/clients", icon: Users },
     { name: "Invoices", href: "/invoices", icon: FileText },
+    { name: "Cheque Management", href: "/cheques", icon: CreditCard },
     { name: "Create Invoice", href: "/invoices/new", icon: PlusCircle, isPrimary: true },
     { name: "Monthly History", href: "/history", icon: CalendarDays },
     { name: "Reports", href: "/reports", icon: BarChart3 },
@@ -85,6 +88,7 @@ export function AppLayout({ children }: AppLayoutProps) {
           </div>
         </Link>
         <div className="flex items-center space-x-2">
+          <NotificationBell />
           <button
             onClick={toggleRole}
             className="text-xs bg-navy-900 border border-navy-700 px-2 py-1 rounded text-slate-200 flex items-center space-x-1"
@@ -248,6 +252,40 @@ export function AppLayout({ children }: AppLayoutProps) {
 
       {/* Main Content Area */}
       <main className="flex-1 flex flex-col min-w-0 pb-20 md:pb-8">
+        {/* Desktop Top Header Bar */}
+        <header className="hidden md:flex items-center justify-between px-8 py-3.5 bg-white border-b border-slate-200/80 sticky top-0 z-30 shadow-xs">
+          <div className="flex items-center space-x-3">
+            <span className="text-xs font-semibold px-2.5 py-1 bg-navy-50 text-navy-900 rounded-md border border-navy-100">
+              SN INVOICE PWA
+            </span>
+            <span className="text-xs text-slate-300">|</span>
+            <span className="text-xs text-slate-500 font-medium">
+              Multi-Entity & Cheque Reminder System
+            </span>
+          </div>
+
+          <div className="flex items-center space-x-3">
+            <div className="bg-navy-950 rounded-xl px-1 py-0.5 shadow-sm">
+              <NotificationBell />
+            </div>
+
+            <div className="h-6 w-px bg-slate-200" />
+
+            <button
+              onClick={toggleRole}
+              className="text-xs font-semibold px-3 py-1.5 rounded-lg border flex items-center space-x-1.5 transition-all shadow-xs bg-slate-50 hover:bg-slate-100 text-slate-700 border-slate-200"
+              title="Click to switch role"
+            >
+              {role === 'admin' ? (
+                <ShieldCheck className="w-4 h-4 text-emerald-600" />
+              ) : (
+                <UserCheck className="w-4 h-4 text-blue-600" />
+              )}
+              <span className="capitalize font-semibold">{role} View</span>
+            </button>
+          </div>
+        </header>
+
         {/* Offline Banner if offline */}
         {!isOnline && (
           <div className="bg-amber-500 text-navy-950 font-medium px-4 py-2 text-xs text-center flex items-center justify-center space-x-2 shadow-sm">

@@ -316,3 +316,191 @@ export interface DashboardKPIs {
   overdueInvoicesCount: number;
 }
 
+// ==========================================
+// CHEQUE MANAGEMENT & SMART REMINDER MODULE
+// ==========================================
+
+export type ChequeType = 'incoming' | 'outgoing';
+
+export type IncomingChequeStatus = 
+  | 'received' 
+  | 'pending_deposit' 
+  | 'deposited' 
+  | 'cleared' 
+  | 'returned' 
+  | 'cancelled' 
+  | 'replaced';
+
+export type OutgoingChequeStatus = 
+  | 'prepared' 
+  | 'issued' 
+  | 'pending_presentation' 
+  | 'presented' 
+  | 'cleared' 
+  | 'returned' 
+  | 'cancelled';
+
+export type ChequeStatus = IncomingChequeStatus | OutgoingChequeStatus;
+
+export type ChequeAlertState = 
+  | 'upcoming' 
+  | 'due_today' 
+  | 'overdue' 
+  | 'action_required' 
+  | 'cleared' 
+  | 'normal';
+
+export interface ChequeInvoiceAllocation {
+  id: string;
+  chequeId: string;
+  invoiceId: string;
+  invoiceNumber: string;
+  allocatedAmount: number;
+  createdAt: string;
+}
+
+export interface ChequeStatusHistory {
+  id: string;
+  chequeId: string;
+  previousStatus?: ChequeStatus;
+  newStatus: ChequeStatus;
+  changedAt: string;
+  changedBy?: string;
+  notes?: string;
+  returnReason?: string;
+  bankCharges?: number;
+  followUpDate?: string;
+  replacementChequeRef?: string;
+}
+
+export interface ChequeAttachment {
+  id: string;
+  fileName: string;
+  fileUrl: string;
+  fileType: string;
+  uploadedAt: string;
+}
+
+export interface ChequeReminder {
+  id: string;
+  chequeId: string;
+  reminderDate: string; // YYYY-MM-DD
+  reminderType: 
+    | 'due_7_days' 
+    | 'due_3_days' 
+    | 'due_1_day' 
+    | 'due_today' 
+    | 'overdue' 
+    | 'deposit_followup' 
+    | 'returned_action';
+  title: string;
+  message: string;
+  priority: 'low' | 'medium' | 'high' | 'urgent';
+  isRead: boolean;
+  isDismissed: boolean;
+  snoozedUntil?: string; // ISO date-time string
+  deliveryStatus: 'pending' | 'delivered' | 'failed';
+  deliveredAt?: string;
+  createdAt: string;
+}
+
+export interface Cheque {
+  id: string;
+  type: ChequeType;
+  chequeNumber: string;
+  amount: number;
+  currency: string; // default 'LKR'
+  chequeDate: string; // YYYY-MM-DD on the physical cheque
+  receivedOrIssuedDate: string; // YYYY-MM-DD date handed over/received
+  expectedActionDate: string; // expected deposit date (incoming) or expected presentation date (outgoing)
+  actualClearanceDate?: string;
+  
+  // Banking & Party Details
+  drawerBank: string; // e.g. Commercial Bank, Seylan Bank, HNB
+  branch?: string;
+  bankAccountId?: string; // Entity bank account for deposit target or issuing
+  bankAccountNumber?: string;
+  payerOrPayeeName: string; // Client name or supplier name
+  clientId?: string; // Linked client if incoming
+  supplierName?: string; // Supplier/Vendor if outgoing
+  
+  // Billing Entity
+  billingEntityId: string;
+  billingEntityName?: string;
+  billingEntityPrefix?: string;
+
+  // Status & Alerts
+  status: ChequeStatus;
+  alertState?: ChequeAlertState;
+  
+  // Purpose & References
+  purposeOfPayment?: string;
+  billReference?: string;
+  notes?: string;
+  
+  // Attachments (Front & Back cheque images)
+  imageFrontUrl?: string;
+  imageBackUrl?: string;
+  attachments: ChequeAttachment[];
+  
+  // Relations
+  invoiceAllocations: ChequeInvoiceAllocation[];
+  statusHistory: ChequeStatusHistory[];
+  reminders: ChequeReminder[];
+  
+  // Reminder Configuration
+  isReminderEnabled: boolean;
+  reminderStartDate?: string;
+  customReminderDays?: number[]; // e.g. [7, 3, 1, 0]
+  
+  // Returned Cheque Specifics
+  followUpDate?: string;
+  returnReason?: string;
+  bankCharges?: number;
+  replacementChequeId?: string;
+  replacementChequeRef?: string;
+
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface ChequeFilter {
+  type?: 'all' | ChequeType;
+  entityId?: string;
+  status?: string;
+  alertState?: string;
+  bank?: string;
+  searchQuery?: string;
+  clientId?: string;
+  startDate?: string;
+  endDate?: string;
+  month?: number;
+  year?: number;
+}
+
+export interface ChequeKPIs {
+  totalIncomingAmount: number;
+  totalOutgoingAmount: number;
+  pendingChequesCount: number;
+  pendingChequesAmount: number;
+  due7DaysCount: number;
+  due7DaysAmount: number;
+  overdueCount: number;
+  overdueAmount: number;
+  clearedCount: number;
+  clearedAmount: number;
+  returnedCount: number;
+  returnedAmount: number;
+}
+
+export interface NotificationPreferences {
+  emailEnabled: boolean;
+  emailRecipient: string;
+  pushEnabled: boolean;
+  dailySummaryTime: string; // '09:00'
+  alertOnOverdue: boolean;
+  alertOnReturned: boolean;
+  timezone: string; // 'Asia/Colombo'
+}
+
+

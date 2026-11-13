@@ -4,7 +4,7 @@ import React, { useState, useEffect } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { AppLayout } from "@/components/layout/AppLayout";
-import { Invoice, InvoiceTemplateKey } from "@/types";
+import { Invoice, InvoiceTemplateKey, Cheque } from "@/types";
 import { storage } from "@/lib/storage";
 import { formatLKR, formatDate, formatDateTime } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -13,6 +13,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { InvoiceTemplateRenderer } from "@/components/invoices/InvoiceTemplateRenderer";
 import { ShareInvoiceModal } from "@/components/invoices/ShareInvoiceModal";
 import { RecordPaymentModal } from "@/components/invoices/RecordPaymentModal";
+import { ChequeModal } from "@/components/cheques/ChequeModal";
 import {
   Printer,
   Share2,
@@ -26,7 +27,9 @@ import {
   AlertTriangle,
   History,
   FileText,
-  Building
+  Building,
+  CreditCard,
+  Plus
 } from "lucide-react";
 
 export default function InvoiceDetailPage() {
@@ -38,7 +41,13 @@ export default function InvoiceDetailPage() {
   const [templateKey, setTemplateKey] = useState<InvoiceTemplateKey>("standard");
   const [isShareModalOpen, setIsShareModalOpen] = useState(false);
   const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
+  const [isChequeModalOpen, setIsChequeModalOpen] = useState(false);
+  const [cheques, setCheques] = useState<Cheque[]>([]);
   const [userRole, setUserRole] = useState<'admin' | 'staff'>('admin');
+
+  const loadCheques = () => {
+    setCheques(storage.getCheques());
+  };
 
   useEffect(() => {
     setUserRole(storage.getUserRole());
@@ -47,6 +56,21 @@ export default function InvoiceDetailPage() {
       setInvoice(found);
       setTemplateKey(found.templateKey || "standard");
     }
+    loadCheques();
+
+    const handleChequeUpdated = () => {
+      loadCheques();
+      const updatedInv = storage.getInvoiceById(invoiceId);
+      if (updatedInv) setInvoice(updatedInv);
+    };
+
+    window.addEventListener("cheque-updated", handleChequeUpdated);
+    window.addEventListener("storage", handleChequeUpdated);
+
+    return () => {
+      window.removeEventListener("cheque-updated", handleChequeUpdated);
+      window.removeEventListener("storage", handleChequeUpdated);
+    };
   }, [invoiceId]);
 
   if (!invoice) {
@@ -345,6 +369,133 @@ export default function InvoiceDetailPage() {
               )}
             </CardContent>
           </Card>
+
+          {/* Related Cheques & Clearance Tracking Card */}
+          <Card className="lg:col-span-2">
+            <CardHeader className="pb-3 flex flex-row items-center justify-between">
+              <CardTitle className="text-base flex items-center space-x-2">
+                <CreditCard className="w-4 h-4 text-emerald-600" />
+                <span>Related Cheques &amp; Clearance Tracking</span>
+              </CardTitle>
+              {invoice.status !== "void" && (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => setIsChequeModalOpen(true)}
+                  className="text-xs flex items-center space-x-1"
+                >
+                  <Plus className="w-3.5 h-3.5" />
+                  <span>Record Cheque</span>
+                </Button>
+              )}
+            </CardHeader>
+            <CardContent>
+              {cheques.filter(
+                (c) =>
+                  c.invoiceAllocations?.some((a) => a.invoiceId === invoice.id) ||
+                  c.billReference === invoice.invoiceNumber
+              ).length > 0 ? (
+                <div className="space-y-3">
+                  <div className="divide-y divide-slate-100 text-xs">
+                    {cheques
+                      .filter(
+                        (c) =>
+                          c.invoiceAllocations?.some((a) => a.invoiceId === invoice.id) ||
+                          c.billReference === invoice.invoiceNumber
+                      )
+                      .map((c) => {
+                        const alloc = c.invoiceAllocations?.find((a) => a.invoiceId === invoice.id);
+                        const allocAmt = alloc?.allocatedAmount || c.amount;
+                        const isCleared = c.status === "cleared";
+                        const isReturned = c.status === "returned";
+
+                        return (
+                          <div
+                            key={c.id}
+                            className="py-3 flex flex-col sm:flex-row sm:items-center justify-between gap-2"
+                          >
+                            <div className="space-y-0.5">
+                              <div className="flex items-center space-x-2">
+                                <span className="font-bold text-slate-900 font-mono text-sm">
+                                  Cheque #{c.chequeNumber}
+                                </span>
+                                <span
+                                  className={`text-[10px] font-bold px-2 py-0.5 rounded-full capitalize ${
+                                    isCleared
+                                      ? "bg-emerald-100 text-emerald-800"
+                                      : isReturned
+                                      ? "bg-rose-100 text-rose-800"
+                                      : "bg-amber-100 text-amber-800"
+                                  }`}
+                                >
+                                  {c.status.replace("_", " ")}
+                                </span>
+                              </div>
+                              <p className="text-slate-500 text-[11px]">
+                                {c.drawerBank} {c.branch && `(${c.branch})`} • Due/Deposit:{" "}
+                                {c.expectedActionDate || c.chequeDate}
+                              </p>
+                              <p className="text-[11px] text-slate-600">
+                                {isCleared ? (
+                                  <span className="text-emerald-700 font-medium">
+                                    ✓ Cleared on {c.actualClearanceDate || "Bank confirmation"} (payment credited to invoice)
+                                  </span>
+                                ) : isReturned ? (
+                                  <span className="text-rose-700 font-bold">
+                                    🚨 Returned: {c.returnReason || "Refer to Drawer"} (Action required)
+                                  </span>
+                                ) : (
+                                  <span className="text-amber-700">
+                                    ⏳ Pending deposit / clearance (not counted as cash until cleared)
+                                  </span>
+                                )}
+                              </p>
+                            </div>
+
+                            <div className="text-right">
+                              <span className="font-mono font-bold text-slate-900 text-sm">
+                                {formatLKR(allocAmt)}
+                              </span>
+                              <span className="block text-[10px] text-slate-400">
+                                Allocated to this invoice
+                              </span>
+                            </div>
+                          </div>
+                        );
+                      })}
+                  </div>
+
+                  <div className="p-3 bg-slate-50 rounded-xl border border-slate-200 text-[11px] text-slate-500 flex items-center justify-between">
+                    <span>
+                      Cheques Linked:{" "}
+                      <strong>
+                        {
+                          cheques.filter(
+                            (c) =>
+                              c.invoiceAllocations?.some((a) => a.invoiceId === invoice.id) ||
+                              c.billReference === invoice.invoiceNumber
+                          ).length
+                        }
+                      </strong>
+                    </span>
+                    <Link
+                      href="/cheques"
+                      className="text-emerald-700 hover:text-emerald-800 font-semibold"
+                    >
+                      Open Cheque Workspace →
+                    </Link>
+                  </div>
+                </div>
+              ) : (
+                <div className="py-5 text-center text-slate-500 text-xs">
+                  <p>No cheques recorded for this invoice yet.</p>
+                  <p className="text-[11px] text-slate-400 mt-1">
+                    When a client pays by cheque, record it here to track its deposit date, clearing status, and smart reminders.
+                  </p>
+                </div>
+              )}
+            </CardContent>
+          </Card>
         </div>
       </div>
 
@@ -362,6 +513,18 @@ export default function InvoiceDetailPage() {
         isOpen={isPaymentModalOpen}
         onClose={() => setIsPaymentModalOpen(false)}
         onPaymentRecorded={(updated) => setInvoice(updated)}
+      />
+
+      {/* Cheque Modal */}
+      <ChequeModal
+        isOpen={isChequeModalOpen}
+        onClose={() => setIsChequeModalOpen(false)}
+        onSaved={() => {
+          loadCheques();
+          const updatedInv = storage.getInvoiceById(invoiceId);
+          if (updatedInv) setInvoice(updatedInv);
+        }}
+        defaultInvoiceId={invoice.id}
       />
     </AppLayout>
   );

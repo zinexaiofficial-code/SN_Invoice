@@ -788,3 +788,4 @@ export function EntityModal({ isOpen, onClose, entityToEdit, onSaved }: EntityMo
     </Dialog>
   );
 }
+
