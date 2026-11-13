@@ -8,21 +8,69 @@ export interface UserProfile {
   createdAt: string;
 }
 
+export interface EntityBankAccount {
+  id: string;
+  bankName: string;
+  branchName: string;
+  accountHolderName: string;
+  accountNumber: string;
+  swiftCode?: string;
+  isDefault: boolean;
+}
+
 export interface BillingEntity {
   id: string;
-  name: string;
+  name: string; // Legal registered business name
+  displayName?: string; // Trading / brand display name
   address: string;
+  addressLine1?: string;
+  addressLine2?: string;
+  city?: string;
+  postalCode?: string;
+  country?: string;
   phone?: string;
+  secondaryPhone?: string;
   email?: string;
+  website?: string;
+  brn?: string; // Business Registration Number
+  vatNumber?: string;
+  isVatRegistered: boolean;
+
+  // Banking
   bankName?: string;
   branch?: string;
   accountName?: string;
   accountNumber?: string;
+  swiftCode?: string;
   chequePayee: string;
-  vatNumber?: string;
   paymentInstructions?: string;
-  prefix: string;
+  bankAccounts?: EntityBankAccount[];
+
+  // Branding & Assets
+  logoUrl?: string; // URL or persistent data URL (PNG, JPG, WebP)
   signatureUrl?: string;
+  primaryColor?: string;
+  secondaryColor?: string;
+  headerStyle?: 'modern' | 'classic' | 'minimal';
+  footerText?: string;
+
+  // Invoice Numbering & Defaults
+  prefix: string; // Unique entity prefix e.g. SN, HRP
+  startingSequence?: number;
+  currentSequence?: number;
+  defaultCurrency?: string;
+  defaultPaymentTerms?: string;
+  defaultDueDays?: number;
+  defaultInvoiceTemplate?: InvoiceTemplateKey;
+  defaultTaxConfig?: {
+    vatApplicable: boolean;
+    vatRate: number;
+  };
+  invoiceNotes?: string;
+  signatoryName?: string;
+  signatoryDesignation?: string;
+
+  status: 'active' | 'archived';
   isActive: boolean;
   createdAt: string;
   updatedAt: string;
@@ -139,17 +187,35 @@ export interface ClientSnapshot {
 export interface BillingSnapshot {
   id: string;
   name: string;
+  displayName?: string;
   address: string;
+  addressLine1?: string;
+  addressLine2?: string;
+  city?: string;
+  postalCode?: string;
+  country?: string;
   phone?: string;
+  secondaryPhone?: string;
   email?: string;
+  website?: string;
+  brn?: string;
+  vatNumber?: string;
+  isVatRegistered?: boolean;
   chequePayee: string;
   bankName?: string;
   branch?: string;
   accountName?: string;
   accountNumber?: string;
-  vatNumber?: string;
+  swiftCode?: string;
   paymentInstructions?: string;
+  logoUrl?: string;
   signatureUrl?: string;
+  signatoryName?: string;
+  signatoryDesignation?: string;
+  primaryColor?: string;
+  secondaryColor?: string;
+  footerText?: string;
+  prefix?: string;
 }
 
 export interface Invoice {

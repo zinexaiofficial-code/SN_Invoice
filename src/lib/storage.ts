@@ -17,18 +17,52 @@ export const INITIAL_BILLING_ENTITIES: BillingEntity[] = [
   {
     id: 'e1111111-1111-1111-1111-111111111111',
     name: 'SN Advertising',
+    displayName: 'SN Advertising',
     address: '32/1, The Suriya Group, Talawatta, Gonawala, Kelaniya.',
-    phone: '+94 11 772 8282 / +94 77 400 0004 / +94 77 462 6262',
+    addressLine1: '32/1, The Suriya Group, Talawatta',
+    addressLine2: 'Gonawala',
+    city: 'Kelaniya',
+    postalCode: '11600',
+    country: 'Sri Lanka',
+    phone: '+94 11 772 8282',
+    secondaryPhone: '+94 77 400 0004 / +94 77 462 6262',
     email: 'snadvertising@hotmail.com',
+    website: 'www.snadvertising.lk',
+    brn: 'PV-89241',
+    isVatRegistered: false,
+    vatNumber: undefined,
     bankName: 'Seylan Bank',
     branch: 'Kadawatha Branch',
     accountName: 'SN Advertising',
     accountNumber: '028013149867001',
     chequePayee: 'SN ADVERTISING',
-    vatNumber: undefined,
-    paymentInstructions: 'Cheques should be drawn in favour of SN ADVERTISING. and crossed "ACCOUNT PAYEE" only. Bank transfers may be made to SN Advertising, Account No. 028013149867001, Seylan Bank – Kadawatha Branch.',
+    paymentInstructions: 'Cheques should be drawn in favour of SN ADVERTISING. and crossed "ACCOUNT PAYEE" only. Bank transfers to SN Advertising, Account No. 028013149867001, Seylan Bank – Kadawatha Branch.',
+    bankAccounts: [
+      {
+        id: 'ba-sn-1',
+        bankName: 'Seylan Bank',
+        branchName: 'Kadawatha Branch',
+        accountHolderName: 'SN Advertising',
+        accountNumber: '028013149867001',
+        isDefault: true,
+      }
+    ],
     prefix: 'SN',
+    startingSequence: 23460,
+    currentSequence: 23467,
+    logoUrl: '/logo.png',
     signatureUrl: '/signature-sample.png',
+    signatoryName: 'S. Nawagamuwa',
+    signatoryDesignation: 'Managing Director',
+    primaryColor: '#0f172a',
+    secondaryColor: '#059669',
+    headerStyle: 'classic',
+    footerText: 'Thank you for partnering with SN Advertising — Colombo, Sri Lanka',
+    defaultCurrency: 'LKR',
+    defaultPaymentTerms: '7 Days',
+    defaultDueDays: 7,
+    defaultInvoiceTemplate: 'standard',
+    status: 'active',
     isActive: true,
     createdAt: '2026-08-01T00:00:00Z',
     updatedAt: '2026-08-01T00:00:00Z',
@@ -36,17 +70,54 @@ export const INITIAL_BILLING_ENTITIES: BillingEntity[] = [
   {
     id: 'e2222222-2222-2222-2222-222222222222',
     name: 'HARIPARA (PVT) LTD',
+    displayName: 'HARIPARA (PVT) LTD',
     address: '32/1, The Suriya Group, Talawatta, Gonawala, Kelaniya.',
-    phone: '+94 11 772 8282 / +94 77 400 0004',
-    email: 'snadvertising@hotmail.com',
+    addressLine1: '32/1, The Suriya Group, Talawatta',
+    addressLine2: 'Gonawala',
+    city: 'Kelaniya',
+    postalCode: '11600',
+    country: 'Sri Lanka',
+    phone: '+94 11 772 8282',
+    secondaryPhone: '+94 77 400 0004',
+    email: 'info@haripara.lk',
+    website: 'www.haripara.lk',
+    brn: 'PV-104928',
+    isVatRegistered: true,
+    vatNumber: '114094498-7000',
     bankName: 'Commercial Bank of Ceylon',
     branch: 'Kelaniya Branch',
     accountName: 'HARIPARA (PVT) LTD',
     accountNumber: '10002938475',
+    swiftCode: 'CCEYLKX',
     chequePayee: 'HARIPARA(PVT)LTD',
-    vatNumber: '114094498-7000',
-    paymentInstructions: 'Cheques should be drawn in favour of HARIPARA(PVT)LTD. and crossed "ACCOUNT PAYEE" only.',
+    paymentInstructions: 'Cheques should be drawn in favour of HARIPARA(PVT)LTD. and crossed "ACCOUNT PAYEE" only. Electronic transfers to Commercial Bank of Ceylon, Kelaniya Branch, A/C: 10002938475.',
+    bankAccounts: [
+      {
+        id: 'ba-hrp-1',
+        bankName: 'Commercial Bank of Ceylon',
+        branchName: 'Kelaniya Branch',
+        accountHolderName: 'HARIPARA (PVT) LTD',
+        accountNumber: '10002938475',
+        swiftCode: 'CCEYLKX',
+        isDefault: true,
+      }
+    ],
     prefix: 'HRP',
+    startingSequence: 1,
+    currentSequence: 3,
+    logoUrl: '',
+    signatureUrl: '',
+    signatoryName: 'Authorized Officer',
+    signatoryDesignation: 'Director of Operations',
+    primaryColor: '#1e293b',
+    secondaryColor: '#d97706',
+    headerStyle: 'modern',
+    footerText: 'Official IRD Registered Tax Invoice — HARIPARA (PVT) LTD',
+    defaultCurrency: 'LKR',
+    defaultPaymentTerms: '14 Days',
+    defaultDueDays: 14,
+    defaultInvoiceTemplate: 'vat',
+    status: 'active',
     isActive: true,
     createdAt: '2026-08-01T00:00:00Z',
     updatedAt: '2026-08-01T00:00:00Z',
@@ -251,15 +322,24 @@ export const INITIAL_INVOICES: Invoice[] = [
     billingSnapshot: {
       id: 'e1111111-1111-1111-1111-111111111111',
       name: 'SN Advertising',
+      displayName: 'SN Advertising',
       address: '32/1, The Suriya Group, Talawatta, Gonawala, Kelaniya.',
       phone: '+94 11 772 8282 / +94 77 400 0004 / +94 77 462 6262',
       email: 'snadvertising@hotmail.com',
+      website: 'www.snadvertising.lk',
+      brn: 'PV-89241',
       chequePayee: 'SN ADVERTISING',
       bankName: 'Seylan Bank',
       branch: 'Kadawatha Branch',
       accountName: 'SN Advertising',
       accountNumber: '028013149867001',
-      paymentInstructions: 'Cheques should be drawn in favour of SN ADVERTISING. and crossed "ACCOUNT PAYEE" only. Bank transfers may be made to SN Advertising, Account No. 028013149867001, Seylan Bank – Kadawatha Branch.'
+      paymentInstructions: 'Cheques should be drawn in favour of SN ADVERTISING. and crossed "ACCOUNT PAYEE" only. Bank transfers may be made to SN Advertising, Account No. 028013149867001, Seylan Bank – Kadawatha Branch.',
+      prefix: 'SN',
+      logoUrl: '/logo.png',
+      signatureUrl: '/signature-sample.png',
+      signatoryName: 'S. Nawagamuwa',
+      signatoryDesignation: 'Managing Director',
+      footerText: 'Thank you for partnering with SN Advertising — Colombo, Sri Lanka',
     },
     items: [
       {
@@ -351,12 +431,26 @@ export const INITIAL_INVOICES: Invoice[] = [
     billingSnapshot: {
       id: 'e2222222-2222-2222-2222-222222222222',
       name: 'HARIPARA (PVT) LTD',
+      displayName: 'HARIPARA (PVT) LTD',
       address: '32/1, The Suriya Group, Talawatta, Gonawala, Kelaniya.',
       phone: '+94 11 772 8282 / +94 77 400 0004',
-      email: 'snadvertising@hotmail.com',
+      email: 'info@haripara.lk',
+      website: 'www.haripara.lk',
+      brn: 'PV-104928',
       chequePayee: 'HARIPARA(PVT)LTD',
       vatNumber: '114094498-7000',
-      paymentInstructions: 'Cheques should be drawn in favour of HARIPARA(PVT)LTD. and crossed "ACCOUNT PAYEE" only.'
+      isVatRegistered: true,
+      bankName: 'Commercial Bank of Ceylon',
+      branch: 'Kelaniya Branch',
+      accountName: 'HARIPARA (PVT) LTD',
+      accountNumber: '10002938475',
+      swiftCode: 'CCEYLKX',
+      paymentInstructions: 'Cheques should be drawn in favour of HARIPARA(PVT)LTD. and crossed "ACCOUNT PAYEE" only. Electronic transfers to Commercial Bank of Ceylon, Kelaniya Branch, A/C: 10002938475.',
+      prefix: 'HRP',
+      logoUrl: '',
+      signatoryName: 'Authorized Officer',
+      signatoryDesignation: 'Director of Operations',
+      footerText: 'Official IRD Registered Tax Invoice — HARIPARA (PVT) LTD',
     },
     items: [
       {
@@ -426,12 +520,26 @@ export const INITIAL_INVOICES: Invoice[] = [
     billingSnapshot: {
       id: 'e2222222-2222-2222-2222-222222222222',
       name: 'HARIPARA (PVT) LTD',
+      displayName: 'HARIPARA (PVT) LTD',
       address: '32/1, The Suriya Group, Talawatta, Gonawala, Kelaniya.',
       phone: '+94 11 772 8282 / +94 77 400 0004',
-      email: 'snadvertising@hotmail.com',
+      email: 'info@haripara.lk',
+      website: 'www.haripara.lk',
+      brn: 'PV-104928',
       chequePayee: 'HARIPARA(PVT)LTD',
       vatNumber: '114094498-7000',
-      paymentInstructions: 'Cheques should be drawn in favour of HARIPARA(PVT)LTD. and crossed "ACCOUNT PAYEE" only.'
+      isVatRegistered: true,
+      bankName: 'Commercial Bank of Ceylon',
+      branch: 'Kelaniya Branch',
+      accountName: 'HARIPARA (PVT) LTD',
+      accountNumber: '10002938475',
+      swiftCode: 'CCEYLKX',
+      paymentInstructions: 'Cheques should be drawn in favour of HARIPARA(PVT)LTD. and crossed "ACCOUNT PAYEE" only. Electronic transfers to Commercial Bank of Ceylon, Kelaniya Branch, A/C: 10002938475.',
+      prefix: 'HRP',
+      logoUrl: '',
+      signatoryName: 'Authorized Officer',
+      signatoryDesignation: 'Director of Operations',
+      footerText: 'Official IRD Registered Tax Invoice — HARIPARA (PVT) LTD',
     },
     items: [
       {
@@ -489,24 +597,133 @@ class StorageService {
       return INITIAL_BILLING_ENTITIES;
     }
     try {
-      return JSON.parse(data);
+      const parsed: BillingEntity[] = JSON.parse(data);
+      // Merge in any missing seed fields for existing entities (like brn, isVatRegistered, etc.)
+      const merged = parsed.map(ent => {
+        const seed = INITIAL_BILLING_ENTITIES.find(s => s.id === ent.id);
+        if (seed) {
+          return {
+            ...seed,
+            ...ent,
+            // If stored had empty/old values for new fields, take seed
+            isVatRegistered: ent.isVatRegistered !== undefined ? ent.isVatRegistered : seed.isVatRegistered,
+            vatNumber: ent.vatNumber !== undefined ? ent.vatNumber : seed.vatNumber,
+            brn: ent.brn || seed.brn,
+            displayName: ent.displayName || seed.displayName,
+            status: ent.status || seed.status || (ent.isActive ? 'active' : 'archived'),
+            prefix: ent.prefix || seed.prefix,
+            bankName: ent.bankName || seed.bankName,
+            accountNumber: ent.accountNumber || seed.accountNumber,
+            chequePayee: ent.chequePayee || seed.chequePayee,
+            email: ent.id === 'e2222222-2222-2222-2222-222222222222' && ent.email?.includes('snadvertising') ? seed.email : (ent.email || seed.email),
+          };
+        }
+        return {
+          ...ent,
+          status: ent.status || (ent.isActive ? 'active' : 'archived'),
+          isVatRegistered: Boolean(ent.isVatRegistered),
+        };
+      });
+      return merged;
     } catch {
       return INITIAL_BILLING_ENTITIES;
     }
   }
 
+  getEntityById(id: string): BillingEntity | undefined {
+    return this.getBillingEntities().find(e => e.id === id);
+  }
+
+  hasInvoices(entityId: string): boolean {
+    return this.getInvoices().some(inv => inv.billingEntityId === entityId);
+  }
+
+  isPrefixTaken(prefix: string, excludeEntityId?: string): boolean {
+    const p = prefix.trim().toUpperCase();
+    return this.getBillingEntities().some(e => e.id !== excludeEntityId && e.prefix.toUpperCase() === p);
+  }
+
+  archiveBillingEntity(id: string): { success: boolean; message?: string } {
+    const list = this.getBillingEntities();
+    const idx = list.findIndex(e => e.id === id);
+    if (idx === -1) return { success: false, message: 'Entity not found' };
+    
+    // Prevent archiving if it is the only active entity
+    const activeCount = list.filter(e => e.isActive && e.status !== 'archived').length;
+    if (activeCount <= 1 && list[idx].isActive && list[idx].status !== 'archived') {
+      return { success: false, message: 'At least one active billing entity must remain in the system.' };
+    }
+
+    list[idx] = {
+      ...list[idx],
+      status: 'archived',
+      isActive: false,
+      updatedAt: new Date().toISOString()
+    };
+    if (this.isBrowser()) {
+      localStorage.setItem(STORAGE_KEYS.BILLING_ENTITIES, JSON.stringify(list));
+    }
+    return { success: true };
+  }
+
+  unarchiveBillingEntity(id: string): { success: boolean; message?: string } {
+    const list = this.getBillingEntities();
+    const idx = list.findIndex(e => e.id === id);
+    if (idx === -1) return { success: false, message: 'Entity not found' };
+
+    list[idx] = {
+      ...list[idx],
+      status: 'active',
+      isActive: true,
+      updatedAt: new Date().toISOString()
+    };
+    if (this.isBrowser()) {
+      localStorage.setItem(STORAGE_KEYS.BILLING_ENTITIES, JSON.stringify(list));
+    }
+    return { success: true };
+  }
+
+  deleteBillingEntity(id: string): { success: boolean; message?: string } {
+    if (this.hasInvoices(id)) {
+      return { 
+        success: false, 
+        message: 'This entity has historical invoices. To protect financial audit records, entities with invoice history cannot be deleted. You can archive it instead.' 
+      };
+    }
+    const list = this.getBillingEntities();
+    if (list.length <= 1) {
+      return { success: false, message: 'You cannot delete the only billing entity.' };
+    }
+    const filtered = list.filter(e => e.id !== id);
+    if (this.isBrowser()) {
+      localStorage.setItem(STORAGE_KEYS.BILLING_ENTITIES, JSON.stringify(filtered));
+    }
+    return { success: true };
+  }
+
   saveBillingEntity(entity: Partial<BillingEntity>): BillingEntity {
     const list = this.getBillingEntities();
     let saved: BillingEntity;
+    const prefix = (entity.prefix || 'SN').toUpperCase().trim();
+
     if (entity.id) {
       const idx = list.findIndex(e => e.id === entity.id);
       if (idx >= 0) {
-        saved = { ...list[idx], ...entity, updatedAt: new Date().toISOString() };
+        saved = { 
+          ...list[idx], 
+          ...entity, 
+          prefix,
+          status: entity.status || list[idx].status || 'active',
+          updatedAt: new Date().toISOString() 
+        };
         list[idx] = saved;
       } else {
         saved = {
           ...entity,
           id: entity.id || 'e-' + Date.now(),
+          prefix,
+          status: entity.status || 'active',
+          isActive: entity.status !== 'archived',
           createdAt: new Date().toISOString(),
           updatedAt: new Date().toISOString(),
         } as BillingEntity;
@@ -516,9 +733,12 @@ class StorageService {
       saved = {
         id: 'e-' + Date.now(),
         name: entity.name || 'New Entity',
+        displayName: entity.displayName || entity.name || 'New Entity',
         address: entity.address || '',
         chequePayee: entity.chequePayee || entity.name || '',
-        prefix: entity.prefix || 'SN',
+        prefix,
+        isVatRegistered: Boolean(entity.isVatRegistered),
+        status: 'active',
         isActive: true,
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString(),
@@ -684,30 +904,63 @@ class StorageService {
     return this.getInvoices().find(inv => inv.id === id || inv.invoiceNumber === id);
   }
 
-  // Generate next collision-safe running invoice number
-  getNextInvoiceNumber(prefix = 'SN', year = new Date().getFullYear()): string {
-    if (!this.isBrowser()) return '23467';
-    const lastNumStr = localStorage.getItem(STORAGE_KEYS.NEXT_INVOICE_NUM);
-    let nextNum = 23467;
-    if (lastNumStr) {
-      nextNum = parseInt(lastNumStr, 10) || 23467;
+  // Generate next collision-safe running invoice number for a specific billing entity
+  getNextInvoiceNumber(entityId?: string): string {
+    if (!this.isBrowser()) return 'SN-23467';
+    const entities = this.getBillingEntities();
+    const entity = (entityId ? entities.find(e => e.id === entityId) : null) || entities[0];
+    const prefix = (entity?.prefix || 'SN').toUpperCase().trim();
+    const year = new Date().getFullYear();
+
+    const seqKey = `sn_seq_${prefix}`;
+    const storedSeq = localStorage.getItem(seqKey);
+
+    let nextNum: number;
+    if (storedSeq) {
+      nextNum = parseInt(storedSeq, 10);
     } else {
-      // Find highest from existing invoices
-      const existing = this.getInvoices();
-      const numbers = existing
-        .map(i => parseInt(i.invoiceNumber.replace(/\D/g, ''), 10))
-        .filter(n => !isNaN(n));
+      // Find highest from existing invoices for this entity or prefix
+      const invoices = this.getInvoices();
+      const entityInvs = invoices.filter(i => 
+        i.billingEntityId === entity?.id || 
+        (i.invoiceNumber && i.invoiceNumber.toUpperCase().startsWith(prefix))
+      );
+      
+      const numbers = entityInvs.map(inv => {
+        const parts = inv.invoiceNumber.split('-');
+        const lastPart = parts[parts.length - 1];
+        const num = parseInt(lastPart, 10);
+        return isNaN(num) ? 0 : num;
+      }).filter(n => n > 0);
+
       if (numbers.length > 0) {
         nextNum = Math.max(...numbers) + 1;
+      } else if (entity?.startingSequence) {
+        nextNum = entity.startingSequence;
+      } else if (prefix === 'SN') {
+        nextNum = 23467;
+      } else {
+        nextNum = 1;
       }
     }
-    return String(nextNum);
+
+    if (prefix === 'SN') {
+      return `SN-${nextNum}`;
+    }
+    return `${prefix}-${year}-${String(nextNum).padStart(4, '0')}`;
   }
 
-  incrementInvoiceNumber(): void {
+  incrementInvoiceNumber(entityId?: string): void {
     if (!this.isBrowser()) return;
-    const curr = parseInt(this.getNextInvoiceNumber(), 10) || 23467;
-    localStorage.setItem(STORAGE_KEYS.NEXT_INVOICE_NUM, String(curr + 1));
+    const entities = this.getBillingEntities();
+    const entity = (entityId ? entities.find(e => e.id === entityId) : null) || entities[0];
+    const prefix = (entity?.prefix || 'SN').toUpperCase().trim();
+    const seqKey = `sn_seq_${prefix}`;
+
+    const nextStr = this.getNextInvoiceNumber(entityId);
+    const parts = nextStr.split('-');
+    const currentNum = parseInt(parts[parts.length - 1], 10) || 1;
+    localStorage.setItem(seqKey, String(currentNum + 1));
   }
 
   saveInvoice(invoice: Partial<Invoice>): Invoice {
@@ -768,8 +1021,8 @@ class StorageService {
         list.push(saved);
       }
     } else {
-      const invoiceNumber = invoice.invoiceNumber || this.getNextInvoiceNumber();
-      this.incrementInvoiceNumber();
+      const invoiceNumber = invoice.invoiceNumber || this.getNextInvoiceNumber(invoice.billingEntityId);
+      this.incrementInvoiceNumber(invoice.billingEntityId);
 
       saved = {
         id: 'inv-' + Date.now(),
@@ -862,7 +1115,7 @@ class StorageService {
     const source = this.getInvoiceById(sourceInvoiceId);
     if (!source) throw new Error('Source invoice not found');
 
-    const nextNumber = this.getNextInvoiceNumber();
+    const nextNumber = this.getNextInvoiceNumber(source.billingEntityId);
     const today = new Date().toISOString().split('T')[0];
 
     const duplicated: Partial<Invoice> = {
@@ -974,19 +1227,37 @@ class StorageService {
   }
 
   // --- Dashboard KPIs ---
-  getDashboardKPIs(selectedYear?: number, selectedMonth?: number): DashboardKPIs {
-    const invoices = this.getInvoices();
+  getDashboardKPIs(selectedYear?: number, selectedMonth?: number, entityId?: string, clientId?: string): DashboardKPIs {
+    let invoices = this.getInvoices();
     const clients = this.getClients();
     const now = new Date();
     const year = selectedYear || now.getFullYear();
     const month = selectedMonth || (now.getMonth() + 1);
+
+    // Apply entity filter if provided
+    if (entityId) {
+      invoices = invoices.filter(inv => inv.billingEntityId === entityId);
+    }
+
+    // Apply client filter if provided
+    if (clientId) {
+      invoices = invoices.filter(inv => inv.clientId === clientId);
+    }
 
     const monthInvoices = invoices.filter(inv => {
       const d = new Date(inv.invoiceDate);
       return d.getFullYear() === year && (d.getMonth() + 1) === month;
     });
 
-    const totalClients = clients.filter(c => c.isActive).length;
+    let activeClients = clients.filter(c => c.isActive);
+    if (entityId) {
+      activeClients = activeClients.filter(c => 
+        c.defaultBillingEntityId === entityId || 
+        invoices.some(inv => inv.clientId === c.id)
+      );
+    }
+    const totalClients = activeClients.length;
+
     const invoicesThisMonth = monthInvoices.length;
     const totalInvoicedThisMonth = monthInvoices.reduce((sum, inv) => sum + (inv.status !== 'void' ? inv.grandTotal : 0), 0);
     const invoicesSentThisMonth = monthInvoices.filter(inv => inv.sentStatus !== 'not_sent').length;

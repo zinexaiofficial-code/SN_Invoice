@@ -3,7 +3,7 @@
 import React, { useState, useEffect } from "react";
 import Link from "next/link";
 import { AppLayout } from "@/components/layout/AppLayout";
-import { Invoice } from "@/types";
+import { Invoice, BillingEntity } from "@/types";
 import { storage } from "@/lib/storage";
 import { formatLKR, formatDate } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -20,11 +20,14 @@ import {
   DollarSign,
   Eye,
   FileText,
-  Filter
+  Filter,
+  Building2
 } from "lucide-react";
 
 export default function InvoicesListPage() {
   const [invoices, setInvoices] = useState<Invoice[]>([]);
+  const [billingEntities, setBillingEntities] = useState<BillingEntity[]>([]);
+  const [selectedEntityId, setSelectedEntityId] = useState<string>("");
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [activeShareInvoice, setActiveShareInvoice] = useState<Invoice | null>(null);
@@ -32,9 +35,11 @@ export default function InvoicesListPage() {
 
   useEffect(() => {
     setInvoices(storage.getInvoices());
+    setBillingEntities(storage.getBillingEntities());
   }, []);
 
   const filteredInvoices = invoices.filter((inv) => {
+    if (selectedEntityId && inv.billingEntityId !== selectedEntityId) return false;
     if (statusFilter !== "all" && inv.status !== statusFilter) return false;
     if (search.trim()) {
       const q = search.toLowerCase();
@@ -69,14 +74,29 @@ export default function InvoicesListPage() {
 
         {/* Filter & Search Bar */}
         <div className="flex flex-col sm:flex-row gap-3 items-center justify-between bg-white p-3.5 rounded-xl border border-slate-200 shadow-sm">
-          <div className="relative w-full sm:w-80">
-            <Search className="w-4 h-4 text-slate-400 absolute left-3 top-3" />
-            <Input
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              placeholder="Search by invoice #, client, job ref..."
-              className="pl-9 h-10 text-sm"
-            />
+          <div className="flex flex-wrap items-center gap-2.5 w-full sm:w-auto">
+            <div className="relative w-full sm:w-64">
+              <Search className="w-4 h-4 text-slate-400 absolute left-3 top-3" />
+              <Input
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                placeholder="Search invoice #, client, ref..."
+                className="pl-9 h-10 text-xs sm:text-sm"
+              />
+            </div>
+
+            <select
+              value={selectedEntityId}
+              onChange={(e) => setSelectedEntityId(e.target.value)}
+              className="h-10 px-3 rounded-xl border border-slate-300 bg-white text-xs font-bold text-navy-950"
+            >
+              <option value="">🏢 All Entities</option>
+              {billingEntities.map((ent) => (
+                <option key={ent.id} value={ent.id}>
+                  [{ent.prefix}] {ent.displayName || ent.name}
+                </option>
+              ))}
+            </select>
           </div>
 
           <div className="flex items-center space-x-2 w-full sm:w-auto overflow-x-auto pb-1 sm:pb-0">
@@ -119,11 +139,16 @@ export default function InvoicesListPage() {
                         <Link href={`/invoices/${inv.id}`} className="hover:underline">
                           #{inv.invoiceNumber}
                         </Link>
-                        {inv.regNo && (
-                          <span className="block text-[11px] font-normal text-slate-400 font-mono">
-                            {inv.regNo}
+                        <div className="flex items-center space-x-1.5 mt-0.5">
+                          <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-slate-100 text-navy-950 font-mono border border-slate-200">
+                            {inv.billingSnapshot?.prefix || "SN"}
                           </span>
-                        )}
+                          {inv.regNo && (
+                            <span className="text-[11px] font-normal text-slate-400 font-mono">
+                              {inv.regNo}
+                            </span>
+                          )}
+                        </div>
                       </td>
 
                       <td className="py-3.5 px-4">

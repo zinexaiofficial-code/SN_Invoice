@@ -209,10 +209,10 @@ export default function MonthlyHistoryPage() {
               onChange={(e) => setSelectedBillingEntityId(e.target.value)}
               className="h-9 px-3 rounded-lg border border-slate-300 bg-white text-xs font-semibold text-slate-800"
             >
-              <option value="">All Entities</option>
+              <option value="">🏢 All Entities</option>
               {billingEntities.map((ent) => (
                 <option key={ent.id} value={ent.id}>
-                  {ent.name}
+                  [{ent.prefix}] {ent.displayName || ent.name}
                 </option>
               ))}
             </select>

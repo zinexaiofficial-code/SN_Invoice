@@ -10,6 +10,49 @@ interface InvoiceTemplateRendererProps {
   printMode?: boolean;
 }
 
+function EntityLogoOrBadge({
+  logoUrl,
+  entityName,
+  prefix,
+  size = "md"
+}: {
+  logoUrl?: string;
+  entityName?: string;
+  prefix?: string;
+  size?: "sm" | "md" | "lg";
+}) {
+  const [imgError, setImgError] = React.useState(false);
+  const sizeClasses = {
+    sm: "w-12 h-12 text-sm",
+    md: "w-20 h-20 text-base",
+    lg: "w-24 h-24 text-lg",
+  }[size];
+
+  if (logoUrl && !imgError) {
+    return (
+      <div className={`${sizeClasses} relative shrink-0`}>
+        <Image
+          src={logoUrl}
+          alt={entityName || "Billing Entity Logo"}
+          fill
+          className="object-contain"
+          priority
+          onError={() => setImgError(true)}
+        />
+      </div>
+    );
+  }
+
+  const initials = prefix || (entityName ? entityName.slice(0, 3).toUpperCase() : "ENT");
+  return (
+    <div
+      className={`${sizeClasses} rounded-xl bg-gradient-to-br from-navy-950 via-slate-900 to-slate-800 text-white font-black flex flex-col items-center justify-center tracking-wider shadow-sm shrink-0 border border-slate-300`}
+    >
+      <span className="text-sm font-extrabold">{initials}</span>
+    </div>
+  );
+}
+
 export function InvoiceTemplateRenderer({ invoice, printMode = false }: InvoiceTemplateRendererProps) {
   const {
     invoiceNumber,
@@ -32,6 +75,20 @@ export function InvoiceTemplateRenderer({ invoice, printMode = false }: InvoiceT
     templateKey = 'standard'
   } = invoice;
 
+  const entityName = billingSnapshot?.displayName || billingSnapshot?.name || "SN Advertising";
+  const entityLegal = billingSnapshot?.name;
+  const entityPrefix = billingSnapshot?.prefix || "SN";
+  const entityFooter = billingSnapshot?.footerText || `Thank you for partnering with ${entityName} — Sri Lanka`;
+  const signatoryName = billingSnapshot?.signatoryName || "Authorized Signatory";
+  const signatoryTitle = billingSnapshot?.signatoryDesignation || `For ${entityName}`;
+
+  // Default payment instruction fallback if entity didn't set one
+  const defaultBankText = billingSnapshot?.bankName 
+    ? `Bank transfers to ${billingSnapshot?.accountName || entityName}, A/C: ${billingSnapshot?.accountNumber || ''}, ${billingSnapshot?.bankName} – ${billingSnapshot?.branch || ''}.` 
+    : '';
+  const finalPaymentInstructions = paymentInstructions || billingSnapshot?.paymentInstructions || 
+    `Cheques should be drawn in favour of ${billingSnapshot?.chequePayee || entityName} and crossed "ACCOUNT PAYEE" only. ${defaultBankText}`;
+
   return (
     <div
       id="printable-invoice"
@@ -46,32 +103,49 @@ export function InvoiceTemplateRenderer({ invoice, printMode = false }: InvoiceT
       {templateKey === 'standard' && (
         <div className="flex flex-col justify-between min-h-full">
           <div>
-            {/* Header: Logo and Letterhead */}
+            {/* Header: Dynamic Entity Logo and Letterhead */}
             <div className="flex items-start justify-between border-b-2 border-navy-950 pb-5">
               <div className="flex items-center space-x-4">
-                <div className="w-20 h-20 relative shrink-0">
-                  <Image
-                    src={billingSnapshot?.signatureUrl ? "/logo.png" : "/logo.png"}
-                    alt="SN Advertising Logo"
-                    fill
-                    className="object-contain"
-                    priority
-                  />
-                </div>
+                <EntityLogoOrBadge
+                  logoUrl={billingSnapshot?.logoUrl}
+                  entityName={entityName}
+                  prefix={entityPrefix}
+                  size="md"
+                />
                 <div>
                   <h1 className="text-2xl font-black tracking-tight text-navy-950 uppercase">
-                    SN ADVERTISING
+                    {entityName}
                   </h1>
-                  <p className="text-xs text-slate-600 font-medium">Advertising Agency &amp; Media Production</p>
+                  {entityLegal && entityLegal !== entityName && (
+                    <p className="text-xs text-slate-500 font-semibold">{entityLegal}</p>
+                  )}
+                  {billingSnapshot?.brn && (
+                    <p className="text-[11px] text-slate-500 font-mono mt-0.5">BRN: {billingSnapshot.brn}</p>
+                  )}
+                  {billingSnapshot?.vatNumber && (
+                    <p className="text-[11px] text-emerald-800 font-mono font-semibold">
+                      VAT Reg: {billingSnapshot.vatNumber}
+                    </p>
+                  )}
                 </div>
               </div>
 
               <div className="text-right text-xs text-slate-700 leading-relaxed font-sans max-w-xs">
-                <p className="font-semibold text-slate-900">32/1, The Suriya Group,</p>
-                <p>Talawatta, Gonawala, Kelaniya.</p>
-                <p className="text-navy-900 font-medium mt-1">snadvertising@hotmail.com</p>
-                <p className="font-mono text-slate-800 mt-0.5">+94 11 772 8282</p>
-                <p className="font-mono text-slate-800">+94 077 400 0004 / +94 77 462 6262</p>
+                {billingSnapshot?.address && (
+                  <p className="font-semibold text-slate-900 whitespace-pre-line">{billingSnapshot.address}</p>
+                )}
+                {billingSnapshot?.email && (
+                  <p className="text-navy-900 font-medium mt-1">{billingSnapshot.email}</p>
+                )}
+                {billingSnapshot?.phone && (
+                  <p className="font-mono text-slate-800 mt-0.5">{billingSnapshot.phone}</p>
+                )}
+                {billingSnapshot?.secondaryPhone && (
+                  <p className="font-mono text-slate-800">{billingSnapshot.secondaryPhone}</p>
+                )}
+                {billingSnapshot?.website && (
+                  <p className="text-slate-500 text-[11px]">{billingSnapshot.website}</p>
+                )}
               </div>
             </div>
 
@@ -145,26 +219,26 @@ export function InvoiceTemplateRenderer({ invoice, printMode = false }: InvoiceT
 
                 <div className="pt-2 border-t border-slate-200">
                   <span className="text-[11px] text-slate-500">Billing Entity: </span>
-                  <span className="text-xs font-bold text-navy-950">{billingSnapshot?.name}</span>
+                  <span className="text-xs font-bold text-navy-950">{entityName}</span>
                 </div>
               </div>
             </div>
 
             {/* Line Items Table */}
-            <div className="mt-6 border border-slate-300 rounded-lg overflow-hidden">
+            <div className="mt-5 border border-slate-300 rounded-lg overflow-hidden">
               <table className="w-full text-left text-sm border-collapse">
                 <thead>
                   <tr className="bg-navy-950 text-white text-xs font-bold uppercase tracking-wider">
-                    <th className="py-2.5 px-3 border-r border-navy-900 w-32">Date of Advertising</th>
-                    <th className="py-2.5 px-4 border-r border-navy-900">Discription</th>
+                    <th className="py-2.5 px-3 border-r border-navy-900 w-32">Period</th>
+                    <th className="py-2.5 px-4 border-r border-navy-900">Description of Service</th>
                     <th className="py-2.5 px-3 border-r border-navy-900 text-center w-16">Qty</th>
-                    <th className="py-2.5 px-3 border-r border-navy-900 text-right w-28">Unit Price</th>
+                    <th className="py-2.5 px-3 border-r border-navy-900 text-right w-28">Price (Rs.)</th>
                     <th className="py-2.5 px-4 text-right w-36">Amount (Rs.)</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-200 text-slate-800">
                   {items.map((item, idx) => (
-                    <tr key={item.id || idx} className="hover:bg-slate-50/50">
+                    <tr key={item.id || idx}>
                       <td className="py-3 px-3 text-xs font-mono font-medium border-r border-slate-200 align-top">
                         {item.servicePeriod || formatDate(invoiceDate)}
                       </td>
@@ -183,16 +257,6 @@ export function InvoiceTemplateRenderer({ invoice, printMode = false }: InvoiceT
                       </td>
                     </tr>
                   ))}
-                  {/* Empty rows filler for visual aesthetics if few items */}
-                  {items.length === 1 && (
-                    <tr className="h-12 border-b border-slate-200">
-                      <td className="border-r border-slate-200"></td>
-                      <td className="border-r border-slate-200"></td>
-                      <td className="border-r border-slate-200"></td>
-                      <td className="border-r border-slate-200"></td>
-                      <td></td>
-                    </tr>
-                  )}
                 </tbody>
               </table>
             </div>
@@ -242,50 +306,71 @@ export function InvoiceTemplateRenderer({ invoice, printMode = false }: InvoiceT
               <div>
                 <p className="font-bold text-navy-950 mb-1 uppercase tracking-wide text-[11px]">Payment Instructions:</p>
                 <p className="font-medium text-slate-800 leading-relaxed">
-                  {paymentInstructions || billingSnapshot?.paymentInstructions || "Cheques should be drawn in favour of SN ADVERTISING. and crossed 'ACCOUNT PAYEE' only."}
+                  {finalPaymentInstructions}
                 </p>
               </div>
 
               <div className="text-right flex flex-col items-end">
-                <div className="w-44 border-b border-slate-400 pb-1 mb-1 text-center">
-                  <span className="font-script text-lg text-navy-900 italic font-semibold">Authorized</span>
-                </div>
-                <p className="font-bold text-navy-950 text-xs uppercase tracking-wider">Authorized Signature</p>
-                <p className="text-[10px] text-slate-500">SN Advertising</p>
+                {billingSnapshot?.signatureUrl ? (
+                  <div className="w-36 h-14 relative mb-1">
+                    <Image
+                      src={billingSnapshot.signatureUrl}
+                      alt="Authorized Signature"
+                      fill
+                      className="object-contain"
+                    />
+                  </div>
+                ) : (
+                  <div className="w-44 border-b border-slate-400 pb-1 mb-1 text-center">
+                    <span className="font-script text-lg text-navy-900 italic font-semibold">Authorized</span>
+                  </div>
+                )}
+                <p className="font-bold text-navy-950 text-xs uppercase tracking-wider">{signatoryName}</p>
+                <p className="text-[10px] text-slate-500">{signatoryTitle}</p>
               </div>
             </div>
 
             <div className="text-center text-[10px] text-slate-400 pt-3 border-t border-slate-200">
-              Thank you for partnering with SN Advertising — Colombo, Sri Lanka
+              {entityFooter}
             </div>
           </div>
         </div>
       )}
 
-      {/* ===================== TEMPLATE 2: VAT INVOICE ===================== */}
+      {/* ===================== TEMPLATE 2: VAT TAX INVOICE ===================== */}
       {templateKey === 'vat' && (
         <div className="flex flex-col justify-between min-h-full">
           <div>
-            {/* Header: Logo, Entity and Explicit VAT Registration */}
+            {/* Header: Dynamic Entity and IRD VAT Registration */}
             <div className="flex items-start justify-between border-b-2 border-navy-900 pb-5">
               <div className="flex items-center space-x-4">
-                <div className="w-20 h-20 relative shrink-0">
-                  <Image src="/logo.png" alt="SN Logo" fill className="object-contain" priority />
-                </div>
+                <EntityLogoOrBadge
+                  logoUrl={billingSnapshot?.logoUrl}
+                  entityName={entityName}
+                  prefix={entityPrefix}
+                  size="md"
+                />
                 <div>
-                  <h1 className="text-2xl font-black text-navy-950 tracking-tight">SN ADVERTISING</h1>
-                  <p className="text-xs text-slate-600 font-bold uppercase">{billingSnapshot?.name}</p>
-                  <p className="text-xs text-slate-500">Advertising &amp; Commercial Broadcasting Services</p>
+                  <h1 className="text-2xl font-black text-navy-950 tracking-tight uppercase">{entityName}</h1>
+                  {entityLegal && entityLegal !== entityName && (
+                    <p className="text-xs text-slate-600 font-bold uppercase">{entityLegal}</p>
+                  )}
+                  {billingSnapshot?.brn && (
+                    <p className="text-xs text-slate-500 font-mono">BRN: {billingSnapshot.brn}</p>
+                  )}
+                  <p className="text-xs text-slate-500">Commercial &amp; Professional Advertising Services</p>
                 </div>
               </div>
 
               <div className="text-right text-xs text-slate-700 leading-relaxed font-sans max-w-xs">
-                <p className="font-semibold text-slate-900">{billingSnapshot?.address || "32/1, The Suriya Group, Kelaniya"}</p>
-                <p className="text-navy-900">{billingSnapshot?.email || "snadvertising@hotmail.com"}</p>
-                <p className="font-mono text-slate-800 mt-1">{billingSnapshot?.phone || "+94 11 772 8282"}</p>
+                <p className="font-semibold text-slate-900 whitespace-pre-line">{billingSnapshot?.address}</p>
+                {billingSnapshot?.email && <p className="text-navy-900">{billingSnapshot.email}</p>}
+                {billingSnapshot?.phone && <p className="font-mono text-slate-800 mt-0.5">{billingSnapshot.phone}</p>}
                 <div className="mt-2 bg-navy-900 text-white px-2.5 py-1 rounded text-right inline-block">
                   <span className="text-[10px] font-bold block text-slate-300">ISSUER VAT REG NO:</span>
-                  <span className="text-xs font-mono font-bold tracking-wider">{billingSnapshot?.vatNumber || "114094498-7000"}</span>
+                  <span className="text-xs font-mono font-bold tracking-wider">
+                    {billingSnapshot?.vatNumber || "114094498-7000"}
+                  </span>
                 </div>
               </div>
             </div>
@@ -345,7 +430,7 @@ export function InvoiceTemplateRenderer({ invoice, printMode = false }: InvoiceT
 
                 <div className="pt-2 border-t border-slate-200">
                   <span className="text-[11px] text-slate-500">Payment Payee: </span>
-                  <span className="text-xs font-bold text-navy-950">{billingSnapshot?.chequePayee}</span>
+                  <span className="text-xs font-bold text-navy-950">{billingSnapshot?.chequePayee || entityName}</span>
                 </div>
               </div>
             </div>
@@ -420,17 +505,32 @@ export function InvoiceTemplateRenderer({ invoice, printMode = false }: InvoiceT
               <div>
                 <p className="font-bold text-navy-950 mb-1 uppercase tracking-wide text-[11px]">Payment Terms &amp; Instructions:</p>
                 <p className="font-medium text-slate-800 leading-relaxed">
-                  {paymentInstructions || `Cheques should be drawn in favour of ${billingSnapshot?.chequePayee || 'HARIPARA(PVT)LTD.'} and crossed "ACCOUNT PAYEE" only.`}
+                  {finalPaymentInstructions}
                 </p>
               </div>
 
               <div className="text-right flex flex-col items-end">
-                <div className="w-44 border-b border-slate-400 pb-1 mb-1 text-center">
-                  <span className="font-script text-lg text-navy-900 italic font-semibold">Authorized</span>
-                </div>
-                <p className="font-bold text-navy-950 text-xs uppercase tracking-wider">Authorized Officer</p>
-                <p className="text-[10px] text-slate-500">For {billingSnapshot?.name || "HARIPARA (PVT) LTD"}</p>
+                {billingSnapshot?.signatureUrl ? (
+                  <div className="w-36 h-14 relative mb-1">
+                    <Image
+                      src={billingSnapshot.signatureUrl}
+                      alt="Authorized Signature"
+                      fill
+                      className="object-contain"
+                    />
+                  </div>
+                ) : (
+                  <div className="w-44 border-b border-slate-400 pb-1 mb-1 text-center">
+                    <span className="font-script text-lg text-navy-900 italic font-semibold">Authorized</span>
+                  </div>
+                )}
+                <p className="font-bold text-navy-950 text-xs uppercase tracking-wider">{signatoryName}</p>
+                <p className="text-[10px] text-slate-500">{signatoryTitle}</p>
               </div>
+            </div>
+
+            <div className="text-center text-[10px] text-slate-400 pt-3 border-t border-slate-200">
+              {entityFooter}
             </div>
           </div>
         </div>
@@ -443,21 +543,29 @@ export function InvoiceTemplateRenderer({ invoice, printMode = false }: InvoiceT
             {/* Header: Radio & Broadcast branding */}
             <div className="flex items-start justify-between border-b-2 border-navy-950 pb-5">
               <div className="flex items-center space-x-4">
-                <div className="w-20 h-20 relative shrink-0">
-                  <Image src="/logo.png" alt="SN Logo" fill className="object-contain" priority />
-                </div>
+                <EntityLogoOrBadge
+                  logoUrl={billingSnapshot?.logoUrl}
+                  entityName={entityName}
+                  prefix={entityPrefix}
+                  size="md"
+                />
                 <div>
-                  <h1 className="text-2xl font-black text-navy-950 tracking-tight">SN ADVERTISING</h1>
+                  <h1 className="text-2xl font-black text-navy-950 tracking-tight uppercase">{entityName}</h1>
                   <div className="inline-flex items-center px-2 py-0.5 mt-1 rounded bg-navy-100 text-navy-900 text-xs font-bold uppercase">
                     Broadcast &amp; Media Sponsorship Division
                   </div>
+                  {billingSnapshot?.vatNumber && (
+                    <p className="text-[11px] text-emerald-800 font-mono font-semibold mt-0.5">
+                      VAT: {billingSnapshot.vatNumber}
+                    </p>
+                  )}
                 </div>
               </div>
 
-              <div className="text-right text-xs text-slate-700 leading-relaxed">
-                <p className="font-semibold text-slate-900">32/1, The Suriya Group, Kelaniya</p>
-                <p>snadvertising@hotmail.com</p>
-                <p className="font-mono text-slate-800 mt-1">+94 11 772 8282 / +94 77 400 0004</p>
+              <div className="text-right text-xs text-slate-700 leading-relaxed max-w-xs">
+                <p className="font-semibold text-slate-900 whitespace-pre-line">{billingSnapshot?.address}</p>
+                {billingSnapshot?.email && <p className="text-navy-900">{billingSnapshot.email}</p>}
+                {billingSnapshot?.phone && <p className="font-mono text-slate-800 mt-1">{billingSnapshot.phone}</p>}
               </div>
             </div>
 
@@ -507,7 +615,7 @@ export function InvoiceTemplateRenderer({ invoice, printMode = false }: InvoiceT
                 )}
                 <div className="flex justify-end space-x-2 pt-2 border-t border-slate-200">
                   <span className="text-slate-500">Billing Entity:</span>
-                  <span className="font-bold text-navy-950">{billingSnapshot?.name}</span>
+                  <span className="font-bold text-navy-950">{entityName}</span>
                 </div>
               </div>
             </div>
@@ -580,17 +688,32 @@ export function InvoiceTemplateRenderer({ invoice, printMode = false }: InvoiceT
               <div>
                 <p className="font-bold text-navy-950 mb-1 uppercase tracking-wide text-[11px]">Payment Details:</p>
                 <p className="font-medium text-slate-800 leading-relaxed">
-                  {paymentInstructions || `Cheques should be drawn in favour of ${billingSnapshot?.chequePayee} and crossed "ACCOUNT PAYEE" only.`}
+                  {finalPaymentInstructions}
                 </p>
               </div>
 
               <div className="text-right flex flex-col items-end">
-                <div className="w-44 border-b border-slate-400 pb-1 mb-1 text-center">
-                  <span className="font-script text-lg text-navy-900 italic font-semibold">Authorized</span>
-                </div>
-                <p className="font-bold text-navy-950 text-xs uppercase tracking-wider">Authorized Signature</p>
-                <p className="text-[10px] text-slate-500">SN Advertising</p>
+                {billingSnapshot?.signatureUrl ? (
+                  <div className="w-36 h-14 relative mb-1">
+                    <Image
+                      src={billingSnapshot.signatureUrl}
+                      alt="Authorized Signature"
+                      fill
+                      className="object-contain"
+                    />
+                  </div>
+                ) : (
+                  <div className="w-44 border-b border-slate-400 pb-1 mb-1 text-center">
+                    <span className="font-script text-lg text-navy-900 italic font-semibold">Authorized</span>
+                  </div>
+                )}
+                <p className="font-bold text-navy-950 text-xs uppercase tracking-wider">{signatoryName}</p>
+                <p className="text-[10px] text-slate-500">{signatoryTitle}</p>
               </div>
+            </div>
+
+            <div className="text-center text-[10px] text-slate-400 pt-3 border-t border-slate-200">
+              {entityFooter}
             </div>
           </div>
         </div>
@@ -603,12 +726,15 @@ export function InvoiceTemplateRenderer({ invoice, printMode = false }: InvoiceT
             {/* Header: Modern Corporate */}
             <div className="flex items-start justify-between border-b-2 border-slate-800 pb-6">
               <div className="flex items-center space-x-4">
-                <div className="w-20 h-20 relative shrink-0">
-                  <Image src="/logo.png" alt="SN Logo" fill className="object-contain" priority />
-                </div>
+                <EntityLogoOrBadge
+                  logoUrl={billingSnapshot?.logoUrl}
+                  entityName={entityName}
+                  prefix={entityPrefix}
+                  size="md"
+                />
                 <div>
-                  <h1 className="text-2xl font-black text-navy-950 tracking-tight">SN ADVERTISING</h1>
-                  <p className="text-xs text-slate-500 font-medium">Smart Advertising, Production &amp; Digital Growth</p>
+                  <h1 className="text-2xl font-black text-navy-950 tracking-tight uppercase">{entityName}</h1>
+                  <p className="text-xs text-slate-500 font-medium">Smart Advertising, Production &amp; Commercial Growth</p>
                 </div>
               </div>
 
@@ -622,10 +748,11 @@ export function InvoiceTemplateRenderer({ invoice, printMode = false }: InvoiceT
             <div className="mt-6 grid grid-cols-3 gap-4 text-xs">
               <div className="bg-slate-50 p-3 rounded-lg border border-slate-200">
                 <span className="text-[10px] font-bold uppercase text-slate-400 block mb-1">ISSUED BY</span>
-                <p className="font-bold text-navy-950">{billingSnapshot?.name}</p>
+                <p className="font-bold text-navy-950">{entityName}</p>
                 <p className="text-slate-600 mt-0.5">{billingSnapshot?.address}</p>
                 <p className="text-slate-600 mt-1 font-mono">{billingSnapshot?.phone}</p>
                 {billingSnapshot?.vatNumber && <p className="font-mono text-slate-700">VAT: {billingSnapshot.vatNumber}</p>}
+                {billingSnapshot?.brn && <p className="font-mono text-slate-700">BRN: {billingSnapshot.brn}</p>}
               </div>
 
               <div className="bg-slate-50 p-3 rounded-lg border border-slate-200">
@@ -730,14 +857,30 @@ export function InvoiceTemplateRenderer({ invoice, printMode = false }: InvoiceT
             <div className="flex justify-between items-end">
               <div className="max-w-md">
                 <p className="font-bold text-navy-950 mb-0.5">Payment Instructions:</p>
-                <p>{paymentInstructions || billingSnapshot?.paymentInstructions}</p>
+                <p>{finalPaymentInstructions}</p>
               </div>
               <div className="text-right">
-                <div className="w-40 border-b border-slate-400 pb-1 mb-1 text-center font-script text-base text-navy-950">
-                  Authorized Sign
-                </div>
-                <p className="font-bold text-navy-950 uppercase text-[10px]">SN ADVERTISING</p>
+                {billingSnapshot?.signatureUrl ? (
+                  <div className="w-36 h-12 relative mb-1 ml-auto">
+                    <Image
+                      src={billingSnapshot.signatureUrl}
+                      alt="Authorized Signature"
+                      fill
+                      className="object-contain"
+                    />
+                  </div>
+                ) : (
+                  <div className="w-40 border-b border-slate-400 pb-1 mb-1 text-center font-script text-base text-navy-950">
+                    Authorized Sign
+                  </div>
+                )}
+                <p className="font-bold text-navy-950 uppercase text-[10px]">{signatoryName}</p>
+                <p className="text-[9px] text-slate-500">{signatoryTitle}</p>
               </div>
+            </div>
+
+            <div className="text-center text-[10px] text-slate-400 pt-3 border-t border-slate-100 mt-3">
+              {entityFooter}
             </div>
           </div>
         </div>
@@ -745,4 +888,3 @@ export function InvoiceTemplateRenderer({ invoice, printMode = false }: InvoiceT
     </div>
   );
 }
-

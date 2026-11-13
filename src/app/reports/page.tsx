@@ -23,16 +23,19 @@ import {
 export default function ReportsPage() {
   const [invoices, setInvoices] = useState<Invoice[]>([]);
   const [clients, setClients] = useState<Client[]>([]);
+  const [billingEntities, setBillingEntities] = useState<BillingEntity[]>([]);
   const [reportType, setReportType] = useState<
     "monthly" | "client_wise" | "sent_status" | "outstanding" | "paid" | "yearly"
   >("monthly");
 
   const [selectedYear, setSelectedYear] = useState<number>(2026);
   const [selectedMonth, setSelectedMonth] = useState<number>(9); // September 2026
+  const [selectedBillingEntityId, setSelectedBillingEntityId] = useState<string>("");
 
   useEffect(() => {
     setInvoices(storage.getInvoices());
     setClients(storage.getClients());
+    setBillingEntities(storage.getBillingEntities());
   }, []);
 
   const monthNames = [
@@ -40,8 +43,12 @@ export default function ReportsPage() {
     "July", "August", "September", "October", "November", "December"
   ];
 
-  // Filtering based on active report
+  // Filtering based on active report and selected billing entity
   let displayedInvoices = invoices.filter((i) => i.status !== "void");
+
+  if (selectedBillingEntityId) {
+    displayedInvoices = displayedInvoices.filter((inv) => inv.billingEntityId === selectedBillingEntityId);
+  }
 
   if (reportType === "monthly") {
     displayedInvoices = displayedInvoices.filter((inv) => {
@@ -65,15 +72,17 @@ export default function ReportsPage() {
   const totalPaidSum = displayedInvoices.reduce((sum, inv) => sum + inv.totalPaid, 0);
   const totalOutstandingSum = displayedInvoices.reduce((sum, inv) => sum + inv.outstandingBalance, 0);
 
-  // Export to Excel / CSV
+  // Export to Excel / CSV with entity details
   const handleExportExcel = () => {
     const data = displayedInvoices.map((inv) => ({
       "Invoice Number": inv.invoiceNumber,
       "Invoice Date": formatDate(inv.invoiceDate),
+      "Billing Entity": inv.billingSnapshot?.displayName || inv.billingSnapshot?.name || "N/A",
+      "Entity Prefix": inv.billingSnapshot?.prefix || "SN",
+      "Entity VAT Reg": inv.billingSnapshot?.vatNumber || "Non-VAT",
       "Client Name": inv.clientSnapshot?.name,
       "Client Code": inv.clientSnapshot?.code,
       "Client VAT": inv.clientSnapshot?.vatNumber || "N/A",
-      "Billing Entity": inv.billingSnapshot?.name,
       "Service Description": inv.items?.[0]?.description || inv.items?.[0]?.serviceName,
       "Advertising Period": inv.servicePeriodText || inv.items?.[0]?.servicePeriod || "-",
       "Subtotal (LKR)": inv.subtotal,
@@ -91,7 +100,10 @@ export default function ReportsPage() {
     const workbook = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(workbook, worksheet, "Invoice Report");
 
-    const fileName = `SN_Invoice_${reportType}_${selectedYear}_${Date.now()}.xlsx`;
+    const entityPrefix = selectedBillingEntityId 
+      ? (billingEntities.find(e => e.id === selectedBillingEntityId)?.prefix || "ENT") 
+      : "ALL";
+    const fileName = `SN_Invoice_${entityPrefix}_${reportType}_${selectedYear}_${Date.now()}.xlsx`;
     XLSX.writeFile(workbook, fileName);
   };
 
@@ -144,33 +156,51 @@ export default function ReportsPage() {
           })}
         </div>
 
-        {/* Date Filter Bar for monthly/yearly reports */}
-        {(reportType === "monthly" || reportType === "yearly") && (
-          <div className="bg-white p-3 rounded-xl border border-slate-200 flex items-center space-x-3 text-xs">
-            <span className="font-bold text-slate-600">Select Reporting Period:</span>
+        {/* Filter Controls Bar */}
+        <div className="bg-white p-3.5 rounded-xl border border-slate-200 flex flex-wrap items-center gap-3 text-xs">
+          <div className="flex items-center space-x-2">
+            <span className="font-bold text-slate-700">🏢 Entity:</span>
             <select
-              value={selectedYear}
-              onChange={(e) => setSelectedYear(parseInt(e.target.value, 10))}
-              className="h-8 px-2 rounded border border-slate-300 font-bold"
+              value={selectedBillingEntityId}
+              onChange={(e) => setSelectedBillingEntityId(e.target.value)}
+              className="h-8 px-2.5 rounded-lg border border-slate-300 font-bold text-navy-950 bg-white"
             >
-              <option value={2026}>2026</option>
-              <option value={2025}>2025</option>
+              <option value="">All Billing Entities</option>
+              {billingEntities.map((ent) => (
+                <option key={ent.id} value={ent.id}>
+                  [{ent.prefix}] {ent.displayName || ent.name}
+                </option>
+              ))}
             </select>
-            {reportType === "monthly" && (
+          </div>
+
+          {(reportType === "monthly" || reportType === "yearly") && (
+            <div className="flex items-center space-x-2 border-l border-slate-200 pl-3">
+              <span className="font-bold text-slate-700">Period:</span>
               <select
-                value={selectedMonth}
-                onChange={(e) => setSelectedMonth(parseInt(e.target.value, 10))}
+                value={selectedYear}
+                onChange={(e) => setSelectedYear(parseInt(e.target.value, 10))}
                 className="h-8 px-2 rounded border border-slate-300 font-bold"
               >
-                {monthNames.map((m, idx) => (
-                  <option key={m} value={idx + 1}>
-                    {m}
-                  </option>
-                ))}
+                <option value={2026}>2026</option>
+                <option value={2025}>2025</option>
               </select>
-            )}
-          </div>
-        )}
+              {reportType === "monthly" && (
+                <select
+                  value={selectedMonth}
+                  onChange={(e) => setSelectedMonth(parseInt(e.target.value, 10))}
+                  className="h-8 px-2 rounded border border-slate-300 font-bold"
+                >
+                  {monthNames.map((m, idx) => (
+                    <option key={m} value={idx + 1}>
+                      {m}
+                    </option>
+                  ))}
+                </select>
+              )}
+            </div>
+          )}
+        </div>
 
         {/* Financial Summary Cards */}
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
@@ -221,7 +251,10 @@ export default function ReportsPage() {
                   {displayedInvoices.map((inv) => (
                     <tr key={inv.id} className="hover:bg-slate-50/80 transition-colors">
                       <td className="py-3 px-4 font-mono font-bold text-navy-950">
-                        #{inv.invoiceNumber}
+                        <div>#{inv.invoiceNumber}</div>
+                        <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-slate-100 text-navy-900 border border-slate-200 inline-block mt-0.5">
+                          {inv.billingSnapshot?.prefix || "SN"}
+                        </span>
                       </td>
                       <td className="py-3 px-3 font-mono text-xs text-slate-600">
                         {formatDate(inv.invoiceDate)}

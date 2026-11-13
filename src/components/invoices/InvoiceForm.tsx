@@ -116,12 +116,17 @@ export function InvoiceForm({ initialInvoice }: InvoiceFormProps) {
       setSpecialNotes(initialInvoice.specialNotes || "");
       setPaymentInstructions(initialInvoice.paymentInstructions || "");
     } else {
-      // New Invoice: Auto-generate collision safe invoice number
-      setInvoiceNumber(storage.getNextInvoiceNumber());
-      const defaultEntity = ents[0];
+      // New Invoice: Default to first active billing entity and its sequence
+      const activeEntities = ents.filter(e => e.isActive && e.status !== 'archived');
+      const defaultEntity = activeEntities[0] || ents[0];
       if (defaultEntity) {
         setSelectedBillingEntityId(defaultEntity.id);
+        setInvoiceNumber(storage.getNextInvoiceNumber(defaultEntity.id));
         setPaymentInstructions(defaultEntity.paymentInstructions || "");
+        setVatApplicable(Boolean(defaultEntity.isVatRegistered));
+        setTemplateKey(defaultEntity.defaultInvoiceTemplate || (defaultEntity.isVatRegistered ? 'vat' : 'standard'));
+      } else {
+        setInvoiceNumber(storage.getNextInvoiceNumber());
       }
     }
   }, [initialInvoice]);
@@ -133,14 +138,11 @@ export function InvoiceForm({ initialInvoice }: InvoiceFormProps) {
     if (!client) return;
 
     if (client.defaultBillingEntityId) {
-      setSelectedBillingEntityId(client.defaultBillingEntityId);
-      const entity = billingEntities.find((e) => e.id === client.defaultBillingEntityId);
-      if (entity) setPaymentInstructions(entity.paymentInstructions || "");
+      handleEntityChange(client.defaultBillingEntityId);
     }
 
     if (client.defaultVatPreference !== undefined) {
       setVatApplicable(client.defaultVatPreference);
-      // Auto-switch template to VAT if client prefers VAT
       if (client.defaultVatPreference) {
         setTemplateKey("vat");
       }
@@ -155,12 +157,41 @@ export function InvoiceForm({ initialInvoice }: InvoiceFormProps) {
     }
   };
 
-  // When Billing Entity changes, update payment instructions
+  // When Billing Entity changes, update sequence number, template, tax, and bank instructions
+  const [entityChangeNotice, setEntityChangeNotice] = useState<string>("");
+
   const handleEntityChange = (entityId: string) => {
-    setSelectedBillingEntityId(entityId);
+    const prevEntity = billingEntities.find(e => e.id === selectedBillingEntityId);
     const entity = billingEntities.find((e) => e.id === entityId);
-    if (entity) {
-      setPaymentInstructions(entity.paymentInstructions || "");
+    if (!entity) return;
+
+    setSelectedBillingEntityId(entityId);
+
+    // Update sequence number for this specific entity if creating new invoice
+    if (!initialInvoice) {
+      const nextNum = storage.getNextInvoiceNumber(entityId);
+      setInvoiceNumber(nextNum);
+    }
+
+    // Set entity defaults
+    setPaymentInstructions(entity.paymentInstructions || "");
+    if (entity.defaultInvoiceTemplate) {
+      setTemplateKey(entity.defaultInvoiceTemplate);
+    } else if (entity.isVatRegistered) {
+      setTemplateKey("vat");
+    }
+
+    if (entity.isVatRegistered !== undefined) {
+      setVatApplicable(entity.isVatRegistered);
+    }
+
+    if (entity.invoiceNotes && !specialNotes) {
+      setSpecialNotes(entity.invoiceNotes);
+    }
+
+    if (prevEntity && prevEntity.id !== entity.id) {
+      setEntityChangeNotice(`Switched billing entity to ${entity.displayName || entity.name}. Updated prefix to ${entity.prefix} and refreshed bank instructions.`);
+      setTimeout(() => setEntityChangeNotice(""), 5000);
     }
   };
 
@@ -247,17 +278,35 @@ export function InvoiceForm({ initialInvoice }: InvoiceFormProps) {
     const billingSnapshot = {
       id: entity?.id || "unknown",
       name: entity?.name || "SN Advertising",
+      displayName: entity?.displayName || entity?.name || "SN Advertising",
       address: entity?.address || "Kelaniya",
+      addressLine1: entity?.addressLine1,
+      addressLine2: entity?.addressLine2,
+      city: entity?.city,
+      postalCode: entity?.postalCode,
+      country: entity?.country,
       phone: entity?.phone,
+      secondaryPhone: entity?.secondaryPhone,
       email: entity?.email,
-      chequePayee: entity?.chequePayee || "SN ADVERTISING",
+      website: entity?.website,
+      brn: entity?.brn,
+      vatNumber: entity?.vatNumber,
+      isVatRegistered: entity?.isVatRegistered,
+      chequePayee: entity?.chequePayee || entity?.name || "SN ADVERTISING",
       bankName: entity?.bankName,
       branch: entity?.branch,
       accountName: entity?.accountName,
       accountNumber: entity?.accountNumber,
-      vatNumber: entity?.vatNumber,
+      swiftCode: entity?.swiftCode,
       paymentInstructions: paymentInstructions || entity?.paymentInstructions,
+      logoUrl: entity?.logoUrl,
       signatureUrl: entity?.signatureUrl,
+      signatoryName: entity?.signatoryName,
+      signatoryDesignation: entity?.signatoryDesignation,
+      primaryColor: entity?.primaryColor,
+      secondaryColor: entity?.secondaryColor,
+      footerText: entity?.footerText,
+      prefix: entity?.prefix || "SN",
     };
 
     return {
@@ -303,6 +352,10 @@ export function InvoiceForm({ initialInvoice }: InvoiceFormProps) {
     setError("");
 
     // Section 7 Validation Rules
+    if (!selectedBillingEntityId) {
+      setError("Please select a billing entity before issuing or saving this invoice.");
+      return;
+    }
     if (!selectedClientId) {
       setError("Please choose a client.");
       return;
@@ -324,6 +377,7 @@ export function InvoiceForm({ initialInvoice }: InvoiceFormProps) {
   };
 
   const currentPreviewInvoice = buildInvoicePayload(status);
+  const activeEntity = billingEntities.find(e => e.id === selectedBillingEntityId);
 
   return (
     <div className="space-y-6 pb-28 md:pb-8">
@@ -334,7 +388,7 @@ export function InvoiceForm({ initialInvoice }: InvoiceFormProps) {
             {initialInvoice ? `Edit Invoice #${initialInvoice.invoiceNumber}` : "Create New Invoice"}
           </h1>
           <p className="text-sm text-slate-500">
-            Select client, add services, preview PDF, and issue official invoice.
+            Select billing entity, client, services, and generate official invoice.
           </p>
         </div>
 
@@ -368,6 +422,13 @@ export function InvoiceForm({ initialInvoice }: InvoiceFormProps) {
         </div>
       </div>
 
+      {entityChangeNotice && (
+        <div className="p-3 bg-blue-50 border border-blue-200 text-blue-900 rounded-xl text-xs font-semibold flex items-center justify-between animate-in fade-in">
+          <span>{entityChangeNotice}</span>
+          <button onClick={() => setEntityChangeNotice("")} className="text-blue-500 hover:text-blue-800 text-xs">Dismiss</button>
+        </div>
+      )}
+
       {error && (
         <div className="p-3.5 bg-rose-50 border border-rose-200 text-rose-800 rounded-xl text-sm font-semibold flex items-center space-x-2">
           <AlertCircle className="w-5 h-5 shrink-0 text-rose-600" />
@@ -377,13 +438,13 @@ export function InvoiceForm({ initialInvoice }: InvoiceFormProps) {
 
       {/* Grid: Sections A & B */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Section A: Invoice Header */}
+        {/* Section A: Invoice Header & Billing Entity */}
         <Card className="border-slate-200 shadow-sm overflow-hidden">
           <CardHeader className="bg-slate-50/70 border-b border-slate-100 py-3 px-4 sm:px-6">
             <div className="flex items-center justify-between">
               <CardTitle className="text-sm sm:text-base font-bold flex items-center space-x-2 text-navy-950">
                 <Building2 className="w-4 h-4 text-emerald-600 shrink-0" />
-                <span>Section A — Invoice Header</span>
+                <span>Section A — Billing Entity &amp; Details</span>
               </CardTitle>
               <span className="text-[11px] font-mono bg-navy-100 text-navy-900 px-2.5 py-0.5 rounded-full font-bold">
                 #{invoiceNumber || "NEW"}
@@ -391,19 +452,60 @@ export function InvoiceForm({ initialInvoice }: InvoiceFormProps) {
             </div>
           </CardHeader>
           <CardContent className="p-4 sm:p-6 space-y-4">
+            {/* Prominent Billing Entity Selection */}
+            <div className="p-3.5 bg-slate-50 border border-slate-200 rounded-xl space-y-2.5">
+              <div className="flex items-center justify-between">
+                <Label htmlFor="entity" className="text-xs font-bold text-navy-950 uppercase tracking-wider flex items-center space-x-1.5">
+                  <span>Billing Entity (Issuer) *</span>
+                </Label>
+                {activeEntity && (
+                  <span className={`text-[10px] px-2 py-0.5 rounded font-bold uppercase ${
+                    activeEntity.isVatRegistered 
+                      ? 'bg-amber-100 text-amber-900 border border-amber-300' 
+                      : 'bg-emerald-100 text-emerald-900 border border-emerald-300'
+                  }`}>
+                    {activeEntity.isVatRegistered ? `VAT: ${activeEntity.vatNumber}` : 'Non-VAT Entity'}
+                  </span>
+                )}
+              </div>
+
+              <select
+                id="entity"
+                value={selectedBillingEntityId}
+                onChange={(e) => handleEntityChange(e.target.value)}
+                className="w-full h-11 rounded-lg border border-slate-300 bg-white px-3 text-sm font-bold text-navy-950 focus:outline-none focus:ring-2 focus:ring-navy-900 shadow-sm"
+              >
+                {billingEntities.filter(e => e.isActive && e.status !== 'archived').map((ent) => (
+                  <option key={ent.id} value={ent.id}>
+                    [{ent.prefix}] {ent.displayName || ent.name} — {ent.isVatRegistered ? `VAT (${ent.vatNumber})` : 'Non-VAT'}
+                  </option>
+                ))}
+              </select>
+
+              {activeEntity && (
+                <div className="text-[11px] text-slate-600 pt-1 border-t border-slate-200/80 flex flex-wrap gap-x-3 gap-y-0.5">
+                  <span><strong>Bank:</strong> {activeEntity.bankName || 'N/A'}</span>
+                  <span><strong>Branch:</strong> {activeEntity.branch || 'N/A'}</span>
+                  <span><strong>A/C:</strong> {activeEntity.accountNumber || 'N/A'}</span>
+                </div>
+              )}
+            </div>
+
             {/* Invoice Number & Date */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
               <div className="space-y-1.5">
                 <div className="flex items-center justify-between">
                   <Label htmlFor="invNo" className="text-xs font-bold text-slate-700">Invoice Number *</Label>
-                  <span className="text-[10px] text-emerald-700 bg-emerald-50 px-1.5 py-0.5 rounded font-semibold">Auto-Sequence</span>
+                  <span className="text-[10px] text-emerald-700 bg-emerald-50 px-1.5 py-0.5 rounded font-semibold">
+                    {activeEntity?.prefix || 'SN'}-Sequence
+                  </span>
                 </div>
                 <Input
                   id="invNo"
                   value={invoiceNumber}
                   onChange={(e) => setInvoiceNumber(e.target.value)}
                   className="font-mono font-bold text-navy-950 bg-slate-50 border-slate-300 h-10 text-sm"
-                  placeholder="e.g. 23467"
+                  placeholder="e.g. SN-23467"
                   required
                 />
               </div>
@@ -420,27 +522,8 @@ export function InvoiceForm({ initialInvoice }: InvoiceFormProps) {
               </div>
             </div>
 
-            {/* Billing Entity & Template */}
+            {/* Layout Template & Due Date */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
-              <div className="space-y-1.5">
-                <Label htmlFor="entity" className="text-xs font-bold text-slate-700">
-                  Issue Under (Billing Entity) *
-                </Label>
-                <select
-                  id="entity"
-                  value={selectedBillingEntityId}
-                  onChange={(e) => handleEntityChange(e.target.value)}
-                  className="w-full h-10 rounded-lg border border-slate-300 bg-white px-3 text-xs sm:text-sm font-semibold text-slate-900 focus:outline-none focus:ring-2 focus:ring-navy-900"
-                >
-                  {billingEntities.map((ent) => (
-                    <option key={ent.id} value={ent.id}>
-                      {ent.name} {ent.vatNumber ? `(VAT: ${ent.vatNumber})` : "(Non-VAT)"}
-                    </option>
-                  ))}
-                </select>
-                <p className="text-[10px] text-slate-400">Controls cheque payee &amp; bank transfer details</p>
-              </div>
-
               <div className="space-y-1.5">
                 <Label htmlFor="template" className="text-xs font-bold text-slate-700">
                   Layout Template *
@@ -457,6 +540,18 @@ export function InvoiceForm({ initialInvoice }: InvoiceFormProps) {
                   <option value="custom">Custom Commercial Invoice</option>
                 </select>
                 <p className="text-[10px] text-slate-400">Can be switched anytime without retyping</p>
+              </div>
+
+              <div className="space-y-1.5">
+                <Label htmlFor="dueDate" className="text-xs font-bold text-slate-700">Due Date (Optional)</Label>
+                <Input
+                  id="dueDate"
+                  type="date"
+                  value={dueDate}
+                  onChange={(e) => setDueDate(e.target.value)}
+                  className="border-slate-300 h-10 text-sm"
+                />
+                <p className="text-[10px] text-slate-400">Defaults to entity due terms if left blank</p>
               </div>
             </div>
 

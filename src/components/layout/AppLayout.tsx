@@ -81,7 +81,7 @@ export function AppLayout({ children }: AppLayoutProps) {
           </div>
           <div>
             <span className="font-bold text-base tracking-wide text-white">SN Invoice</span>
-            <span className="block text-[10px] text-slate-300 -mt-0.5">SN Advertising</span>
+            <span className="block text-[10px] text-slate-300 -mt-0.5">Multi-Entity Invoicing</span>
           </div>
         </Link>
         <div className="flex items-center space-x-2">
@@ -112,7 +112,7 @@ export function AppLayout({ children }: AppLayoutProps) {
           </div>
           <div className="overflow-hidden">
             <h1 className="font-extrabold text-base tracking-tight text-white leading-tight">SN INVOICE</h1>
-            <p className="text-xs text-slate-300 font-medium truncate">SN Advertising</p>
+            <p className="text-xs text-slate-300 font-medium truncate">Multi-Entity Invoicing</p>
           </div>
         </div>
 

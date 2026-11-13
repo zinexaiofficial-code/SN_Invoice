@@ -3,7 +3,7 @@
 import React, { useState, useEffect } from "react";
 import Link from "next/link";
 import { AppLayout } from "@/components/layout/AppLayout";
-import { Invoice, Client, DashboardKPIs } from "@/types";
+import { Invoice, Client, BillingEntity, DashboardKPIs } from "@/types";
 import { storage } from "@/lib/storage";
 import { formatLKR, formatDate } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -24,7 +24,8 @@ import {
   Building,
   ChevronRight,
   TrendingUp,
-  BarChart2
+  BarChart2,
+  Building2
 } from "lucide-react";
 
 export default function DashboardPage() {
@@ -40,33 +41,41 @@ export default function DashboardPage() {
 
   const [invoices, setInvoices] = useState<Invoice[]>([]);
   const [clients, setClients] = useState<Client[]>([]);
+  const [billingEntities, setBillingEntities] = useState<BillingEntity[]>([]);
 
-  // Month & Client selector
+  // Month, Entity & Client selectors
   const [selectedYear, setSelectedYear] = useState<number>(2026);
   const [selectedMonth, setSelectedMonth] = useState<number>(9); // September 2026 (matching sample)
+  const [selectedBillingEntityId, setSelectedBillingEntityId] = useState<string>("");
   const [selectedClientId, setSelectedClientId] = useState<string>("");
 
   useEffect(() => {
     const allInvs = storage.getInvoices();
     const allClis = storage.getClients();
+    const allEnts = storage.getBillingEntities();
     setInvoices(allInvs);
     setClients(allClis);
-    setKpis(storage.getDashboardKPIs(selectedYear, selectedMonth));
-  }, [selectedYear, selectedMonth, selectedClientId]);
+    setBillingEntities(allEnts);
+    setKpis(storage.getDashboardKPIs(selectedYear, selectedMonth, selectedBillingEntityId || undefined, selectedClientId || undefined));
+  }, [selectedYear, selectedMonth, selectedBillingEntityId, selectedClientId]);
 
   const monthNames = [
     "January", "February", "March", "April", "May", "June",
     "July", "August", "September", "October", "November", "December"
   ];
 
-  // Client filtered recent invoices
-  const recentInvoices = invoices
-    .filter((inv) => !selectedClientId || inv.clientId === selectedClientId)
-    .slice(0, 7);
+  // Entity and Client filtered invoices
+  const filteredInvoices = invoices.filter((inv) => {
+    if (selectedBillingEntityId && inv.billingEntityId !== selectedBillingEntityId) return false;
+    if (selectedClientId && inv.clientId !== selectedClientId) return false;
+    return true;
+  });
 
-  // Top clients by invoiced value
+  const recentInvoices = filteredInvoices.slice(0, 7);
+
+  // Top clients by invoiced value (scoped to selected entity)
   const clientRevenueMap: Record<string, { name: string; total: number; count: number }> = {};
-  invoices.forEach((inv) => {
+  filteredInvoices.forEach((inv) => {
     if (inv.status === "void") return;
     const cid = inv.clientId;
     const cname = inv.clientSnapshot?.name || "Unknown";
@@ -81,27 +90,50 @@ export default function DashboardPage() {
     .sort((a, b) => b.total - a.total)
     .slice(0, 5);
 
-  // Payment Status counts
+  // Payment Status counts (scoped to selected entity)
   const paymentStatusCounts = {
-    paid: invoices.filter((i) => i.paymentStatus === "paid").length,
-    partially_paid: invoices.filter((i) => i.paymentStatus === "partially_paid").length,
-    unpaid: invoices.filter((i) => i.paymentStatus === "unpaid" && i.status !== "void").length,
-    voided: invoices.filter((i) => i.status === "void").length,
+    paid: filteredInvoices.filter((i) => i.paymentStatus === "paid").length,
+    partially_paid: filteredInvoices.filter((i) => i.paymentStatus === "partially_paid").length,
+    unpaid: filteredInvoices.filter((i) => i.paymentStatus === "unpaid" && i.status !== "void").length,
+    voided: filteredInvoices.filter((i) => i.status === "void").length,
   };
+
+  const activeEntityName = billingEntities.find(e => e.id === selectedBillingEntityId)?.displayName || "All Entities";
 
   return (
     <AppLayout>
       <div className="space-y-6">
-        {/* Top Header & Month/Year/Client Controls */}
+        {/* Top Header & Month/Year/Entity/Client Controls */}
         <div className="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-4 pb-4 border-b border-slate-200">
           <div>
-            <h1 className="text-2xl font-black text-navy-950 tracking-tight">Dashboard</h1>
+            <div className="flex items-center space-x-2">
+              <h1 className="text-2xl font-black text-navy-950 tracking-tight">Dashboard</h1>
+              {selectedBillingEntityId && (
+                <span className="text-xs font-bold px-2.5 py-0.5 rounded-full bg-navy-950 text-white font-mono">
+                  {activeEntityName}
+                </span>
+              )}
+            </div>
             <p className="text-sm text-slate-500">
-              SN Advertising commercial performance, active campaigns, and cashflow.
+              Commercial invoicing performance, cashflow, and active advertiser campaigns.
             </p>
           </div>
 
           <div className="flex flex-wrap items-center gap-2">
+            {/* Global Billing Entity Filter */}
+            <select
+              value={selectedBillingEntityId}
+              onChange={(e) => setSelectedBillingEntityId(e.target.value)}
+              className="h-9 px-3 rounded-xl border border-slate-300 bg-white text-xs font-bold text-navy-950 shadow-xs"
+            >
+              <option value="">🏢 All Billing Entities</option>
+              {billingEntities.map((ent) => (
+                <option key={ent.id} value={ent.id}>
+                  [{ent.prefix}] {ent.displayName || ent.name}
+                </option>
+              ))}
+            </select>
+
             <select
               value={selectedYear}
               onChange={(e) => setSelectedYear(parseInt(e.target.value, 10))}
@@ -138,7 +170,7 @@ export default function DashboardPage() {
 
             <Link
               href="/invoices/new"
-              className="bg-emerald-600 hover:bg-emerald-700 text-white font-semibold py-2 px-3.5 rounded-xl text-xs flex items-center space-x-1.5 shadow-sm"
+              className="h-9 px-3.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold flex items-center space-x-1.5 shadow-sm transition-colors"
             >
               <PlusCircle className="w-4 h-4" />
               <span>New Invoice</span>
@@ -338,11 +370,16 @@ export default function DashboardPage() {
                         <Link href={`/invoices/${inv.id}`} className="hover:underline">
                           #{inv.invoiceNumber}
                         </Link>
-                        {inv.regNo && (
-                          <span className="block text-[11px] font-normal text-slate-400 font-mono">
-                            {inv.regNo}
+                        <div className="flex items-center space-x-1.5 mt-0.5">
+                          <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-slate-100 text-navy-950 font-mono border border-slate-200">
+                            {inv.billingSnapshot?.prefix || "SN"}
                           </span>
-                        )}
+                          {inv.regNo && (
+                            <span className="text-[11px] font-normal text-slate-400 font-mono">
+                              {inv.regNo}
+                            </span>
+                          )}
+                        </div>
                       </td>
 
                       <td className="py-3.5 px-4">

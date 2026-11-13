@@ -19,6 +19,9 @@ yarn-error.log*
 # OS Files
 .DS_Store
 *.pem
+*.tsbuildinfo
+*.pdf
+download*.png
 
 # IDE
 .idea/
