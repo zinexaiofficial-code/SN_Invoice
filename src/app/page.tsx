@@ -4,6 +4,7 @@ import React, { useState, useEffect } from "react";
 import Link from "next/link";
 import { AppLayout } from "@/components/layout/AppLayout";
 import { Invoice, Client, BillingEntity, DashboardKPIs } from "@/types";
+import { useDatabase } from "@/context/DatabaseContext";
 import { storage } from "@/lib/storage";
 import { formatLKR, formatDate } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -29,6 +30,8 @@ import {
 } from "lucide-react";
 
 export default function DashboardPage() {
+  const { invoices, clients, billingEntities, isLoading } = useDatabase();
+
   const [kpis, setKpis] = useState<DashboardKPIs>({
     totalClients: 0,
     invoicesThisMonth: 0,
@@ -39,10 +42,6 @@ export default function DashboardPage() {
     overdueInvoicesCount: 0,
   });
 
-  const [invoices, setInvoices] = useState<Invoice[]>([]);
-  const [clients, setClients] = useState<Client[]>([]);
-  const [billingEntities, setBillingEntities] = useState<BillingEntity[]>([]);
-
   // Month, Entity & Client selectors
   const [selectedYear, setSelectedYear] = useState<number>(2026);
   const [selectedMonth, setSelectedMonth] = useState<number>(9); // September 2026 (matching sample)
@@ -50,14 +49,8 @@ export default function DashboardPage() {
   const [selectedClientId, setSelectedClientId] = useState<string>("");
 
   useEffect(() => {
-    const allInvs = storage.getInvoices();
-    const allClis = storage.getClients();
-    const allEnts = storage.getBillingEntities();
-    setInvoices(allInvs);
-    setClients(allClis);
-    setBillingEntities(allEnts);
     setKpis(storage.getDashboardKPIs(selectedYear, selectedMonth, selectedBillingEntityId || undefined, selectedClientId || undefined));
-  }, [selectedYear, selectedMonth, selectedBillingEntityId, selectedClientId]);
+  }, [invoices, clients, billingEntities, selectedYear, selectedMonth, selectedBillingEntityId, selectedClientId]);
 
   const monthNames = [
     "January", "February", "March", "April", "May", "June",

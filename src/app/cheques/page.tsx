@@ -25,6 +25,7 @@ import {
   ChevronDown
 } from "lucide-react";
 import { storage } from "@/lib/storage";
+import { useDatabase } from "@/context/DatabaseContext";
 import { Cheque, ChequeType, ChequeKPIs, BillingEntity, ChequeReminder } from "@/types";
 import { ChequeModal } from "@/components/cheques/ChequeModal";
 import { ChequeStatusModal } from "@/components/cheques/ChequeStatusModal";
@@ -36,6 +37,7 @@ import { cn } from "@/lib/utils";
 function ChequesPageContent() {
   const searchParams = useSearchParams();
   const initialSearch = searchParams.get("search") || "";
+  const { cheques: dbCheques, billingEntities: dbEntities, isLoading } = useDatabase();
 
   const [cheques, setCheques] = useState<Cheque[]>([]);
   const [entities, setEntities] = useState<BillingEntity[]>([]);
@@ -69,14 +71,17 @@ function ChequesPageContent() {
   const [detailsTargetCheque, setDetailsTargetCheque] = useState<Cheque | null>(null);
 
   const loadData = () => {
-    const entList = storage.getBillingEntities();
+    const entList = dbEntities.length > 0 ? dbEntities : storage.getBillingEntities();
     setEntities(entList);
 
     const filterObj = {
       entityId: selectedEntityId !== "all" ? selectedEntityId : undefined,
     };
 
-    const list = storage.getCheques(filterObj);
+    const sourceCheques = dbCheques.length > 0 ? dbCheques : storage.getCheques();
+    const list = selectedEntityId !== "all"
+      ? sourceCheques.filter(c => c.billingEntityId === selectedEntityId)
+      : sourceCheques;
     setCheques(list);
 
     const calculatedKpis = storage.getChequeKPIs(filterObj);
@@ -94,7 +99,7 @@ function ChequesPageContent() {
       window.removeEventListener("cheque-updated", handleChequeUpdate);
       window.removeEventListener("storage", handleChequeUpdate);
     };
-  }, [selectedEntityId]);
+  }, [selectedEntityId, dbCheques, dbEntities]);
 
   // Urgent Reminders list
   const urgentReminders = useMemo(() => {

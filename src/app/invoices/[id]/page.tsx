@@ -5,6 +5,7 @@ import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { AppLayout } from "@/components/layout/AppLayout";
 import { Invoice, InvoiceTemplateKey, Cheque, InvoicePdfFormat, PdfTypographySettings } from "@/types";
+import { useDatabase } from "@/context/DatabaseContext";
 import { storage } from "@/lib/storage";
 import { formatLKR, formatDate, formatDateTime } from "@/lib/utils";
 import { downloadInvoicePdf } from "@/lib/pdf";
@@ -47,6 +48,7 @@ export default function InvoiceDetailPage() {
   const params = useParams();
   const router = useRouter();
   const invoiceId = params.id as string;
+  const { invoices, isLoading, saveInvoice: dbSaveInvoice, refresh: dbRefresh } = useDatabase();
 
   const [invoice, setInvoice] = useState<Invoice | null>(null);
   const [templateKey, setTemplateKey] = useState<InvoiceTemplateKey>("standard");
@@ -63,6 +65,7 @@ export default function InvoiceDetailPage() {
   const [copiedLink, setCopiedLink] = useState(false);
   const [cheques, setCheques] = useState<Cheque[]>([]);
   const [userRole, setUserRole] = useState<'admin' | 'staff'>('admin');
+  const [fetchAttempted, setFetchAttempted] = useState(false);
 
   const loadCheques = () => {
     setCheques(storage.getCheques());
@@ -71,14 +74,16 @@ export default function InvoiceDetailPage() {
   const handleTypographyChange = (newTypo: PdfTypographySettings) => {
     setTypography(newTypo);
     if (invoice) {
-      const updated = storage.saveInvoice({ ...invoice, pdfLayout: newTypo });
-      setInvoice(updated);
+      dbSaveInvoice({ ...invoice, pdfLayout: newTypo }).catch(() => {
+        const updated = storage.saveInvoice({ ...invoice, pdfLayout: newTypo });
+        setInvoice(updated);
+      });
     }
   };
 
   useEffect(() => {
     setUserRole(storage.getUserRole());
-    const found = storage.getInvoiceById(invoiceId);
+    const found = invoices.find((i) => i.id === invoiceId) || storage.getInvoiceById(invoiceId);
     if (found) {
       setInvoice(found);
       setTemplateKey(found.templateKey || "standard");
@@ -86,12 +91,29 @@ export default function InvoiceDetailPage() {
         setSelectedFormat(found.signatureFormat);
       }
       setTypography(resolveTypography(found.pdfLayout, found.items, found.vatApplicable, !!found.specialNotes));
+    } else if (!isLoading && !fetchAttempted) {
+      setFetchAttempted(true);
+      fetch(`/api/invoices/${encodeURIComponent(invoiceId)}`, {
+        headers: { "Cache-Control": "no-cache" },
+      })
+        .then((res) => (res.ok ? res.json() : null))
+        .then((json) => {
+          if (json?.success && json?.data) {
+            setInvoice(json.data);
+            setTemplateKey(json.data.templateKey || "standard");
+            if (json.data.signatureFormat) {
+              setSelectedFormat(json.data.signatureFormat);
+            }
+            setTypography(resolveTypography(json.data.pdfLayout, json.data.items, json.data.vatApplicable, !!json.data.specialNotes));
+          }
+        })
+        .catch((err) => console.error("Error fetching invoice directly:", err));
     }
     loadCheques();
 
     const handleChequeUpdated = () => {
       loadCheques();
-      const updatedInv = storage.getInvoiceById(invoiceId);
+      const updatedInv = invoices.find((i) => i.id === invoiceId) || storage.getInvoiceById(invoiceId);
       if (updatedInv) {
         setInvoice(updatedInv);
         setTypography(resolveTypography(updatedInv.pdfLayout, updatedInv.items, updatedInv.vatApplicable, !!updatedInv.specialNotes));
@@ -105,7 +127,18 @@ export default function InvoiceDetailPage() {
       window.removeEventListener("cheque-updated", handleChequeUpdated);
       window.removeEventListener("storage", handleChequeUpdated);
     };
-  }, [invoiceId]);
+  }, [invoiceId, invoices, isLoading, fetchAttempted]);
+
+  if (isLoading && !invoice) {
+    return (
+      <AppLayout>
+        <div className="text-center py-20 space-y-3">
+          <div className="w-8 h-8 border-2 border-navy-900 border-t-transparent rounded-full animate-spin mx-auto"></div>
+          <p className="text-xs text-slate-500 font-semibold">Loading invoice #{invoiceId}...</p>
+        </div>
+      </AppLayout>
+    );
+  }
 
   if (!invoice) {
     return (
@@ -393,8 +426,10 @@ export default function InvoiceDetailPage() {
               onChange={(e) => {
                 const newKey = e.target.value as InvoiceTemplateKey;
                 setTemplateKey(newKey);
-                const updated = storage.saveInvoice({ ...invoice, templateKey: newKey });
-                setInvoice(updated);
+                dbSaveInvoice({ ...invoice, templateKey: newKey }).catch(() => {
+                  const updated = storage.saveInvoice({ ...invoice, templateKey: newKey });
+                  setInvoice(updated);
+                });
               }}
               className="mt-1 w-full h-9 rounded-md border border-slate-300 bg-white px-2 text-xs font-medium text-slate-900 focus:outline-none focus:ring-2 focus:ring-navy-900"
             >

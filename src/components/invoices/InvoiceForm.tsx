@@ -16,6 +16,7 @@ import {
   AdvertisingReferenceType,
   PdfTypographySettings,
 } from "@/types";
+import { useDatabase } from "@/context/DatabaseContext";
 import { storage } from "@/lib/storage";
 import { formatLKR, formatDate, formatServicePeriod } from "@/lib/utils";
 import { downloadInvoicePdf } from "@/lib/pdf";
@@ -62,6 +63,14 @@ interface InvoiceFormProps {
 
 export function InvoiceForm({ initialInvoice }: InvoiceFormProps) {
   const router = useRouter();
+  const {
+    clients: dbClients,
+    billingEntities: dbBillingEntities,
+    services: dbServices,
+    mediaChannels: dbMediaChannels,
+    branding: dbBranding,
+    saveInvoice: dbSaveInvoice,
+  } = useDatabase();
 
   const [clients, setClients] = useState<Client[]>([]);
   const [billingEntities, setBillingEntities] = useState<BillingEntity[]>([]);
@@ -83,6 +92,7 @@ export function InvoiceForm({ initialInvoice }: InvoiceFormProps) {
   const [isExportModalOpen, setIsExportModalOpen] = useState(false);
   const [issuedInvoice, setIssuedInvoice] = useState<Invoice | null>(null);
   const [isDownloading, setIsDownloading] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
   const [approvalConfirmed, setApprovalConfirmed] = useState(false);
   const [error, setError] = useState<string>("");
   const [formTypography, setFormTypography] = useState<PdfTypographySettings>(() =>
@@ -134,18 +144,19 @@ export function InvoiceForm({ initialInvoice }: InvoiceFormProps) {
 
   // Load references and set initial data
   useEffect(() => {
-    const clis = storage.getClients();
-    const ents = storage.getBillingEntities();
-    const servs = storage.getServices();
+    const clis = dbClients.length > 0 ? dbClients : storage.getClients();
+    const ents = dbBillingEntities.length > 0 ? dbBillingEntities : storage.getBillingEntities();
+    const servs = dbServices.length > 0 ? dbServices : storage.getServices();
     const tmpls = storage.getTemplates();
-    const branding = storage.getBranding();
+    const branding = dbBranding || storage.getBranding();
+    const chans = dbMediaChannels.length > 0 ? dbMediaChannels : storage.getMediaChannels();
 
     setClients(clis);
     setBillingEntities(ents);
     setServices(servs);
     setTemplates(tmpls);
-    setMediaChannels(storage.getMediaChannels());
-    setVatRate(branding.defaultVatRate || 18);
+    setMediaChannels(chans);
+    setVatRate(branding?.defaultVatRate || 18);
 
     if (initialInvoice) {
       setInvoiceNumber(initialInvoice.invoiceNumber);
@@ -174,16 +185,16 @@ export function InvoiceForm({ initialInvoice }: InvoiceFormProps) {
       const activeEntities = ents.filter(e => e.isActive && e.status !== 'archived');
       const defaultEntity = activeEntities[0] || ents[0];
       if (defaultEntity) {
-        setSelectedBillingEntityId(defaultEntity.id);
-        setInvoiceNumber(storage.getNextInvoiceNumber(defaultEntity.id));
-        setPaymentInstructions(defaultEntity.paymentInstructions || "");
-        setVatApplicable(Boolean(defaultEntity.isVatRegistered));
-        setTemplateKey(defaultEntity.defaultInvoiceTemplate || (defaultEntity.isVatRegistered ? 'vat' : 'standard'));
+        setSelectedBillingEntityId(prev => prev || defaultEntity.id);
+        setInvoiceNumber(prev => prev || storage.getNextInvoiceNumber(defaultEntity.id));
+        setPaymentInstructions(prev => prev || defaultEntity.paymentInstructions || "");
+        setVatApplicable(prev => prev ?? Boolean(defaultEntity.isVatRegistered));
+        setTemplateKey(prev => prev || defaultEntity.defaultInvoiceTemplate || (defaultEntity.isVatRegistered ? 'vat' : 'standard'));
       } else {
-        setInvoiceNumber(storage.getNextInvoiceNumber());
+        setInvoiceNumber(prev => prev || storage.getNextInvoiceNumber());
       }
     }
-  }, [initialInvoice]);
+  }, [initialInvoice, dbClients, dbBillingEntities, dbServices, dbMediaChannels, dbBranding]);
 
   // When Client changes, auto-fill client preferences
   const handleClientChange = (clientId: string) => {
@@ -459,16 +470,37 @@ export function InvoiceForm({ initialInvoice }: InvoiceFormProps) {
     }
 
     const payload = buildInvoicePayload("draft");
-    const saved = storage.saveInvoice(payload);
-    router.push(`/invoices/${saved.id}`);
+    setIsSaving(true);
+    dbSaveInvoice(payload)
+      .then((saved) => {
+        router.push(`/invoices/${saved.id}`);
+      })
+      .catch((err) => {
+        console.error("Save invoice error:", err);
+        const saved = storage.saveInvoice(payload);
+        router.push(`/invoices/${saved.id}`);
+      })
+      .finally(() => {
+        setIsSaving(false);
+      });
   };
 
-  const handleConfirmIssueAndApprove = () => {
+  const handleConfirmIssueAndApprove = async () => {
     setIsApprovalModalOpen(false);
     const payload = buildInvoicePayload("issued");
-    const saved = storage.saveInvoice(payload);
-    setIssuedInvoice(saved);
-    setIsExportModalOpen(true);
+    setIsSaving(true);
+    try {
+      const saved = await dbSaveInvoice(payload);
+      setIssuedInvoice(saved);
+      setIsExportModalOpen(true);
+    } catch (err) {
+      console.error("Issue and approve error:", err);
+      const saved = storage.saveInvoice(payload);
+      setIssuedInvoice(saved);
+      setIsExportModalOpen(true);
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   const handleDownloadDigitalPdf = async () => {
@@ -535,19 +567,21 @@ export function InvoiceForm({ initialInvoice }: InvoiceFormProps) {
           <Button
             type="button"
             variant="outline"
+            disabled={isSaving}
             onClick={() => handleSave("draft")}
             className="flex items-center space-x-1.5"
           >
             <Save className="w-4 h-4 text-slate-600" />
-            <span>{initialInvoice ? "Save Changes" : "Save Draft"}</span>
+            <span>{isSaving ? "Saving..." : (initialInvoice ? "Save Changes" : "Save Draft")}</span>
           </Button>
           <Button
             type="button"
+            disabled={isSaving}
             onClick={() => handleSave("issued")}
             className="bg-emerald-600 hover:bg-emerald-700 text-white font-semibold flex items-center space-x-1.5 shadow-sm"
           >
             <CheckCircle2 className="w-4 h-4" />
-            <span>{initialInvoice && initialInvoice.status === "issued" ? "Update & Re-Issue" : "Issue Invoice"}</span>
+            <span>{isSaving ? "Saving..." : (initialInvoice && initialInvoice.status === "issued" ? "Update & Re-Issue" : "Issue Invoice")}</span>
           </Button>
         </div>
       </div>

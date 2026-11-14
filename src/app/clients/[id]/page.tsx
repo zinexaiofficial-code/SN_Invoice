@@ -5,6 +5,7 @@ import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { AppLayout } from "@/components/layout/AppLayout";
 import { Client, Invoice, BillingEntity } from "@/types";
+import { useDatabase } from "@/context/DatabaseContext";
 import { storage } from "@/lib/storage";
 import { formatLKR, formatDate } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -29,30 +30,27 @@ export default function ClientDetailPage() {
   const params = useParams();
   const router = useRouter();
   const clientId = params.id as string;
+  const { clients, invoices: dbInvoices, billingEntities, isLoading, refresh } = useDatabase();
 
-  const [client, setClient] = useState<Client | null>(null);
-  const [invoices, setInvoices] = useState<Invoice[]>([]);
-  const [billingEntity, setBillingEntity] = useState<BillingEntity | null>(null);
   const [selectedMonthKey, setSelectedMonthKey] = useState<string | null>(null);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
 
-  useEffect(() => {
-    refreshData();
-  }, [clientId]);
+  const client = clients.find((c) => c.id === clientId) || storage.getClientById(clientId) || null;
+  const invoices = (client ? dbInvoices.filter((i) => i.clientId === client.id) : []);
+  const billingEntity = (client && client.defaultBillingEntityId)
+    ? billingEntities.find((e) => e.id === client.defaultBillingEntityId) || null
+    : null;
 
-  const refreshData = () => {
-    const c = storage.getClientById(clientId);
-    if (c) {
-      setClient(c);
-      const allInvoices = storage.getInvoices().filter((i) => i.clientId === c.id);
-      setInvoices(allInvoices);
-
-      if (c.defaultBillingEntityId) {
-        const ent = storage.getBillingEntities().find((e) => e.id === c.defaultBillingEntityId);
-        if (ent) setBillingEntity(ent);
-      }
-    }
-  };
+  if (isLoading && !client) {
+    return (
+      <AppLayout>
+        <div className="text-center py-20 space-y-3">
+          <div className="w-8 h-8 border-2 border-navy-900 border-t-transparent rounded-full animate-spin mx-auto"></div>
+          <p className="text-xs text-slate-500 font-semibold">Loading client details...</p>
+        </div>
+      </AppLayout>
+    );
+  }
 
   if (!client) {
     return (
@@ -62,6 +60,9 @@ export default function ClientDetailPage() {
           <h2 className="text-xl font-bold text-navy-950">Client not found</h2>
           <Button onClick={() => router.push("/clients")}>Back to Clients</Button>
         </div>
+      </AppLayout>
+    );
+  }
       </AppLayout>
     );
   }
@@ -396,7 +397,7 @@ export default function ClientDetailPage() {
         client={client}
         isOpen={isEditModalOpen}
         onClose={() => setIsEditModalOpen(false)}
-        onSaved={refreshData}
+        onSaved={() => refresh()}
       />
     </AppLayout>
   );

@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from "next";
 import { Inter } from "next/font/google";
 import "./globals.css";
 import { PwaRegister } from "@/components/pwa/PwaRegister";
+import { DatabaseProvider } from "@/context/DatabaseContext";
 
 const inter = Inter({ subsets: ["latin"], variable: "--font-sans" });
 
@@ -43,7 +44,9 @@ export default function RootLayout({
       </head>
       <body className={inter.className}>
         <PwaRegister />
-        {children}
+        <DatabaseProvider>
+          {children}
+        </DatabaseProvider>
       </body>
     </html>
   );

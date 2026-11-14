@@ -67,8 +67,10 @@ export async function getBootstrapData(): Promise<BootstrapData> {
     const entitiesRes = await pool.query('SELECT * FROM billing_entities WHERE is_archived = false ORDER BY created_at ASC');
     let billingEntities: BillingEntity[] = entitiesRes.rows.map(mapEntityRow);
 
-    // If fresh, seed initial entities
-    if (billingEntities.length === 0) {
+    // Only seed initial entities on brand new empty database setup
+    const totalEntitiesRes = await pool.query('SELECT COUNT(*) FROM billing_entities');
+    const totalEntitiesCount = parseInt(totalEntitiesRes.rows[0].count, 10);
+    if (totalEntitiesCount === 0) {
       for (const ent of INITIAL_BILLING_ENTITIES) {
         await saveBillingEntity(ent);
       }
@@ -76,21 +78,16 @@ export async function getBootstrapData(): Promise<BootstrapData> {
       billingEntities = recheck.rows.map(mapEntityRow);
     }
 
-    // 2. Clients
+    // 2. Clients — Single Source of Truth from DB (NEVER auto-reseed deleted clients)
     const clientsRes = await pool.query('SELECT * FROM clients WHERE is_archived = false ORDER BY company_name ASC');
     let clients: Client[] = clientsRes.rows.map(mapClientRow);
-    if (clients.length === 0) {
-      for (const cl of INITIAL_CLIENTS) {
-        await saveClient(cl);
-      }
-      const recheck = await pool.query('SELECT * FROM clients WHERE is_archived = false ORDER BY company_name ASC');
-      clients = recheck.rows.map(mapClientRow);
-    }
 
-    // 3. Services
+    // 3. Services — Only seed on brand new empty database
     const servicesRes = await pool.query('SELECT * FROM services WHERE is_active = true ORDER BY name ASC');
     let services: Service[] = servicesRes.rows.map(mapServiceRow);
-    if (services.length === 0) {
+    const totalServicesRes = await pool.query('SELECT COUNT(*) FROM services');
+    const totalServicesCount = parseInt(totalServicesRes.rows[0].count, 10);
+    if (totalServicesCount === 0) {
       for (const s of INITIAL_SERVICES) {
         await saveService(s);
       }
@@ -98,10 +95,12 @@ export async function getBootstrapData(): Promise<BootstrapData> {
       services = recheck.rows.map(mapServiceRow);
     }
 
-    // 4. Media Channels
+    // 4. Media Channels — Only seed on brand new empty database
     const channelsRes = await pool.query('SELECT * FROM media_channels WHERE is_active = true ORDER BY name ASC');
     let mediaChannels: MediaChannel[] = channelsRes.rows.map(mapChannelRow);
-    if (mediaChannels.length === 0) {
+    const totalChannelsRes = await pool.query('SELECT COUNT(*) FROM media_channels');
+    const totalChannelsCount = parseInt(totalChannelsRes.rows[0].count, 10);
+    if (totalChannelsCount === 0) {
       for (const mc of INITIAL_MEDIA_CHANNELS) {
         await saveMediaChannel(mc);
       }
@@ -109,7 +108,7 @@ export async function getBootstrapData(): Promise<BootstrapData> {
       mediaChannels = recheck.rows.map(mapChannelRow);
     }
 
-    // 5. Invoices & Items
+    // 5. Invoices & Items — Single Source of Truth from DB (NEVER auto-reseed deleted invoices)
     const invoicesRes = await pool.query('SELECT * FROM invoices ORDER BY invoice_date DESC, created_at DESC');
     const itemsRes = await pool.query('SELECT * FROM invoice_items ORDER BY display_order ASC, created_at ASC');
     const paymentsRes = await pool.query('SELECT * FROM payments ORDER BY payment_date DESC');
@@ -129,20 +128,6 @@ export async function getBootstrapData(): Promise<BootstrapData> {
     let invoices: Invoice[] = invoicesRes.rows.map((row) =>
       mapInvoiceRow(row, itemsByInvoice[row.id] || [], paymentsByInvoice[row.id] || [])
     );
-
-    if (invoices.length === 0) {
-      for (const inv of INITIAL_INVOICES) {
-        await saveInvoice(inv);
-      }
-      const recheck = await pool.query('SELECT * FROM invoices ORDER BY invoice_date DESC');
-      const recheckItems = await pool.query('SELECT * FROM invoice_items ORDER BY display_order ASC');
-      const rebItems: Record<string, InvoiceItem[]> = {};
-      for (const r of recheckItems.rows) {
-        if (!rebItems[r.invoice_id]) rebItems[r.invoice_id] = [];
-        rebItems[r.invoice_id].push(mapItemRow(r));
-      }
-      invoices = recheck.rows.map((row) => mapInvoiceRow(row, rebItems[row.id] || [], []));
-    }
 
     // 6. Cheques
     const chequesRes = await pool.query('SELECT * FROM cheques ORDER BY cheque_date ASC, created_at DESC');
@@ -267,6 +252,26 @@ export async function saveBillingEntity(entity: BillingEntity): Promise<BillingE
   return mapEntityRow(res.rows[0]);
 }
 
+export async function archiveBillingEntity(id: string): Promise<boolean> {
+  const pool = getDbPool();
+  if (!pool) return false;
+  const res = await pool.query('UPDATE billing_entities SET is_archived = true, updated_at = NOW() WHERE id = $1', [id]);
+  return (res.rowCount ?? 0) > 0;
+}
+
+export async function deleteBillingEntity(id: string): Promise<{ success: boolean; message?: string }> {
+  const pool = getDbPool();
+  if (!pool) return { success: false, message: 'Database unavailable' };
+  const check = await pool.query('SELECT COUNT(*) FROM invoices WHERE billing_entity_id = $1', [id]);
+  const count = parseInt(check.rows[0].count, 10);
+  if (count > 0) {
+    await pool.query('UPDATE billing_entities SET is_archived = true, updated_at = NOW() WHERE id = $1', [id]);
+    return { success: true, message: 'Entity has invoices and was safely archived to preserve financial records.' };
+  }
+  const res = await pool.query('DELETE FROM billing_entities WHERE id = $1', [id]);
+  return { success: (res.rowCount ?? 0) > 0 };
+}
+
 // -----------------------------------------------------------------------------
 // CLIENTS
 // -----------------------------------------------------------------------------
@@ -345,6 +350,26 @@ export async function saveClient(client: Client): Promise<Client> {
   return mapClientRow(res.rows[0]);
 }
 
+export async function archiveClient(id: string): Promise<boolean> {
+  const pool = getDbPool();
+  if (!pool) return false;
+  const res = await pool.query('UPDATE clients SET is_archived = true, updated_at = NOW() WHERE id = $1', [id]);
+  return (res.rowCount ?? 0) > 0;
+}
+
+export async function deleteClient(id: string): Promise<{ success: boolean; message?: string }> {
+  const pool = getDbPool();
+  if (!pool) return { success: false, message: 'Database unavailable' };
+  const check = await pool.query('SELECT COUNT(*) FROM invoices WHERE client_id = $1', [id]);
+  const count = parseInt(check.rows[0].count, 10);
+  if (count > 0) {
+    await pool.query('UPDATE clients SET is_archived = true, updated_at = NOW() WHERE id = $1', [id]);
+    return { success: true, message: 'Client has invoices and was safely archived to preserve audit history.' };
+  }
+  const res = await pool.query('DELETE FROM clients WHERE id = $1', [id]);
+  return { success: (res.rowCount ?? 0) > 0 };
+}
+
 // -----------------------------------------------------------------------------
 // SERVICES
 // -----------------------------------------------------------------------------
@@ -406,6 +431,13 @@ export async function saveService(service: Service): Promise<Service> {
 
   const res = await pool.query(query, values);
   return mapServiceRow(res.rows[0]);
+}
+
+export async function deleteService(id: string): Promise<boolean> {
+  const pool = getDbPool();
+  if (!pool) return false;
+  const res = await pool.query('UPDATE services SET is_active = false, updated_at = NOW() WHERE id = $1', [id]);
+  return (res.rowCount ?? 0) > 0;
 }
 
 // -----------------------------------------------------------------------------
@@ -733,6 +765,13 @@ export async function saveCheque(cheque: Cheque): Promise<Cheque> {
 
   const res = await pool.query(query, values);
   return mapChequeRow(res.rows[0]);
+}
+
+export async function deleteCheque(id: string): Promise<boolean> {
+  const pool = getDbPool();
+  if (!pool) return false;
+  const res = await pool.query('DELETE FROM cheques WHERE id = $1', [id]);
+  return (res.rowCount ?? 0) > 0;
 }
 
 // -----------------------------------------------------------------------------

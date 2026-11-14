@@ -5,6 +5,7 @@ import { useParams, useRouter } from "next/navigation";
 import { AppLayout } from "@/components/layout/AppLayout";
 import { InvoiceForm } from "@/components/invoices/InvoiceForm";
 import { Invoice } from "@/types";
+import { useDatabase } from "@/context/DatabaseContext";
 import { storage } from "@/lib/storage";
 import { FileText, ArrowLeft } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -14,18 +15,30 @@ export default function EditInvoicePage() {
   const params = useParams();
   const router = useRouter();
   const invoiceId = params.id as string;
+  const { invoices, isLoading } = useDatabase();
   const [invoice, setInvoice] = useState<Invoice | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [fetchAttempted, setFetchAttempted] = useState(false);
 
   useEffect(() => {
-    const found = storage.getInvoiceById(invoiceId);
+    const found = invoices.find((i) => i.id === invoiceId) || storage.getInvoiceById(invoiceId);
     if (found) {
       setInvoice(found);
+    } else if (!isLoading && !fetchAttempted) {
+      setFetchAttempted(true);
+      fetch(`/api/invoices/${encodeURIComponent(invoiceId)}`, {
+        headers: { "Cache-Control": "no-cache" },
+      })
+        .then((res) => (res.ok ? res.json() : null))
+        .then((json) => {
+          if (json?.success && json?.data) {
+            setInvoice(json.data);
+          }
+        })
+        .catch((err) => console.error("Error fetching invoice directly:", err));
     }
-    setLoading(false);
-  }, [invoiceId]);
+  }, [invoiceId, invoices, isLoading, fetchAttempted]);
 
-  if (loading) {
+  if (isLoading && !invoice) {
     return (
       <AppLayout>
         <div className="text-center py-20 space-y-2">

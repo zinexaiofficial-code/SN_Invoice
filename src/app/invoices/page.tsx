@@ -1,9 +1,10 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState } from "react";
 import Link from "next/link";
 import { AppLayout } from "@/components/layout/AppLayout";
 import { Invoice, BillingEntity } from "@/types";
+import { useDatabase } from "@/context/DatabaseContext";
 import { storage } from "@/lib/storage";
 import { formatLKR, formatDate } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -22,22 +23,17 @@ import {
   FileText,
   Filter,
   Building2,
-  Edit
+  Edit,
+  RefreshCw
 } from "lucide-react";
 
 export default function InvoicesListPage() {
-  const [invoices, setInvoices] = useState<Invoice[]>([]);
-  const [billingEntities, setBillingEntities] = useState<BillingEntity[]>([]);
+  const { invoices, billingEntities, isLoading, error, refresh } = useDatabase();
   const [selectedEntityId, setSelectedEntityId] = useState<string>("");
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [activeShareInvoice, setActiveShareInvoice] = useState<Invoice | null>(null);
   const [activePaymentInvoice, setActivePaymentInvoice] = useState<Invoice | null>(null);
-
-  useEffect(() => {
-    setInvoices(storage.getInvoices());
-    setBillingEntities(storage.getBillingEntities());
-  }, []);
 
   const filteredInvoices = invoices.filter((inv) => {
     if (selectedEntityId && inv.billingEntityId !== selectedEntityId) return false;

@@ -1,5 +1,5 @@
 // SN Invoice Service Worker
-const CACHE_NAME = 'sn-invoice-v1';
+const CACHE_NAME = 'sn-invoice-v2';
 const STATIC_ASSETS = [
   '/',
   '/manifest.json',

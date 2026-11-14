@@ -20,10 +20,10 @@ import {
   FileSpreadsheet
 } from "lucide-react";
 
+import { useDatabase } from "@/context/DatabaseContext";
+
 export default function ReportsPage() {
-  const [invoices, setInvoices] = useState<Invoice[]>([]);
-  const [clients, setClients] = useState<Client[]>([]);
-  const [billingEntities, setBillingEntities] = useState<BillingEntity[]>([]);
+  const { invoices, clients, billingEntities, isLoading } = useDatabase();
   const [reportType, setReportType] = useState<
     "monthly" | "client_wise" | "sent_status" | "outstanding" | "paid" | "yearly"
   >("monthly");
@@ -31,12 +31,6 @@ export default function ReportsPage() {
   const [selectedYear, setSelectedYear] = useState<number>(2026);
   const [selectedMonth, setSelectedMonth] = useState<number>(9); // September 2026
   const [selectedBillingEntityId, setSelectedBillingEntityId] = useState<string>("");
-
-  useEffect(() => {
-    setInvoices(storage.getInvoices());
-    setClients(storage.getClients());
-    setBillingEntities(storage.getBillingEntities());
-  }, []);
 
   const monthNames = [
     "January", "February", "March", "April", "May", "June",

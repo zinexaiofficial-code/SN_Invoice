@@ -33,9 +33,10 @@ import {
   PlusCircle
 } from "lucide-react";
 
+import { useDatabase } from "@/context/DatabaseContext";
+
 export default function MonthlyHistoryPage() {
-  const [clients, setClients] = useState<Client[]>([]);
-  const [billingEntities, setBillingEntities] = useState<BillingEntity[]>([]);
+  const { clients, billingEntities, invoices: allInvoices, isLoading } = useDatabase();
 
   // Filter states
   const now = new Date();
@@ -53,10 +54,9 @@ export default function MonthlyHistoryPage() {
   const [activePaymentInvoice, setActivePaymentInvoice] = useState<Invoice | null>(null);
 
   useEffect(() => {
-    setClients(storage.getClients());
-    setBillingEntities(storage.getBillingEntities());
     refreshInvoices();
   }, [
+    allInvoices,
     selectedYear,
     selectedMonth,
     selectedClientId,

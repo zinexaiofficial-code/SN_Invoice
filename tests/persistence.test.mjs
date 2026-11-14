@@ -24,6 +24,11 @@ async function runTests() {
     }
   }
 
+  let testEntityId = null;
+  let testClientId = null;
+  let testServiceId = null;
+  let testInvoiceId = null;
+
   try {
     // -------------------------------------------------------------------------
     // TEST 0: Healthcheck & Bootstrap
@@ -44,7 +49,7 @@ async function runTests() {
     // TEST A: Entity Persistence
     // -------------------------------------------------------------------------
     console.log(`\n[Test A] Testing Billing Entity Persistence...`);
-    const testEntityId = `ent-test-${Date.now()}`;
+    testEntityId = `ent-test-${Date.now()}`;
     const testEntity = {
       id: testEntityId,
       name: `Test Media Group ${Date.now()}`,
@@ -89,7 +94,7 @@ async function runTests() {
     // TEST B: Client Persistence
     // -------------------------------------------------------------------------
     console.log(`\n[Test B] Testing Client Persistence...`);
-    const testClientId = `cli-test-${Date.now()}`;
+    testClientId = `cli-test-${Date.now()}`;
     const testClient = {
       id: testClientId,
       name: `Ceylon Horizon Motors (Pvt) Ltd`,
@@ -122,7 +127,7 @@ async function runTests() {
     // TEST C: Service Persistence
     // -------------------------------------------------------------------------
     console.log(`\n[Test C] Testing Service Persistence...`);
-    const testServiceId = `srv-test-${Date.now()}`;
+    testServiceId = `srv-test-${Date.now()}`;
     const testService = {
       id: testServiceId,
       name: `Prime Time Radio Commercial Broadcast (30s)`,
@@ -152,7 +157,7 @@ async function runTests() {
     // TEST D: Invoice Creation & Persistence with Accurate Line Items
     // -------------------------------------------------------------------------
     console.log(`\n[Test D] Testing Invoice Persistence & Calculations...`);
-    const testInvoiceId = `inv-test-${Date.now()}`;
+    testInvoiceId = `inv-test-${Date.now()}`;
     const testInvoiceNumber = `TMG-2026-${Math.floor(1000 + Math.random() * 9000)}`;
 
     const testInvoice = {
@@ -272,6 +277,37 @@ async function runTests() {
     });
     assert(invalidInvoiceRes.status === 400, `Missing required fields rejected with HTTP 400 (not fake 200)`);
 
+    // -------------------------------------------------------------------------
+    // TEST I: 10x Consecutive Consistency Check
+    // -------------------------------------------------------------------------
+    console.log(`\n[Test I] Testing 10x Refresh Consistency (Zero-Flakiness Verification)...`);
+    let initialCount = null;
+    let allMatches = true;
+
+    for (let i = 1; i <= 10; i++) {
+      const res = await fetch(`${BASE_URL}/api/bootstrap?_t=${Date.now()}_${i}`, {
+        headers: { 'Cache-Control': 'no-cache, no-store' },
+      });
+      const json = await res.json();
+      const currentClientsCount = (json.data?.clients || []).length;
+      const currentInvoicesCount = (json.data?.invoices || []).length;
+      const currentEntitiesCount = (json.data?.billingEntities || []).length;
+
+      if (initialCount === null) {
+        initialCount = { clients: currentClientsCount, invoices: currentInvoicesCount, entities: currentEntitiesCount };
+      } else {
+        if (
+          currentClientsCount !== initialCount.clients ||
+          currentInvoicesCount !== initialCount.invoices ||
+          currentEntitiesCount !== initialCount.entities
+        ) {
+          allMatches = false;
+          console.error(`  ❌ Mismatch on refresh ${i}: expected`, initialCount, 'got', { clients: currentClientsCount, invoices: currentInvoicesCount, entities: currentEntitiesCount });
+        }
+      }
+    }
+    assert(allMatches, `10 consecutive refreshes returned identical entity, client, and invoice counts`);
+
     console.log(`\n==========================================================`);
     console.log(`🏁 PERSISTENCE TEST SUITE FINISHED`);
     console.log(`Passed: ${passCount} | Failed: ${failCount}`);
@@ -281,6 +317,21 @@ async function runTests() {
   } catch (err) {
     console.error(`💥 Unexpected test failure:`, err);
     process.exit(1);
+  } finally {
+    console.log(`\n🧹 Cleaning up test artifacts from database...`);
+    if (testInvoiceId) {
+      await fetch(`${BASE_URL}/api/invoices/${encodeURIComponent(testInvoiceId)}`, { method: 'DELETE' }).catch(() => {});
+    }
+    if (testServiceId) {
+      await fetch(`${BASE_URL}/api/services?id=${encodeURIComponent(testServiceId)}`, { method: 'DELETE' }).catch(() => {});
+    }
+    if (testClientId) {
+      await fetch(`${BASE_URL}/api/clients?id=${encodeURIComponent(testClientId)}`, { method: 'DELETE' }).catch(() => {});
+    }
+    if (testEntityId) {
+      await fetch(`${BASE_URL}/api/billing-entities?id=${encodeURIComponent(testEntityId)}`, { method: 'DELETE' }).catch(() => {});
+    }
+    console.log(`🧹 Cleanup complete.\n`);
   }
 }
 

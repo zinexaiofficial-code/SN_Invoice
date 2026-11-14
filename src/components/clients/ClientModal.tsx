@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from "react";
 import { Client, BillingEntity } from "@/types";
-import { storage } from "@/lib/storage";
+import { useDatabase } from "@/context/DatabaseContext";
 import {
   Dialog,
   DialogContent,
@@ -14,7 +14,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Building, AlertCircle } from "lucide-react";
+import { Building, AlertCircle, Loader2 } from "lucide-react";
 
 interface ClientModalProps {
   client?: Client | null;
@@ -24,7 +24,8 @@ interface ClientModalProps {
 }
 
 export function ClientModal({ client, isOpen, onClose, onSaved }: ClientModalProps) {
-  const [billingEntities, setBillingEntities] = useState<BillingEntity[]>([]);
+  const { billingEntities, clients: allClients, saveClient } = useDatabase();
+  const [isSaving, setIsSaving] = useState(false);
   
   const [formData, setFormData] = useState<Partial<Client>>({
     name: "",
@@ -48,9 +49,6 @@ export function ClientModal({ client, isOpen, onClose, onSaved }: ClientModalPro
   const [error, setError] = useState<string>("");
 
   useEffect(() => {
-    const entities = storage.getBillingEntities();
-    setBillingEntities(entities);
-
     if (client) {
       setFormData({ ...client });
     } else {
@@ -65,7 +63,7 @@ export function ClientModal({ client, isOpen, onClose, onSaved }: ClientModalPro
         vatNumber: "",
         brn: "",
         defaultVatPreference: false,
-        defaultBillingEntityId: entities[0]?.id || "",
+        defaultBillingEntityId: billingEntities[0]?.id || "",
         defaultPaymentTerms: "Immediate",
         defaultAdvancePercentage: 0,
         defaultNote: "",
@@ -74,13 +72,13 @@ export function ClientModal({ client, isOpen, onClose, onSaved }: ClientModalPro
       });
     }
     setError("");
-  }, [client, isOpen]);
+  }, [client, isOpen, billingEntities]);
 
   const handleChange = (field: keyof Client, value: any) => {
     setFormData((prev) => ({ ...prev, [field]: value }));
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
 
@@ -95,11 +93,10 @@ export function ClientModal({ client, isOpen, onClose, onSaved }: ClientModalPro
     }
 
     // Duplicate check on name or code (Section 5 requirement)
-    const allClients = storage.getClients();
     const existing = allClients.find(
       c => c.id !== client?.id && (
         c.name.trim().toLowerCase() === formData.name?.trim().toLowerCase() ||
-        (formData.code?.trim() && c.code.toLowerCase() === formData.code?.trim().toLowerCase())
+        (formData.code?.trim() && (c.code || "").toLowerCase() === formData.code?.trim().toLowerCase())
       )
     );
 
@@ -108,12 +105,15 @@ export function ClientModal({ client, isOpen, onClose, onSaved }: ClientModalPro
       return;
     }
 
+    setIsSaving(true);
     try {
-      const saved = storage.saveClient(formData);
+      const saved = await saveClient(formData);
       if (onSaved) onSaved(saved);
       onClose();
     } catch (err: any) {
-      setError(err?.message || "Failed to save client");
+      setError(err?.message || "Failed to save client to database");
+    } finally {
+      setIsSaving(false);
     }
   };
 
@@ -323,8 +323,9 @@ export function ClientModal({ client, isOpen, onClose, onSaved }: ClientModalPro
             <Button type="button" variant="outline" onClick={onClose}>
               Cancel
             </Button>
-            <Button type="submit" className="bg-navy-950 text-white hover:bg-navy-900">
-              {client ? "Update Client" : "Save Client"}
+            <Button type="submit" disabled={isSaving} className="bg-navy-950 text-white hover:bg-navy-900 flex items-center space-x-1.5">
+              {isSaving && <Loader2 className="w-4 h-4 animate-spin mr-1" />}
+              <span>{isSaving ? "Saving..." : client ? "Update Client" : "Save Client"}</span>
             </Button>
           </DialogFooter>
         </form>

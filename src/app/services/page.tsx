@@ -11,6 +11,7 @@ import {
   REFERENCE_TYPES,
   MediaChannel
 } from "@/types";
+import { useDatabase } from "@/context/DatabaseContext";
 import { storage } from "@/lib/storage";
 import { formatLKR } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -37,15 +38,16 @@ import {
   Tag,
   Hash,
   Trash2,
-  Sparkles
+  Sparkles,
+  Loader2
 } from "lucide-react";
 
 export default function ServicesPage() {
-  const [services, setServices] = useState<Service[]>([]);
+  const { services, mediaChannels, saveService, deleteService, refresh } = useDatabase();
   const [templates, setTemplates] = useState<InvoiceTemplate[]>([]);
-  const [channels, setChannels] = useState<MediaChannel[]>([]);
   const [isServiceModalOpen, setIsServiceModalOpen] = useState(false);
   const [editingService, setEditingService] = useState<Service | null>(null);
+  const [isSaving, setIsSaving] = useState(false);
 
   // Service form fields
   const [serviceName, setServiceName] = useState("");
@@ -63,14 +65,8 @@ export default function ServicesPage() {
   const [newChannelType, setNewChannelType] = useState<'radio' | 'tv' | 'digital' | 'other'>('radio');
 
   useEffect(() => {
-    refreshData();
-  }, []);
-
-  const refreshData = () => {
-    setServices(storage.getServices());
     setTemplates(storage.getTemplates());
-    setChannels(storage.getMediaChannels());
-  };
+  }, []);
 
   const handleOpenModal = (srv?: Service) => {
     if (srv) {
@@ -99,7 +95,7 @@ export default function ServicesPage() {
     setIsServiceModalOpen(true);
   };
 
-  const handleSaveService = (e: React.FormEvent) => {
+  const handleSaveService = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!serviceName.trim()) return;
 
@@ -113,20 +109,25 @@ export default function ServicesPage() {
       });
     }
 
-    storage.saveService({
-      id: editingService?.id,
-      name: serviceName.trim(),
-      category: serviceCategory || undefined,
-      defaultMediaChannel: finalChannel || undefined,
-      defaultReferenceType: referenceType || undefined,
-      defaultDescription: serviceDesc.trim(),
-      defaultPrice: servicePrice,
-      vatApplicable,
-      isActive: true
-    });
-
-    setIsServiceModalOpen(false);
-    refreshData();
+    setIsSaving(true);
+    try {
+      await saveService({
+        id: editingService?.id,
+        name: serviceName.trim(),
+        category: serviceCategory || undefined,
+        defaultMediaChannel: finalChannel || undefined,
+        defaultReferenceType: referenceType || undefined,
+        defaultDescription: serviceDesc.trim(),
+        defaultPrice: servicePrice,
+        vatApplicable,
+        isActive: true
+      });
+      setIsServiceModalOpen(false);
+    } catch (err: any) {
+      alert(err?.message || "Failed to save service to database");
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   const handleAddChannel = (e: React.FormEvent) => {
@@ -137,13 +138,13 @@ export default function ServicesPage() {
       type: newChannelType
     });
     setNewChannelName("");
-    refreshData();
+    refresh();
   };
 
   const handleDeleteChannel = (id: string) => {
     if (confirm("Remove this station from media channels list?")) {
       storage.deleteMediaChannel(id);
-      refreshData();
+      refresh();
     }
   };
 
@@ -553,8 +554,9 @@ export default function ServicesPage() {
               <Button type="button" variant="outline" onClick={() => setIsServiceModalOpen(false)}>
                 Cancel
               </Button>
-              <Button type="submit" className="bg-navy-950 text-white hover:bg-navy-900 font-bold">
-                Save Service
+              <Button type="submit" disabled={isSaving} className="bg-navy-950 text-white hover:bg-navy-900 font-bold flex items-center space-x-1.5">
+                {isSaving && <Loader2 className="w-4 h-4 animate-spin mr-1" />}
+                <span>{isSaving ? "Saving..." : "Save Service"}</span>
               </Button>
             </DialogFooter>
           </form>

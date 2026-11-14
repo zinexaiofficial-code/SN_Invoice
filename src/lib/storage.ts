@@ -1234,55 +1234,14 @@ class StorageService {
 
   // --- Billing Entities ---
   getBillingEntities(): BillingEntity[] {
-    if (!this.isBrowser()) return INITIAL_BILLING_ENTITIES;
+    if (!this.isBrowser()) return [];
     const data = localStorage.getItem(STORAGE_KEYS.BILLING_ENTITIES);
-    if (!data) {
-      localStorage.setItem(STORAGE_KEYS.BILLING_ENTITIES, JSON.stringify(INITIAL_BILLING_ENTITIES));
-      return INITIAL_BILLING_ENTITIES;
-    }
+    if (!data) return [];
     try {
       const parsed: BillingEntity[] = JSON.parse(data);
-      // Merge in any missing seed fields for existing entities (like brn, isVatRegistered, etc.)
-      const merged = parsed.map(ent => {
-        const seed = INITIAL_BILLING_ENTITIES.find(s => s.id === ent.id);
-        if (seed) {
-          return {
-            ...seed,
-            ...ent,
-            // If stored had empty/old values for new fields, take seed
-            isVatRegistered: ent.isVatRegistered !== undefined ? ent.isVatRegistered : seed.isVatRegistered,
-            vatNumber: ent.vatNumber !== undefined ? ent.vatNumber : seed.vatNumber,
-            brn: ent.brn || seed.brn,
-            displayName: ent.displayName || seed.displayName,
-            status: ent.status || seed.status || (ent.isActive ? 'active' : 'archived'),
-            prefix: ent.prefix || seed.prefix,
-            bankName: ent.bankName || seed.bankName,
-            accountNumber: ent.accountNumber || seed.accountNumber,
-            chequePayee: ent.chequePayee || seed.chequePayee,
-            email: ent.id === 'e2222222-2222-2222-2222-222222222222' && ent.email?.includes('snadvertising') ? seed.email : (ent.email || seed.email),
-            signatoryName: ent.signatoryName || seed.signatoryName,
-            signatoryDesignation: ent.signatoryDesignation || seed.signatoryDesignation,
-            signatoryEmail: ent.signatoryEmail || seed.signatoryEmail,
-            signatureEnabled: ent.signatureEnabled !== undefined ? ent.signatureEnabled : (seed.signatureEnabled ?? true),
-            displaySignatureImage: ent.displaySignatureImage !== undefined ? ent.displaySignatureImage : (seed.displaySignatureImage ?? true),
-            verificationEnabled: ent.verificationEnabled !== undefined ? ent.verificationEnabled : (seed.verificationEnabled ?? true),
-            showQrCode: ent.showQrCode !== undefined ? ent.showQrCode : (seed.showQrCode ?? true),
-            signatureImageUrl: ent.signatureImageUrl || ent.signatureUrl || seed.signatureImageUrl,
-          };
-        }
-        return {
-          ...ent,
-          signatureEnabled: ent.signatureEnabled !== undefined ? ent.signatureEnabled : true,
-          displaySignatureImage: ent.displaySignatureImage !== undefined ? ent.displaySignatureImage : true,
-          verificationEnabled: ent.verificationEnabled !== undefined ? ent.verificationEnabled : true,
-          showQrCode: ent.showQrCode !== undefined ? ent.showQrCode : true,
-          status: ent.status || (ent.isActive ? 'active' : 'archived'),
-          isVatRegistered: Boolean(ent.isVatRegistered),
-        };
-      });
-      return merged;
+      return Array.isArray(parsed) ? parsed : [];
     } catch {
-      return INITIAL_BILLING_ENTITIES;
+      return [];
     }
   }
 
@@ -1318,6 +1277,11 @@ class StorageService {
     };
     if (this.isBrowser()) {
       localStorage.setItem(STORAGE_KEYS.BILLING_ENTITIES, JSON.stringify(list));
+      window.dispatchEvent(new Event('entity-updated'));
+      window.dispatchEvent(new Event('storage'));
+      fetch(`/api/billing-entities?id=${encodeURIComponent(id)}&archive=true`, {
+        method: 'DELETE',
+      }).catch(err => console.error('API archive billing entity error:', err));
     }
     return { success: true };
   }
@@ -1335,6 +1299,13 @@ class StorageService {
     };
     if (this.isBrowser()) {
       localStorage.setItem(STORAGE_KEYS.BILLING_ENTITIES, JSON.stringify(list));
+      window.dispatchEvent(new Event('entity-updated'));
+      window.dispatchEvent(new Event('storage'));
+      fetch('/api/billing-entities', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(list[idx]),
+      }).catch(err => console.error('API unarchive billing entity error:', err));
     }
     return { success: true };
   }
@@ -1353,6 +1324,11 @@ class StorageService {
     const filtered = list.filter(e => e.id !== id);
     if (this.isBrowser()) {
       localStorage.setItem(STORAGE_KEYS.BILLING_ENTITIES, JSON.stringify(filtered));
+      window.dispatchEvent(new Event('entity-updated'));
+      window.dispatchEvent(new Event('storage'));
+      fetch(`/api/billing-entities?id=${encodeURIComponent(id)}`, {
+        method: 'DELETE',
+      }).catch(err => console.error('API delete billing entity error:', err));
     }
     return { success: true };
   }
@@ -1441,24 +1417,14 @@ class StorageService {
 
   // --- Media Channels ---
   getMediaChannels(): MediaChannel[] {
-    if (!this.isBrowser()) return INITIAL_MEDIA_CHANNELS;
+    if (!this.isBrowser()) return [];
     const data = localStorage.getItem(STORAGE_KEYS.MEDIA_CHANNELS);
-    if (!data) {
-      localStorage.setItem(STORAGE_KEYS.MEDIA_CHANNELS, JSON.stringify(INITIAL_MEDIA_CHANNELS));
-      return INITIAL_MEDIA_CHANNELS;
-    }
+    if (!data) return [];
     try {
       const parsed: MediaChannel[] = JSON.parse(data);
-      const existingNames = new Set(parsed.map(c => c.name.toLowerCase().trim()));
-      const missingSeeds = INITIAL_MEDIA_CHANNELS.filter(s => !existingNames.has(s.name.toLowerCase().trim()));
-      if (missingSeeds.length > 0) {
-        const merged = [...parsed, ...missingSeeds];
-        localStorage.setItem(STORAGE_KEYS.MEDIA_CHANNELS, JSON.stringify(merged));
-        return merged;
-      }
-      return parsed;
+      return Array.isArray(parsed) ? parsed : [];
     } catch {
-      return INITIAL_MEDIA_CHANNELS;
+      return [];
     }
   }
 
@@ -1508,38 +1474,14 @@ class StorageService {
 
   // --- Services ---
   getServices(): Service[] {
-    if (!this.isBrowser()) return INITIAL_SERVICES;
+    if (!this.isBrowser()) return [];
     const data = localStorage.getItem(STORAGE_KEYS.SERVICES);
-    if (!data) {
-      localStorage.setItem(STORAGE_KEYS.SERVICES, JSON.stringify(INITIAL_SERVICES));
-      return INITIAL_SERVICES;
-    }
+    if (!data) return [];
     try {
       const parsed: Service[] = JSON.parse(data);
-      const merged = parsed.map(srv => {
-        const seed = INITIAL_SERVICES.find(s => s.id === srv.id || s.name === srv.name);
-        if (seed) {
-          return {
-            ...seed,
-            ...srv,
-            category: srv.category || seed.category,
-            defaultMediaChannel: srv.defaultMediaChannel || seed.defaultMediaChannel,
-            defaultReferenceType: srv.defaultReferenceType || seed.defaultReferenceType,
-          };
-        }
-        return srv;
-      });
-
-      const existingIds = new Set(merged.map(s => s.id));
-      const missingSeeds = INITIAL_SERVICES.filter(s => !existingIds.has(s.id));
-      if (missingSeeds.length > 0) {
-        const fullList = [...merged, ...missingSeeds];
-        localStorage.setItem(STORAGE_KEYS.SERVICES, JSON.stringify(fullList));
-        return fullList;
-      }
-      return merged;
+      return Array.isArray(parsed) ? parsed : [];
     } catch {
-      return INITIAL_SERVICES;
+      return [];
     }
   }
 
@@ -1601,16 +1543,13 @@ class StorageService {
 
   // --- Clients ---
   getClients(): Client[] {
-    if (!this.isBrowser()) return INITIAL_CLIENTS;
+    if (!this.isBrowser()) return [];
     const data = localStorage.getItem(STORAGE_KEYS.CLIENTS);
-    if (!data) {
-      localStorage.setItem(STORAGE_KEYS.CLIENTS, JSON.stringify(INITIAL_CLIENTS));
-      return INITIAL_CLIENTS;
-    }
+    if (!data) return [];
     try {
       return JSON.parse(data);
     } catch {
-      return INITIAL_CLIENTS;
+      return [];
     }
   }
 
@@ -1684,29 +1623,14 @@ class StorageService {
 
   // --- Invoices ---
   getInvoices(): Invoice[] {
-    if (!this.isBrowser()) return INITIAL_INVOICES;
+    if (!this.isBrowser()) return [];
     const data = localStorage.getItem(STORAGE_KEYS.INVOICES);
-    if (!data) {
-      localStorage.setItem(STORAGE_KEYS.INVOICES, JSON.stringify(INITIAL_INVOICES));
-      return INITIAL_INVOICES;
-    }
+    if (!data) return [];
     try {
       const parsed: Invoice[] = JSON.parse(data);
-      return parsed.map((inv) => {
-        const seed = INITIAL_INVOICES.find((s) => s.id === inv.id || s.invoiceNumber === inv.invoiceNumber);
-        if (seed) {
-          return {
-            ...inv,
-            verificationToken: inv.verificationToken || seed.verificationToken,
-            verificationStatus: inv.verificationStatus || seed.verificationStatus || (inv.status === 'issued' ? 'valid' : undefined),
-            approval: inv.approval || seed.approval,
-            canonicalHash: inv.canonicalHash || seed.canonicalHash,
-          };
-        }
-        return inv;
-      });
+      return Array.isArray(parsed) ? parsed : [];
     } catch {
-      return INITIAL_INVOICES;
+      return [];
     }
   }
 
@@ -2822,69 +2746,161 @@ class StorageService {
   }
 
   /**
+   * Updates local storage from server bootstrap snapshot
+   */
+  updateFromBootstrap(data: any): void {
+    if (!this.isBrowser() || !data) return;
+    const { billingEntities, clients, services, mediaChannels, invoices, cheques, branding } = data;
+    if (billingEntities !== undefined) localStorage.setItem(STORAGE_KEYS.BILLING_ENTITIES, JSON.stringify(billingEntities));
+    if (clients !== undefined) localStorage.setItem(STORAGE_KEYS.CLIENTS, JSON.stringify(clients));
+    if (services !== undefined) localStorage.setItem(STORAGE_KEYS.SERVICES, JSON.stringify(services));
+    if (mediaChannels !== undefined) localStorage.setItem(STORAGE_KEYS.MEDIA_CHANNELS, JSON.stringify(mediaChannels));
+    if (invoices !== undefined) localStorage.setItem(STORAGE_KEYS.INVOICES, JSON.stringify(invoices));
+    if (cheques !== undefined) localStorage.setItem(STORAGE_KEYS.CHEQUES, JSON.stringify(cheques));
+    if (branding !== undefined) localStorage.setItem(STORAGE_KEYS.BRANDING, JSON.stringify(branding));
+
+    window.dispatchEvent(new Event('entity-updated'));
+    window.dispatchEvent(new Event('client-updated'));
+    window.dispatchEvent(new Event('service-updated'));
+    window.dispatchEvent(new Event('invoice-updated'));
+    window.dispatchEvent(new Event('cheque-updated'));
+    window.dispatchEvent(new Event('branding-updated'));
+    window.dispatchEvent(new Event('storage'));
+    window.dispatchEvent(new Event('database-synced'));
+  }
+
+  saveClientLocally(client: Client): void {
+    if (!this.isBrowser()) return;
+    const list = this.getClients();
+    const idx = list.findIndex(c => c.id === client.id);
+    if (idx >= 0) list[idx] = client;
+    else list.push(client);
+    localStorage.setItem(STORAGE_KEYS.CLIENTS, JSON.stringify(list));
+    window.dispatchEvent(new Event('client-updated'));
+    window.dispatchEvent(new Event('storage'));
+  }
+
+  archiveClientLocally(id: string): void {
+    if (!this.isBrowser()) return;
+    const list = this.getClients().map(c => c.id === id ? { ...c, isActive: false } : c);
+    localStorage.setItem(STORAGE_KEYS.CLIENTS, JSON.stringify(list));
+    window.dispatchEvent(new Event('client-updated'));
+    window.dispatchEvent(new Event('storage'));
+  }
+
+  deleteClientLocally(id: string): void {
+    if (!this.isBrowser()) return;
+    const list = this.getClients().filter(c => c.id !== id);
+    localStorage.setItem(STORAGE_KEYS.CLIENTS, JSON.stringify(list));
+    window.dispatchEvent(new Event('client-updated'));
+    window.dispatchEvent(new Event('storage'));
+  }
+
+  saveBillingEntityLocally(entity: BillingEntity): void {
+    if (!this.isBrowser()) return;
+    const list = this.getBillingEntities();
+    const idx = list.findIndex(e => e.id === entity.id);
+    if (idx >= 0) list[idx] = entity;
+    else list.push(entity);
+    localStorage.setItem(STORAGE_KEYS.BILLING_ENTITIES, JSON.stringify(list));
+    window.dispatchEvent(new Event('entity-updated'));
+    window.dispatchEvent(new Event('storage'));
+  }
+
+  archiveBillingEntityLocally(id: string): void {
+    if (!this.isBrowser()) return;
+    const list = this.getBillingEntities().map(e => e.id === id ? { ...e, status: 'archived', isActive: false } : e);
+    localStorage.setItem(STORAGE_KEYS.BILLING_ENTITIES, JSON.stringify(list));
+    window.dispatchEvent(new Event('entity-updated'));
+    window.dispatchEvent(new Event('storage'));
+  }
+
+  deleteBillingEntityLocally(id: string): void {
+    if (!this.isBrowser()) return;
+    const list = this.getBillingEntities().filter(e => e.id !== id);
+    localStorage.setItem(STORAGE_KEYS.BILLING_ENTITIES, JSON.stringify(list));
+    window.dispatchEvent(new Event('entity-updated'));
+    window.dispatchEvent(new Event('storage'));
+  }
+
+  saveServiceLocally(service: Service): void {
+    if (!this.isBrowser()) return;
+    const list = this.getServices();
+    const idx = list.findIndex(s => s.id === service.id);
+    if (idx >= 0) list[idx] = service;
+    else list.push(service);
+    localStorage.setItem(STORAGE_KEYS.SERVICES, JSON.stringify(list));
+    window.dispatchEvent(new Event('service-updated'));
+    window.dispatchEvent(new Event('storage'));
+  }
+
+  deleteServiceLocally(id: string): void {
+    if (!this.isBrowser()) return;
+    const list = this.getServices().filter(s => s.id !== id);
+    localStorage.setItem(STORAGE_KEYS.SERVICES, JSON.stringify(list));
+    window.dispatchEvent(new Event('service-updated'));
+    window.dispatchEvent(new Event('storage'));
+  }
+
+  saveInvoiceLocally(invoice: Invoice): void {
+    if (!this.isBrowser()) return;
+    const list = this.getInvoices();
+    const idx = list.findIndex(i => i.id === invoice.id);
+    if (idx >= 0) list[idx] = invoice;
+    else list.unshift(invoice);
+    localStorage.setItem(STORAGE_KEYS.INVOICES, JSON.stringify(list));
+    window.dispatchEvent(new Event('invoice-updated'));
+    window.dispatchEvent(new Event('storage'));
+  }
+
+  deleteInvoiceLocally(id: string): void {
+    if (!this.isBrowser()) return;
+    const list = this.getInvoices().filter(i => i.id !== id);
+    localStorage.setItem(STORAGE_KEYS.INVOICES, JSON.stringify(list));
+    window.dispatchEvent(new Event('invoice-updated'));
+    window.dispatchEvent(new Event('storage'));
+  }
+
+  saveChequeLocally(cheque: Cheque): void {
+    if (!this.isBrowser()) return;
+    const list = this.getCheques();
+    const idx = list.findIndex(c => c.id === cheque.id);
+    if (idx >= 0) list[idx] = cheque;
+    else list.unshift(cheque);
+    localStorage.setItem(STORAGE_KEYS.CHEQUES, JSON.stringify(list));
+    window.dispatchEvent(new Event('cheque-updated'));
+    window.dispatchEvent(new Event('storage'));
+  }
+
+  deleteChequeLocally(id: string): void {
+    if (!this.isBrowser()) return;
+    const list = this.getCheques().filter(c => c.id !== id);
+    localStorage.setItem(STORAGE_KEYS.CHEQUES, JSON.stringify(list));
+    window.dispatchEvent(new Event('cheque-updated'));
+    window.dispatchEvent(new Event('storage'));
+  }
+
+  saveBrandingLocally(branding: BrandingSettings): void {
+    if (!this.isBrowser()) return;
+    localStorage.setItem(STORAGE_KEYS.BRANDING, JSON.stringify(branding));
+    window.dispatchEvent(new Event('branding-updated'));
+    window.dispatchEvent(new Event('storage'));
+  }
+
+  /**
    * Synchronizes latest authoritative data from Backend PostgreSQL database into local cache
    */
   async syncWithServer(): Promise<{ synced: boolean }> {
     if (!this.isBrowser()) return { synced: false };
     try {
-      const res = await fetch('/api/bootstrap');
+      const res = await fetch('/api/bootstrap', {
+        headers: { 'Cache-Control': 'no-cache, no-store, must-revalidate', 'Pragma': 'no-cache' }
+      });
       if (!res.ok) return { synced: false };
       const json = await res.json();
       if (!json.success || !json.data) return { synced: false };
 
-      const { billingEntities, clients, services, mediaChannels, invoices, cheques, branding } = json.data;
-
-      // Check for unmigrated local browser invoices (one-time safe migration)
-      const localInvoices = this.getInvoices();
-      const localClients = this.getClients();
-      const localEntities = this.getBillingEntities();
-
-      const serverInvoiceIds = new Set((invoices || []).map((i: any) => i.id));
-      const unmigrated = localInvoices.filter(i => !serverInvoiceIds.has(i.id));
-
-      if (unmigrated.length > 0) {
-        console.log(`[Database Migration] Migrating ${unmigrated.length} local browser invoices to backend PostgreSQL...`);
-        fetch('/api/sync/migrate-from-browser', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            invoices: unmigrated,
-            clients: localClients,
-            billingEntities: localEntities,
-          }),
-        }).catch(err => console.warn('Browser data migration warning:', err));
-      }
-
-      // Authoritative overwrite with server database records
-      if (billingEntities && billingEntities.length > 0) {
-        localStorage.setItem(STORAGE_KEYS.BILLING_ENTITIES, JSON.stringify(billingEntities));
-        window.dispatchEvent(new Event('entity-updated'));
-      }
-      if (clients && clients.length > 0) {
-        localStorage.setItem(STORAGE_KEYS.CLIENTS, JSON.stringify(clients));
-        window.dispatchEvent(new Event('client-updated'));
-      }
-      if (services && services.length > 0) {
-        localStorage.setItem(STORAGE_KEYS.SERVICES, JSON.stringify(services));
-        window.dispatchEvent(new Event('service-updated'));
-      }
-      if (mediaChannels && mediaChannels.length > 0) {
-        localStorage.setItem(STORAGE_KEYS.MEDIA_CHANNELS, JSON.stringify(mediaChannels));
-      }
-      if (invoices && invoices.length > 0) {
-        localStorage.setItem(STORAGE_KEYS.INVOICES, JSON.stringify(invoices));
-        window.dispatchEvent(new Event('invoice-updated'));
-      }
-      if (cheques && cheques.length > 0) {
-        localStorage.setItem(STORAGE_KEYS.CHEQUES, JSON.stringify(cheques));
-        window.dispatchEvent(new Event('cheque-updated'));
-      }
-      if (branding) {
-        localStorage.setItem(STORAGE_KEYS.BRANDING, JSON.stringify(branding));
-        window.dispatchEvent(new Event('branding-updated'));
-      }
-
-      window.dispatchEvent(new Event('storage'));
+      this.updateFromBootstrap(json.data);
       return { synced: true };
     } catch (err) {
       console.warn('Backend database synchronization warning:', err);

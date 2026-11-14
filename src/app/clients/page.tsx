@@ -1,10 +1,10 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState } from "react";
 import Link from "next/link";
 import { AppLayout } from "@/components/layout/AppLayout";
 import { Client, Invoice } from "@/types";
-import { storage } from "@/lib/storage";
+import { useDatabase } from "@/context/DatabaseContext";
 import { formatLKR, formatDate } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -20,25 +20,16 @@ import {
   Mail,
   FileText,
   ChevronRight,
-  Edit2
+  Edit2,
+  RefreshCw
 } from "lucide-react";
 
 export default function ClientsListPage() {
-  const [clients, setClients] = useState<Client[]>([]);
-  const [invoices, setInvoices] = useState<Invoice[]>([]);
+  const { clients, invoices, isLoading, error, refresh } = useDatabase();
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<"all" | "active" | "inactive">("active");
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingClient, setEditingClient] = useState<Client | null>(null);
-
-  useEffect(() => {
-    refreshData();
-  }, []);
-
-  const refreshData = () => {
-    setClients(storage.getClients());
-    setInvoices(storage.getInvoices());
-  };
 
   const filteredClients = clients.filter((c) => {
     if (statusFilter === "active" && !c.isActive) return false;
@@ -47,7 +38,7 @@ export default function ClientsListPage() {
     if (search.trim()) {
       const q = search.toLowerCase();
       const matchesName = c.name.toLowerCase().includes(q);
-      const matchesCode = c.code.toLowerCase().includes(q);
+      const matchesCode = (c.code || "").toLowerCase().includes(q);
       const matchesPhone = (c.mobile || "").includes(q) || (c.whatsapp || "").includes(q);
       const matchesVat = (c.vatNumber || "").toLowerCase().includes(q);
       if (!matchesName && !matchesCode && !matchesPhone && !matchesVat) return false;
@@ -192,7 +183,16 @@ export default function ClientsListPage() {
                   {filteredClients.length === 0 && (
                     <tr>
                       <td colSpan={7} className="text-center py-12 text-slate-400 text-sm">
-                        No clients found matching your search.
+                        {isLoading ? (
+                          <div className="flex items-center justify-center space-x-2">
+                            <RefreshCw className="w-4 h-4 animate-spin text-emerald-600" />
+                            <span>Loading clients from database...</span>
+                          </div>
+                        ) : error ? (
+                          <span className="text-rose-500 font-medium">{error}</span>
+                        ) : (
+                          "No clients found matching your search."
+                        )}
                       </td>
                     </tr>
                   )}
@@ -210,7 +210,7 @@ export default function ClientsListPage() {
           setIsModalOpen(false);
           setEditingClient(null);
         }}
-        onSaved={refreshData}
+        onSaved={refresh}
       />
     </AppLayout>
   );

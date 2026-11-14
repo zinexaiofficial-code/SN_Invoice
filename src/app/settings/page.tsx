@@ -4,6 +4,7 @@ import React, { useState, useEffect } from "react";
 import Image from "next/image";
 import { AppLayout } from "@/components/layout/AppLayout";
 import { BrandingSettings, BillingEntity } from "@/types";
+import { useDatabase } from "@/context/DatabaseContext";
 import { storage } from "@/lib/storage";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -30,12 +31,32 @@ import {
   CreditCard,
   Mail,
   Phone,
-  ShieldCheck
+  ShieldCheck,
+  RefreshCw
 } from "lucide-react";
 
 export default function SettingsPage() {
-  const [branding, setBranding] = useState<BrandingSettings>(storage.getBranding());
-  const [billingEntities, setBillingEntities] = useState<BillingEntity[]>([]);
+  const {
+    billingEntities,
+    branding: dbBranding,
+    saveBillingEntity,
+    archiveBillingEntity,
+    deleteBillingEntity,
+    saveBranding,
+    refresh,
+    isLoading
+  } = useDatabase();
+
+  const [branding, setBranding] = useState<BrandingSettings>(
+    dbBranding || storage.getBranding()
+  );
+
+  useEffect(() => {
+    if (dbBranding) {
+      setBranding(dbBranding);
+    }
+  }, [dbBranding]);
+
   const [savedSuccess, setSavedSuccess] = useState<string>("");
   const [activeTab, setActiveTab] = useState<"entities" | "branding">("entities");
 
@@ -49,21 +70,15 @@ export default function SettingsPage() {
     entity: BillingEntity;
   } | null>(null);
 
-  const loadData = () => {
-    setBranding(storage.getBranding());
-    setBillingEntities(storage.getBillingEntities());
-  };
-
-  useEffect(() => {
-    loadData();
-  }, []);
-
-  const handleSaveBranding = (e: React.FormEvent) => {
+  const handleSaveBranding = async (e: React.FormEvent) => {
     e.preventDefault();
-    const updated = storage.saveBranding(branding);
-    setBranding(updated);
-    setSavedSuccess("Branding settings saved successfully!");
-    setTimeout(() => setSavedSuccess(""), 4000);
+    try {
+      await saveBranding(branding);
+      setSavedSuccess("Branding settings saved successfully to database!");
+      setTimeout(() => setSavedSuccess(""), 4000);
+    } catch (err: any) {
+      alert(err?.message || "Failed to save branding");
+    }
   };
 
   const handleOpenCreateModal = () => {
@@ -77,40 +92,32 @@ export default function SettingsPage() {
   };
 
   const handleEntitySaved = (saved: BillingEntity) => {
-    loadData();
+    refresh();
     setSavedSuccess(`Billing entity "${saved.displayName || saved.name}" saved successfully!`);
     setTimeout(() => setSavedSuccess(""), 4000);
   };
 
-  const handleConfirmAction = () => {
+  const handleConfirmAction = async () => {
     if (!confirmAction) return;
     const { type, entity } = confirmAction;
 
-    if (type === "archive") {
-      const res = storage.archiveBillingEntity(entity.id);
-      if (!res.success) {
-        alert(res.message);
-      } else {
-        setSavedSuccess(`Entity "${entity.name}" archived.`);
-      }
-    } else if (type === "unarchive") {
-      const res = storage.unarchiveBillingEntity(entity.id);
-      if (!res.success) {
-        alert(res.message);
-      } else {
+    try {
+      if (type === "archive") {
+        await archiveBillingEntity(entity.id);
+        setSavedSuccess(`Entity "${entity.name}" archived in database.`);
+      } else if (type === "unarchive") {
+        await saveBillingEntity({ ...entity, status: "active", isActive: true });
         setSavedSuccess(`Entity "${entity.name}" restored to active status.`);
+      } else if (type === "delete") {
+        await deleteBillingEntity(entity.id);
+        setSavedSuccess(`Entity "${entity.name}" removed from database.`);
       }
-    } else if (type === "delete") {
-      const res = storage.deleteBillingEntity(entity.id);
-      if (!res.success) {
-        alert(res.message);
-      } else {
-        setSavedSuccess(`Entity "${entity.name}" removed.`);
-      }
+    } catch (err: any) {
+      alert(err?.message || "Action failed");
     }
 
     setConfirmAction(null);
-    loadData();
+    refresh();
     setTimeout(() => setSavedSuccess(""), 4000);
   };
 
