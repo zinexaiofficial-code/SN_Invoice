@@ -95,8 +95,11 @@ export function estimateInvoiceHeights(
   density: LayoutDensity = "balanced",
   blocksConfig?: any
 ): InvoiceHeightEstimate {
-  // Page 1 Header: Company Logo, Name, Address, Tax Info, Invoice Title, Bill To Client, Dates
-  const headerHeightMm = 50;
+  // Page 1 Header:
+  // Top: Company Logo, Name, Legal Name, Address & Tax Details (~34mm)
+  // Bottom: Invoice Title ("TAX INVOICE"), Bill To Client Details, Dates, Reg (~36mm)
+  // Inter-block spacing & dividers (~4mm)
+  const headerHeightMm = 72;
 
   // Table header row
   const tableHeaderHeightMm = 8;
@@ -107,9 +110,9 @@ export function estimateInvoiceHeights(
     let h = rowBaseHeight;
     const desc = it.description?.trim();
     if (desc && desc.toLowerCase() !== it.serviceName.trim().toLowerCase()) {
-      // Each ~45 characters wrapped adds ~4mm of height
+      // Each ~45 characters wrapped adds ~4.2mm of height
       const lines = Math.ceil(desc.length / 45);
-      h += Math.min(24, lines * 4.0);
+      h += Math.min(28, lines * 4.2 + 2);
     }
     if (it.referenceNumber) {
       h += 3.5;
@@ -127,7 +130,7 @@ export function estimateInvoiceHeights(
   // Footer: Payment instructions + Digital Signature Block
   const showBank = blocksConfig?.showBankDetails !== false;
   const showSig = blocksConfig?.showSignatureBlock !== false;
-  const footerHeightMm = showBank || showSig ? 44 : 0;
+  const footerHeightMm = showBank || showSig ? 42 : 0;
 
   // Bottom Tagline & Page Numbering
   const bottomTaglineHeightMm = 10;
@@ -145,9 +148,9 @@ export function estimateInvoiceHeights(
   const fitsOnSinglePage = totalFirstPageMm <= 268;
 
   let recommendedDensity: LayoutDensity = "balanced";
-  if (totalItemsHeightMm <= 55) {
+  if (totalItemsHeightMm <= 50) {
     recommendedDensity = "comfortable";
-  } else if (totalItemsHeightMm <= 95) {
+  } else if (totalItemsHeightMm <= 90) {
     recommendedDensity = "balanced";
   } else {
     recommendedDensity = "compact";
@@ -325,12 +328,12 @@ export function paginateInvoiceItems(
   }
 
   // Multi-Page Splitting Logic (or auto-split when single page budget exceeded)
-  // Page 1 budget: 273mm usable - 50mm header - 8mm table head - 10mm continuation tagline = 205mm
-  const page1MaxItemsHeightMm = 185;
-  // Continuation Page budget (with totals & signature): 273mm - 14mm header - 8mm table head - 34mm totals - 44mm footer - 10mm tagline = 163mm
+  // Page 1 budget: 273mm usable - 72mm header - 8mm table head - 10mm continuation tagline = 183mm (with 15mm buffer = 168mm)
+  const page1MaxItemsHeightMm = 168;
+  // Continuation Page budget (with totals & signature): 273mm - 16mm cont header - 8mm table head - 34mm totals - 42mm footer - 10mm tagline = 163mm (with buffer = 145mm)
   const lastPageMaxItemsHeightMm = 145;
-  // Continuation Page budget (without totals & signature): 273mm - 14mm header - 8mm table head - 10mm tagline = 241mm
-  const midPageMaxItemsHeightMm = 220;
+  // Continuation Page budget (without totals & signature): 273mm - 16mm cont header - 8mm table head - 10mm tagline = 239mm (with buffer = 215mm)
+  const midPageMaxItemsHeightMm = 215;
 
   const pages: { items: InvoiceItem[]; startIndex: number }[] = [];
   let remaining = [...items];

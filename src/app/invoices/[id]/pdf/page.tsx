@@ -29,8 +29,9 @@ export default function InvoicePrintPDFPage() {
   const [isDownloading, setIsDownloading] = useState(false);
 
   useEffect(() => {
-    const inv = storage.getInvoiceById(invoiceId);
-    if (inv) {
+    let active = true;
+
+    const applyInvoice = (inv: Invoice) => {
       setInvoice(inv);
       if (templateParam) {
         setTemplateKey(templateParam);
@@ -52,7 +53,33 @@ export default function InvoicePrintPDFPage() {
         Boolean(inv.specialNotes)
       );
       setTypography(initialTypo);
+    };
+
+    const inv = storage.getInvoiceById(invoiceId);
+    if (inv) {
+      applyInvoice(inv);
     }
+
+    // Always fetch latest invoice from API / PostgreSQL backend as authoritative source
+    fetch(`/api/invoices/${invoiceId}`)
+      .then((res) => (res.ok ? res.json() : null))
+      .then((resData) => {
+        if (!active) return;
+        const fetchedInvoice = resData?.data || (resData && !resData.error ? resData : null);
+        if (fetchedInvoice && fetchedInvoice.id) {
+          applyInvoice(fetchedInvoice);
+          try {
+            storage.saveInvoice(fetchedInvoice);
+          } catch (e) {
+            // ignore
+          }
+        }
+      })
+      .catch((err) => console.error("Failed to fetch invoice from API:", err));
+
+    return () => {
+      active = false;
+    };
   }, [invoiceId, templateParam, formatParam]);
 
   if (!invoice) {

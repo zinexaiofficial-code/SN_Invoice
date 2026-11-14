@@ -46,9 +46,18 @@ export async function downloadInvoicePdf({
     await document.fonts.ready;
   }
 
-  // Save temporary styles on parent container (such as zoom scale)
-  const prevContainerTransform = container.style.transform;
-  container.style.transform = "none";
+  // Normalize transforms on container and all descendants so UI zoom scales never alter exported PDF
+  const transformedElements: { el: HTMLElement; prevTransform: string }[] = [];
+  if (container.style.transform && container.style.transform !== "none") {
+    transformedElements.push({ el: container, prevTransform: container.style.transform });
+    container.style.transform = "none";
+  }
+  container.querySelectorAll<HTMLElement>("*").forEach((el) => {
+    if (el.style && el.style.transform && el.style.transform !== "none") {
+      transformedElements.push({ el, prevTransform: el.style.transform });
+      el.style.transform = "none";
+    }
+  });
 
   const pdf = new jsPDF({
     orientation: "portrait",
@@ -73,10 +82,6 @@ export async function downloadInvoicePdf({
         pdf.addPage("a4", "portrait");
       }
 
-      // Save temporary inline styles
-      const prevSheetTransform = sheetEl.style.transform;
-      sheetEl.style.transform = "none";
-
       // Exact pixel dimensions for 210mm x 297mm at 96 DPI
       // 210mm = 793.7px, 297mm = 1122.52px
       const targetWidthPx = 794;
@@ -95,8 +100,6 @@ export async function downloadInvoicePdf({
         scrollX: 0,
         scrollY: 0,
       });
-
-      sheetEl.style.transform = prevSheetTransform;
 
       const imgData = canvas.toDataURL("image/jpeg", 0.98);
 
@@ -128,8 +131,10 @@ export async function downloadInvoicePdf({
       }
     }
   } finally {
-    // Always restore container transform
-    container.style.transform = prevContainerTransform;
+    // Always restore original transforms
+    transformedElements.forEach(({ el, prevTransform }) => {
+      el.style.transform = prevTransform;
+    });
   }
 
   // Trigger browser download

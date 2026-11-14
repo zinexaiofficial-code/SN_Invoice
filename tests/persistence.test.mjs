@@ -437,11 +437,11 @@ async function runTests() {
 
     const sampleItemHeights = sampleItems.map(it => {
       let h = 9.5;
-      if (it.description) h += Math.ceil(it.description.length / 45) * 4.0;
+      if (it.description) h += Math.ceil(it.description.length / 45) * 4.2 + 2;
       return h;
     });
     const totalItemH = sampleItemHeights.reduce((a, b) => a + b, 0);
-    const totalFirstPageEstimate = 50 + 8 + totalItemH + 34 + 44 + 10;
+    const totalFirstPageEstimate = 72 + 8 + totalItemH + 34 + 42 + 10;
     assert(totalFirstPageEstimate <= 268, `Standard 3-item invoice height (${totalFirstPageEstimate.toFixed(1)}mm) safely fits on 1 Page (limit 268mm)`);
     assert(273 - totalFirstPageEstimate >= 5, `Page 1 safe buffer to printable boundary is ${(273 - totalFirstPageEstimate).toFixed(1)}mm (>= 5mm required)`);
 
@@ -454,9 +454,9 @@ async function runTests() {
       lineTotal: 50000,
       description: 'Extended production, scheduling, creative copy review, multiple presenter clips, and station distribution.'
     }));
-    const denseItemHeights = denseItems.map(it => 9.5 + Math.ceil(it.description.length / 45) * 4.0);
+    const denseItemHeights = denseItems.map(it => 9.5 + Math.ceil(it.description.length / 45) * 4.2 + 2);
     const totalDenseH = denseItemHeights.reduce((a, b) => a + b, 0);
-    const totalDenseFirstPage = 50 + 8 + totalDenseH + 34 + 44 + 10;
+    const totalDenseFirstPage = 72 + 8 + totalDenseH + 34 + 42 + 10;
     assert(totalDenseFirstPage > 268, `Dense 8-item invoice height (${totalDenseFirstPage.toFixed(1)}mm) correctly triggers multi-page split`);
 
     console.log(`\n==========================================================`);
