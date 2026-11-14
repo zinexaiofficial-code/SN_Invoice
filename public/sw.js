@@ -1,5 +1,5 @@
-// SN Invoice Service Worker
-const CACHE_NAME = 'sn-invoice-v2';
+// SN Invoice Service Worker v3
+const CACHE_NAME = 'sn-invoice-v3';
 const STATIC_ASSETS = [
   '/',
   '/manifest.json',
@@ -39,11 +39,12 @@ self.addEventListener('fetch', (event) => {
 
   const url = new URL(event.request.url);
 
-  // Do NOT cache API requests, verification endpoints, sensitive invoice payloads, or auth calls
+  // Strictly exclude API, auth, data, verification and preview endpoints from SW interception
   if (
     url.pathname.startsWith('/api') ||
-    url.pathname.includes('/auth/') ||
-    url.pathname.startsWith('/verify')
+    url.pathname.includes('/auth') ||
+    url.pathname.startsWith('/verify') ||
+    url.pathname.startsWith('/_next/data')
   ) {
     return;
   }
@@ -58,17 +59,26 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  // Stale-while-revalidate for static assets with safe error rejection handling
-  event.respondWith(
-    caches.match(event.request).then((cachedResponse) => {
-      if (cachedResponse) {
-        return cachedResponse;
-      }
-      return fetch(event.request).catch((err) => {
-        console.warn('SN Invoice ServiceWorker fetch fallback:', event.request.url, err);
-        return new Response('', { status: 408, statusText: 'Network Timeout / Offline' });
-      });
-    })
-  );
+  // For static assets: serve from cache if available, otherwise fetch from network cleanly
+  if (
+    url.pathname.startsWith('/icons/') ||
+    url.pathname.startsWith('/images/') ||
+    url.pathname.startsWith('/_next/static/') ||
+    STATIC_ASSETS.includes(url.pathname)
+  ) {
+    event.respondWith(
+      caches.match(event.request).then((cachedResponse) => {
+        if (cachedResponse) {
+          // Revalidate in background
+          fetch(event.request).then((networkResponse) => {
+            if (networkResponse && networkResponse.status === 200) {
+              caches.open(CACHE_NAME).then((cache) => cache.put(event.request, networkResponse));
+            }
+          }).catch(() => {});
+          return cachedResponse;
+        }
+        return fetch(event.request);
+      })
+    );
+  }
 });
-

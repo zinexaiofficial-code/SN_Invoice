@@ -21,18 +21,24 @@ export async function GET() {
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
-    const bank = body?.drawerBank || body?.bankName;
-    if (!body || !body.chequeNumber || !bank) {
+    if (!body) {
       return NextResponse.json(
-        { error: 'Missing required cheque fields: chequeNumber and bank/drawerBank are required' },
+        { error: 'Missing request body' },
         { status: 400, headers: NO_CACHE_HEADERS }
       );
     }
 
+    const chequeNumber = (body.chequeNumber && String(body.chequeNumber).trim()) || `CHQ-${Date.now().toString().slice(-6)}`;
+    const bank = (body.drawerBank && String(body.drawerBank).trim()) ||
+                 (body.bankName && String(body.bankName).trim()) ||
+                 (body.bank && String(body.bank).trim()) ||
+                 'General Bank';
+
     const today = new Date().toISOString().split('T')[0];
     const chequeToSave = {
       ...body,
-      id: body.id || `chq-${Date.now()}-${Math.random().toString(36).substring(2, 8)}`,
+      id: (body.id && String(body.id).trim()) || `chq-${Date.now()}-${Math.random().toString(36).substring(2, 8)}`,
+      chequeNumber,
       bankName: bank,
       drawerBank: bank,
       amount: Number(body.amount) || 0,

@@ -459,6 +459,136 @@ async function runTests() {
     const totalDenseFirstPage = 72 + 8 + totalDenseH + 34 + 42 + 10;
     assert(totalDenseFirstPage > 263, `Dense 8-item invoice height (${totalDenseFirstPage.toFixed(1)}mm) correctly triggers multi-page split`);
 
+    // -------------------------------------------------------------------------
+    // TEST M: Client Creation WITHOUT Client-Supplied ID (Fix Verification for Error A)
+    // -------------------------------------------------------------------------
+    console.log(`\n[Test M] Testing Client Creation Without ID (Auto-UUID Generation)...`);
+    const autoCliRes = await fetch(`${BASE_URL}/api/clients`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        name: `Auto ID Client ${Date.now()}`,
+        contactPerson: `Chathura Bandara`,
+        mobile: `+94 71 999 8888`,
+        address: `100 Galle Road, Colombo`,
+        defaultPaymentTerms: `Cash on Delivery`,
+        isActive: true,
+      }),
+    });
+    assert(autoCliRes.status === 200, `Client creation without ID returned HTTP 200 (not 500)`);
+    const autoCliData = await autoCliRes.json();
+    assert(Boolean(autoCliData.data?.id), `Created client assigned non-null ID: ${autoCliData.data?.id}`);
+    assert(Boolean(autoCliData.data?.code), `Created client assigned auto-generated code: ${autoCliData.data?.code}`);
+    const createdAutoClientId = autoCliData.data?.id;
+
+    // -------------------------------------------------------------------------
+    // TEST N: Billing Entity Creation WITHOUT Client-Supplied ID
+    // -------------------------------------------------------------------------
+    console.log(`\n[Test N] Testing Billing Entity Creation Without ID (Auto-UUID Generation)...`);
+    const autoEntRes = await fetch(`${BASE_URL}/api/billing-entities`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        name: `Auto ID Entity ${Date.now()}`,
+        legalName: `Auto ID Media Network (Pvt) Ltd`,
+        prefix: `AIM`,
+        phone: `+94 11 999 0000`,
+        email: `info@aimedia.lk`,
+        status: `active`,
+      }),
+    });
+    assert(autoEntRes.status === 200, `Entity creation without ID returned HTTP 200`);
+    const autoEntData = await autoEntRes.json();
+    assert(Boolean(autoEntData.data?.id), `Created entity assigned non-null ID: ${autoEntData.data?.id}`);
+    const createdAutoEntityId = autoEntData.data?.id;
+
+    // -------------------------------------------------------------------------
+    // TEST O: Service Creation WITHOUT Client-Supplied ID
+    // -------------------------------------------------------------------------
+    console.log(`\n[Test O] Testing Service Creation Without ID (Auto-UUID Generation)...`);
+    const autoSrvRes = await fetch(`${BASE_URL}/api/services`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        name: `Billboard Display - Galle Face ${Date.now()}`,
+        category: `Outdoor LED Advertising`,
+        defaultPrice: 350000,
+        vatApplicable: true,
+        isActive: true,
+      }),
+    });
+    assert(autoSrvRes.status === 200, `Service creation without ID returned HTTP 200`);
+    const autoSrvData = await autoSrvRes.json();
+    assert(Boolean(autoSrvData.data?.id), `Created service assigned non-null ID: ${autoSrvData.data?.id}`);
+    const createdAutoServiceId = autoSrvData.data?.id;
+
+    // -------------------------------------------------------------------------
+    // TEST P: Multiple Invoices with Colliding/Default Line Item IDs ('item-init')
+    // -------------------------------------------------------------------------
+    console.log(`\n[Test P] Testing Multiple Invoices with Duplicate Line Item IDs...`);
+    const inv1Res = await fetch(`${BASE_URL}/api/invoices`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        invoiceNumber: `INV-COLLIDE-1-${Date.now().toString().slice(-4)}`,
+        clientId: createdAutoClientId || testClientId,
+        billingEntityId: createdAutoEntityId || testEntityId,
+        status: 'draft',
+        items: [
+          { id: 'item-init', serviceName: 'Colliding Item Test 1', quantity: 1, unitPrice: 10000, lineTotal: 10000 }
+        ]
+      })
+    });
+    assert(inv1Res.status === 200, `First invoice with 'item-init' line item returned HTTP 200`);
+    const inv1Data = await inv1Res.json();
+    const createdInv1Id = inv1Data.data?.id;
+
+    const inv2Res = await fetch(`${BASE_URL}/api/invoices`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        invoiceNumber: `INV-COLLIDE-2-${Date.now().toString().slice(-4)}`,
+        clientId: createdAutoClientId || testClientId,
+        billingEntityId: createdAutoEntityId || testEntityId,
+        status: 'draft',
+        items: [
+          { id: 'item-init', serviceName: 'Colliding Item Test 2', quantity: 1, unitPrice: 20000, lineTotal: 20000 }
+        ]
+      })
+    });
+    assert(inv2Res.status === 200, `Second invoice with same 'item-init' line item returned HTTP 200 without duplicate key error`);
+    const inv2Data = await inv2Res.json();
+    const createdInv2Id = inv2Data.data?.id;
+
+    // -------------------------------------------------------------------------
+    // TEST Q: Outgoing Cheque Creation Without Drawer Bank
+    // -------------------------------------------------------------------------
+    console.log(`\n[Test Q] Testing Outgoing Cheque Creation (Auto Bank Resolution)...`);
+    const outChqRes = await fetch(`${BASE_URL}/api/cheques`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        type: 'outgoing',
+        chequeNumber: `CHQ-OUT-${Date.now().toString().slice(-4)}`,
+        amount: 150000,
+        billingEntityId: createdAutoEntityId || testEntityId,
+        payerOrPayeeName: 'Print Works Vendor Ltd',
+        status: 'issued',
+      }),
+    });
+    assert(outChqRes.status === 200, `Outgoing cheque without explicit drawerBank returned HTTP 200 (not 400 Bad Request)`);
+    const outChqData = await outChqRes.json();
+    assert(Boolean(outChqData.data?.id), `Created outgoing cheque assigned ID: ${outChqData.data?.id}`);
+    const createdOutChqId = outChqData.data?.id;
+
+    // Cleanup dynamic test records
+    if (createdOutChqId) await fetch(`${BASE_URL}/api/cheques?id=${encodeURIComponent(createdOutChqId)}`, { method: 'DELETE' }).catch(() => {});
+    if (createdInv1Id) await fetch(`${BASE_URL}/api/invoices/${encodeURIComponent(createdInv1Id)}`, { method: 'DELETE' }).catch(() => {});
+    if (createdInv2Id) await fetch(`${BASE_URL}/api/invoices/${encodeURIComponent(createdInv2Id)}`, { method: 'DELETE' }).catch(() => {});
+    if (createdAutoServiceId) await fetch(`${BASE_URL}/api/services?id=${encodeURIComponent(createdAutoServiceId)}`, { method: 'DELETE' }).catch(() => {});
+    if (createdAutoClientId) await fetch(`${BASE_URL}/api/clients?id=${encodeURIComponent(createdAutoClientId)}`, { method: 'DELETE' }).catch(() => {});
+    if (createdAutoEntityId) await fetch(`${BASE_URL}/api/billing-entities?id=${encodeURIComponent(createdAutoEntityId)}`, { method: 'DELETE' }).catch(() => {});
+
     console.log(`\n==========================================================`);
     console.log(`🏁 PERSISTENCE TEST SUITE FINISHED`);
     console.log(`Passed: ${passCount} | Failed: ${failCount}`);

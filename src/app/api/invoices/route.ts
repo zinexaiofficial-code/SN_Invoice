@@ -21,8 +21,8 @@ export async function GET() {
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
-    if (!body || !body.id || !body.invoiceNumber || !body.clientId || !body.billingEntityId) {
-      return NextResponse.json({ error: 'Missing required invoice master fields' }, { status: 400, headers: NO_CACHE_HEADERS });
+    if (!body || !body.clientId || !body.billingEntityId) {
+      return NextResponse.json({ error: 'Missing required invoice master fields (clientId, billingEntityId)' }, { status: 400, headers: NO_CACHE_HEADERS });
     }
     const saved = await saveInvoice(body);
     return NextResponse.json({ success: true, data: saved }, { headers: NO_CACHE_HEADERS });

@@ -27,6 +27,7 @@ import {
   ChequeInvoiceAllocation
 } from "@/types";
 import { storage } from "@/lib/storage";
+import { useDatabase } from "@/context/DatabaseContext";
 
 interface ChequeModalProps {
   cheque?: Cheque | null;
@@ -64,6 +65,7 @@ export function ChequeModal({
 }: ChequeModalProps) {
   if (!isOpen) return null;
 
+  const { saveCheque: dbSaveCheque, billingEntities: dbEntities, clients: dbClients, invoices: dbInvoices } = useDatabase();
   const [activeTab, setActiveTab] = useState<"details" | "invoices" | "images" | "reminders">("details");
   const [entities, setEntities] = useState<BillingEntity[]>([]);
   const [clients, setClients] = useState<Client[]>([]);
@@ -221,7 +223,7 @@ export function ChequeModal({
     );
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
     if (!chequeNumber.trim()) {
@@ -232,7 +234,11 @@ export function ChequeModal({
       alert("Please enter a valid Cheque Amount");
       return;
     }
-    if (!drawerBank.trim()) {
+
+    const selectedAcc = entityBankAccounts.find((b) => b.id === bankAccountId);
+    const effectiveBank = drawerBank.trim() || selectedAcc?.bankName || selectedEntity?.bankName || "General Bank";
+
+    if (type === "incoming" && !drawerBank.trim()) {
       alert("Please specify or select the Drawer Bank");
       return;
     }
@@ -251,8 +257,6 @@ export function ChequeModal({
 
     setIsSubmitting(true);
     try {
-      const selectedAcc = entityBankAccounts.find((b) => b.id === bankAccountId);
-
       const chequeData = {
         ...(cheque?.id ? { id: cheque.id } : {}),
         type,
@@ -262,7 +266,7 @@ export function ChequeModal({
         chequeDate,
         receivedOrIssuedDate,
         expectedActionDate,
-        drawerBank: drawerBank.trim(),
+        drawerBank: effectiveBank,
         branch: branch.trim(),
         bankAccountId: bankAccountId || entityBankAccounts[0]?.id,
         bankAccountNumber: selectedAcc?.accountNumber || selectedEntity?.accountNumber,
@@ -285,7 +289,8 @@ export function ChequeModal({
         reminders: cheque?.reminders || []
       };
 
-      const saved = storage.saveCheque(chequeData);
+      const saved = await dbSaveCheque(chequeData);
+      storage.saveChequeLocally(saved);
 
       if (typeof window !== "undefined") {
         window.dispatchEvent(new CustomEvent("cheque-updated"));
@@ -298,7 +303,8 @@ export function ChequeModal({
         onSaveAndPrint(saved);
       }
     } catch (err: any) {
-      alert(err.message || "Failed to save cheque");
+      console.error("Save cheque error:", err);
+      alert(err.message || "Failed to save cheque to database");
     } finally {
       setIsSubmitting(false);
       setShouldOpenPrint(false);

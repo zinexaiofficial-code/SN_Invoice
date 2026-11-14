@@ -116,7 +116,7 @@ export function InvoiceForm({ initialInvoice }: InvoiceFormProps) {
   // Items State
   const [items, setItems] = useState<InvoiceItem[]>([
     {
-      id: "item-init",
+      id: `item-${Date.now()}-0`,
       serviceName: "Video Campaign with Presenter (3 Clips)",
       description: "Video Campaign with Presenter (3 Clips)",
       servicePeriod: new Date().toISOString().split("T")[0],

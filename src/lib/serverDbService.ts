@@ -178,13 +178,16 @@ export async function getAllBillingEntities(): Promise<BillingEntity[]> {
 
 export async function saveBillingEntity(entity: BillingEntity): Promise<BillingEntity> {
   const pool = getDbPool();
+  const entityId = (entity.id && String(entity.id).trim()) || crypto.randomUUID();
+  const entityWithId = { ...entity, id: entityId };
+
   if (!pool) {
     const data = getFallbackData();
-    const idx = data.billingEntities.findIndex((e) => e.id === entity.id);
-    if (idx >= 0) data.billingEntities[idx] = entity;
-    else data.billingEntities.push(entity);
+    const idx = data.billingEntities.findIndex((e) => e.id === entityId);
+    if (idx >= 0) data.billingEntities[idx] = entityWithId;
+    else data.billingEntities.push(entityWithId);
     writeFallbackDb(data);
-    return entity;
+    return entityWithId;
   }
 
   const query = `
@@ -228,7 +231,7 @@ export async function saveBillingEntity(entity: BillingEntity): Promise<BillingE
   `;
 
   const values = [
-    entity.id,
+    entityId,
     entity.name,
     entity.displayName || entity.name,
     Boolean((entity as any).isDefault),
@@ -298,13 +301,26 @@ export async function getAllClients(): Promise<Client[]> {
 
 export async function saveClient(client: Client): Promise<Client> {
   const pool = getDbPool();
+  const clientId = (client.id && String(client.id).trim()) || crypto.randomUUID();
+  const clientCode = (client.code && String(client.code).trim()) || `CL-${clientId.slice(0, 6).toUpperCase()}`;
+  const clientWithId = { ...client, id: clientId, code: clientCode };
+
   if (!pool) {
     const data = getFallbackData();
-    const idx = data.clients.findIndex((c) => c.id === client.id);
-    if (idx >= 0) data.clients[idx] = client;
-    else data.clients.push(client);
+    const idx = data.clients.findIndex((c) => c.id === clientId);
+    if (idx >= 0) data.clients[idx] = clientWithId;
+    else data.clients.push(clientWithId);
     writeFallbackDb(data);
-    return client;
+    return clientWithId;
+  }
+
+  // Validate Foreign Key for defaultBillingEntityId
+  let validBillingEntityId: string | null = null;
+  if (client.defaultBillingEntityId) {
+    try {
+      const eRes = await pool.query('SELECT 1 FROM billing_entities WHERE id = $1', [client.defaultBillingEntityId]);
+      if (eRes.rows.length > 0) validBillingEntityId = client.defaultBillingEntityId;
+    } catch {}
   }
 
   const query = `
@@ -336,8 +352,8 @@ export async function saveClient(client: Client): Promise<Client> {
   `;
 
   const values = [
-    client.id,
-    client.code || client.id.slice(0, 8),
+    clientId,
+    clientCode,
     client.name,
     client.contactPerson || '',
     client.email || '',
@@ -348,7 +364,7 @@ export async function saveClient(client: Client): Promise<Client> {
     client.brn || '',
     client.defaultPaymentTerms || 'Payment on Delivery',
     client.defaultVatPreference ? 'true' : 'false',
-    client.defaultBillingEntityId || null,
+    validBillingEntityId,
     client.defaultAdvancePercentage || 0,
     client.defaultNote || client.internalNotes || '',
     !client.isActive,
@@ -396,13 +412,16 @@ export async function getAllServices(): Promise<Service[]> {
 
 export async function saveService(service: Service): Promise<Service> {
   const pool = getDbPool();
+  const serviceId = (service.id && String(service.id).trim()) || crypto.randomUUID();
+  const serviceWithId = { ...service, id: serviceId };
+
   if (!pool) {
     const data = getFallbackData();
-    const idx = data.services.findIndex((s) => s.id === service.id);
-    if (idx >= 0) data.services[idx] = service;
-    else data.services.push(service);
+    const idx = data.services.findIndex((s) => s.id === serviceId);
+    if (idx >= 0) data.services[idx] = serviceWithId;
+    else data.services.push(serviceWithId);
     writeFallbackDb(data);
-    return service;
+    return serviceWithId;
   }
 
   const query = `
@@ -425,7 +444,7 @@ export async function saveService(service: Service): Promise<Service> {
   `;
 
   const values = [
-    service.id,
+    serviceId,
     service.name,
     service.category || '',
     service.defaultMediaChannel || '',
@@ -522,13 +541,17 @@ export async function getAllInvoices(): Promise<Invoice[]> {
 
 export async function saveInvoice(invoice: Invoice): Promise<Invoice> {
   const pool = getDbPool();
+  const invoiceId = (invoice.id && String(invoice.id).trim()) || crypto.randomUUID();
+  const invoiceNumber = (invoice.invoiceNumber && String(invoice.invoiceNumber).trim()) || `INV-${Date.now().toString().slice(-6)}`;
+  const invoiceWithId = { ...invoice, id: invoiceId, invoiceNumber };
+
   if (!pool) {
     const data = getFallbackData();
-    const idx = data.invoices.findIndex((i) => i.id === invoice.id);
-    if (idx >= 0) data.invoices[idx] = invoice;
-    else data.invoices.push(invoice);
+    const idx = data.invoices.findIndex((i) => i.id === invoiceId);
+    if (idx >= 0) data.invoices[idx] = invoiceWithId;
+    else data.invoices.push(invoiceWithId);
     writeFallbackDb(data);
-    return invoice;
+    return invoiceWithId;
   }
 
   const client = await pool.connect();
@@ -590,8 +613,8 @@ export async function saveInvoice(invoice: Invoice): Promise<Invoice> {
     `;
 
     const invValues = [
-      invoice.id,
-      invoice.invoiceNumber,
+      invoiceId,
+      invoiceNumber,
       invoice.clientId,
       invoice.billingEntityId,
       invoice.templateKey || 'standard',
@@ -624,11 +647,15 @@ export async function saveInvoice(invoice: Invoice): Promise<Invoice> {
     await client.query(invQuery, invValues);
 
     // 2. Delete and recreate line items atomically
-    await client.query('DELETE FROM invoice_items WHERE invoice_id = $1', [invoice.id]);
+    await client.query('DELETE FROM invoice_items WHERE invoice_id = $1', [invoiceId]);
 
     for (let i = 0; i < (invoice.items || []).length; i++) {
       const it = invoice.items[i];
       const itAmount = Number(it.lineTotal || (it as any).amount) || (Number(it.quantity) * Number(it.unitPrice)) || 0;
+      const itemId = (it.id && it.id.trim() && it.id !== 'item-init' && !it.id.startsWith('item-init') && it.id.length > 8)
+        ? it.id.trim()
+        : `item-${invoiceId}-${i}-${crypto.randomUUID().slice(0, 8)}`;
+
       await client.query(
         `INSERT INTO invoice_items (
           id, invoice_id, service_id, service_name, description, quantity, unit_price,
@@ -636,8 +663,8 @@ export async function saveInvoice(invoice: Invoice): Promise<Invoice> {
           reference_number, show_reference_in_description, show_service_period, display_order
         ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)`,
         [
-          it.id || `item-${invoice.id}-${i}`,
-          invoice.id,
+          itemId,
+          invoiceId,
           it.serviceId || null,
           it.serviceName,
           it.description || '',
@@ -657,8 +684,8 @@ export async function saveInvoice(invoice: Invoice): Promise<Invoice> {
     }
 
     // 3. Update sequence on the billing entity
-    const numPart = parseInt(invoice.invoiceNumber.replace(/\D/g, ''), 10);
-    if (!isNaN(numPart)) {
+    const numPart = parseInt(invoiceNumber.replace(/\D/g, ''), 10);
+    if (!isNaN(numPart) && invoice.billingEntityId) {
       await client.query(
         `UPDATE billing_entities
          SET invoice_next_number = GREATEST(invoice_next_number, $1 + 1)
@@ -671,6 +698,8 @@ export async function saveInvoice(invoice: Invoice): Promise<Invoice> {
 
     return {
       ...invoice,
+      id: invoiceId,
+      invoiceNumber,
       subtotal,
       vatAmount,
       grandTotal,
@@ -704,8 +733,19 @@ export async function getAllCheques(): Promise<Cheque[]> {
 
 export async function saveCheque(cheque: Cheque): Promise<Cheque> {
   const pool = getDbPool();
-  const chequeId = cheque.id || `chq-${Date.now()}-${Math.random().toString(36).substring(2, 8)}`;
-  const chequeWithId = { ...cheque, id: chequeId };
+  const chequeId = (cheque.id && String(cheque.id).trim()) || crypto.randomUUID();
+  const chequeNumber = (cheque.chequeNumber && String(cheque.chequeNumber).trim()) || `CHQ-${Date.now().toString().slice(-6)}`;
+  const bank = (cheque.drawerBank && String(cheque.drawerBank).trim()) ||
+               ((cheque as any).bankName && String((cheque as any).bankName).trim()) ||
+               ((cheque as any).bank && String((cheque as any).bank).trim()) ||
+               'General Bank';
+
+  const chequeWithId: Cheque = {
+    ...cheque,
+    id: chequeId,
+    chequeNumber,
+    drawerBank: bank,
+  };
 
   if (!pool) {
     const data = getFallbackData();
@@ -779,8 +819,8 @@ export async function saveCheque(cheque: Cheque): Promise<Cheque> {
 
   const values = [
     chequeId,
-    cheque.chequeNumber,
-    cheque.drawerBank || (cheque as any).bankName || '',
+    chequeNumber,
+    bank,
     cheque.branch || (cheque as any).bankBranch || '',
     Number(cheque.amount) || 0,
     cheque.receivedOrIssuedDate || (cheque as any).issueDate || new Date().toISOString().split('T')[0],
