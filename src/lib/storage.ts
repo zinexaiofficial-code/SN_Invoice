@@ -31,6 +31,14 @@ import {
 import { generateVerificationToken, computeCanonicalInvoiceHash } from '@/lib/crypto';
 import { formatColomboDateTime, formatDate } from '@/lib/utils';
 import { RECOMMENDED_TYPOGRAPHY } from '@/lib/pdfTypography';
+import { isSupabaseConfigured } from '@/lib/supabase';
+import {
+  saveInvoiceToSupabase,
+  saveClientToSupabase,
+  saveBillingEntityToSupabase,
+  saveChequeToSupabase,
+  fetchInvoicesFromSupabase,
+} from '@/lib/supabaseSync';
 
 // Default Seed Data based on official SN Advertising documents and Excel files
 export const INITIAL_BILLING_ENTITIES: BillingEntity[] = [
@@ -1396,7 +1404,16 @@ class StorageService {
     }
     if (this.isBrowser()) {
       localStorage.setItem(STORAGE_KEYS.BILLING_ENTITIES, JSON.stringify(list));
+      window.dispatchEvent(new Event('entity-updated'));
+      window.dispatchEvent(new Event('storage'));
     }
+
+    if (isSupabaseConfigured) {
+      saveBillingEntityToSupabase(saved).catch(err => {
+        console.warn('Supabase billing entity background sync notice:', err);
+      });
+    }
+
     return saved;
   }
 
@@ -1620,7 +1637,16 @@ class StorageService {
     }
     if (this.isBrowser()) {
       localStorage.setItem(STORAGE_KEYS.CLIENTS, JSON.stringify(list));
+      window.dispatchEvent(new Event('client-updated'));
+      window.dispatchEvent(new Event('storage'));
     }
+
+    if (isSupabaseConfigured) {
+      saveClientToSupabase(saved).catch(err => {
+        console.warn('Supabase client background sync notice:', err);
+      });
+    }
+
     return saved;
   }
 
@@ -1719,10 +1745,30 @@ class StorageService {
     const list = this.getInvoices();
     let saved: Invoice;
 
-    const subtotal = invoice.subtotal || (invoice.items || []).reduce((sum, item) => sum + (item.lineTotal || 0), 0);
-    const vatRate = invoice.vatRate ?? 18;
-    const vatAmount = invoice.vatApplicable ? Math.round(subtotal * (vatRate / 100) * 100) / 100 : 0;
-    const grandTotal = subtotal + vatAmount;
+    const mappedItems = (invoice.items && invoice.items.length > 0)
+      ? invoice.items.map((it, idx) => {
+          const qty = Number(it.quantity) || 1;
+          const unit = Number(it.unitPrice) || 0;
+          return {
+            ...it,
+            quantity: qty,
+            unitPrice: unit,
+            lineTotal: Math.round(qty * unit * 100) / 100,
+            sortOrder: it.sortOrder ?? idx,
+          };
+        })
+      : undefined;
+
+    // Dynamically calculate subtotal from items whenever items are present,
+    // avoiding stale subtotal overwrites!
+    const subtotal = mappedItems && mappedItems.length > 0
+      ? mappedItems.reduce((sum, item) => sum + (item.lineTotal || 0), 0)
+      : (typeof invoice.subtotal === 'number' ? invoice.subtotal : 0);
+
+    const vatApplicable = Boolean(invoice.vatApplicable);
+    const vatRate = typeof invoice.vatRate === 'number' ? invoice.vatRate : 18;
+    const vatAmount = vatApplicable ? Math.round(subtotal * (vatRate / 100) * 100) / 100 : 0;
+    const grandTotal = Math.round((subtotal + vatAmount) * 100) / 100;
 
     // Payments calculations
     const payments = invoice.payments || [];
@@ -1746,7 +1792,9 @@ class StorageService {
         saved = {
           ...list[idx],
           ...invoice,
+          items: mappedItems || list[idx].items,
           subtotal,
+          vatApplicable,
           vatRate,
           vatAmount,
           grandTotal,
@@ -1760,7 +1808,9 @@ class StorageService {
         saved = {
           ...invoice,
           id: invoice.id,
+          items: mappedItems || invoice.items || [],
           subtotal,
+          vatApplicable,
           vatRate,
           vatAmount,
           grandTotal,
@@ -1785,10 +1835,11 @@ class StorageService {
         totalPaid,
         outstandingBalance,
         subtotal,
+        vatApplicable,
         vatRate,
         vatAmount,
         grandTotal,
-        items: invoice.items || [],
+        items: mappedItems || invoice.items || [],
         payments: payments,
         shareHistory: invoice.shareHistory || [],
         createdAt: new Date().toISOString(),
@@ -1854,7 +1905,17 @@ class StorageService {
 
     if (this.isBrowser()) {
       localStorage.setItem(STORAGE_KEYS.INVOICES, JSON.stringify(list));
+      window.dispatchEvent(new CustomEvent('invoice-updated', { detail: saved }));
+      window.dispatchEvent(new Event('storage'));
     }
+
+    // Supabase cloud persistence
+    if (isSupabaseConfigured) {
+      saveInvoiceToSupabase(saved).catch(err => {
+        console.warn('Supabase invoice background sync notice:', err);
+      });
+    }
+
     return saved;
   }
 
@@ -2441,7 +2502,16 @@ class StorageService {
 
     if (this.isBrowser()) {
       localStorage.setItem(STORAGE_KEYS.CHEQUES, JSON.stringify(list));
+      window.dispatchEvent(new Event('cheque-updated'));
+      window.dispatchEvent(new Event('storage'));
     }
+
+    if (isSupabaseConfigured) {
+      saveChequeToSupabase(saved).catch(err => {
+        console.warn('Supabase cheque background sync notice:', err);
+      });
+    }
+
     return saved;
   }
 
@@ -2694,6 +2764,27 @@ class StorageService {
     if (updated && this.isBrowser()) {
       localStorage.setItem(STORAGE_KEYS.CHEQUES, JSON.stringify(list));
     }
+  }
+
+  /**
+   * Synchronizes latest data from Supabase PostgreSQL into local cache
+   */
+  async syncFromSupabase(): Promise<{ synced: boolean; count: number }> {
+    if (!this.isBrowser() || !isSupabaseConfigured) {
+      return { synced: false, count: 0 };
+    }
+    try {
+      const invoices = await fetchInvoicesFromSupabase();
+      if (invoices && invoices.length > 0) {
+        localStorage.setItem(STORAGE_KEYS.INVOICES, JSON.stringify(invoices));
+        window.dispatchEvent(new Event('invoice-updated'));
+        window.dispatchEvent(new Event('storage'));
+        return { synced: true, count: invoices.length };
+      }
+    } catch (e) {
+      console.warn('Initial Supabase synchronization notice:', e);
+    }
+    return { synced: false, count: 0 };
   }
 }
 

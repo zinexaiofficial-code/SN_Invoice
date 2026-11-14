@@ -539,7 +539,7 @@ export function InvoiceForm({ initialInvoice }: InvoiceFormProps) {
             className="flex items-center space-x-1.5"
           >
             <Save className="w-4 h-4 text-slate-600" />
-            <span>Save Draft</span>
+            <span>{initialInvoice ? "Save Changes" : "Save Draft"}</span>
           </Button>
           <Button
             type="button"
@@ -547,7 +547,7 @@ export function InvoiceForm({ initialInvoice }: InvoiceFormProps) {
             className="bg-emerald-600 hover:bg-emerald-700 text-white font-semibold flex items-center space-x-1.5 shadow-sm"
           >
             <CheckCircle2 className="w-4 h-4" />
-            <span>Issue Invoice</span>
+            <span>{initialInvoice && initialInvoice.status === "issued" ? "Update & Re-Issue" : "Issue Invoice"}</span>
           </Button>
         </div>
       </div>

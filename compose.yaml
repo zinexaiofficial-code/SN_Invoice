@@ -1,0 +1,49 @@
+# ==============================================================================
+# SN INVOICE — PRODUCTION DOCKER COMPOSE CONFIGURATION
+# Optimized for Hostinger Ubuntu VPS Deployment
+# ==============================================================================
+
+version: '3.8'
+
+services:
+  sn-invoice:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        NEXT_PUBLIC_APP_NAME: "${NEXT_PUBLIC_APP_NAME:-SN Invoice}"
+        NEXT_PUBLIC_APP_URL: "${NEXT_PUBLIC_APP_URL:-https://invoice.snadvertising.lk}"
+        NEXT_PUBLIC_DEFAULT_CURRENCY: "${NEXT_PUBLIC_DEFAULT_CURRENCY:-LKR}"
+        NEXT_PUBLIC_DEFAULT_TIMEZONE: "${NEXT_PUBLIC_DEFAULT_TIMEZONE:-Asia/Colombo}"
+        NEXT_PUBLIC_DEFAULT_VAT_RATE: "${NEXT_PUBLIC_DEFAULT_VAT_RATE:-18}"
+    container_name: sn-invoice-app
+    restart: unless-stopped
+    env_file:
+      - .env.production
+    environment:
+      - NODE_ENV=production
+      - PORT=3000
+      - HOSTNAME=0.0.0.0
+    ports:
+      # Bound strictly to 127.0.0.1 (localhost) so external traffic must go through reverse proxy with SSL
+      - "127.0.0.1:${APP_PORT:-3000}:3000"
+    volumes:
+      # Persistent external volume for uploaded logos, signatures, and exported PDFs
+      - sn_invoice_data:/app/data
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://127.0.0.1:3000/api/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+    networks:
+      - sn_invoice_network
+
+volumes:
+  sn_invoice_data:
+    name: sn_invoice_production_data
+
+networks:
+  sn_invoice_network:
+    name: sn_invoice_network
+    driver: bridge

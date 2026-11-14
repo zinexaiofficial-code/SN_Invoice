@@ -21,7 +21,8 @@ import {
   Eye,
   FileText,
   Filter,
-  Building2
+  Building2,
+  Edit
 } from "lucide-react";
 
 export default function InvoicesListPage() {
@@ -207,6 +208,13 @@ export default function InvoicesListPage() {
 
                       <td className="py-3.5 px-4 text-right">
                         <div className="flex items-center justify-end space-x-1">
+                          <Link
+                            href={`/invoices/${inv.id}/edit`}
+                            className="p-1.5 text-slate-500 hover:text-navy-950 hover:bg-slate-100 rounded"
+                            title="Edit Invoice"
+                          >
+                            <Edit className="w-4 h-4" />
+                          </Link>
                           <Link
                             href={`/invoices/${inv.id}`}
                             className="p-1.5 text-slate-500 hover:text-navy-950 hover:bg-slate-100 rounded"

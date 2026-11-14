@@ -39,7 +39,8 @@ import {
   Download,
   ExternalLink,
   Check,
-  FileCheck
+  FileCheck,
+  Edit
 } from "lucide-react";
 
 export default function InvoiceDetailPage() {
@@ -243,6 +244,17 @@ export default function InvoiceDetailPage() {
 
           {/* Action Buttons */}
           <div className="flex flex-wrap items-center gap-2">
+            {invoice.status !== "void" && (
+              <Link
+                href={`/invoices/${invoice.id}/edit`}
+                className="inline-flex items-center space-x-1.5 px-3 py-1.5 text-xs font-bold text-slate-800 bg-white border border-slate-300 hover:bg-slate-50 rounded-lg shadow-2xs transition-colors"
+                title="Edit invoice items, prices, or details"
+              >
+                <Edit className="w-3.5 h-3.5 text-navy-950" />
+                <span>Edit Invoice</span>
+              </Link>
+            )}
+
             <Button
               variant="outline"
               size="sm"
