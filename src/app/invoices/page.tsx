@@ -266,7 +266,7 @@ export default function InvoicesListPage() {
           invoice={activeShareInvoice}
           isOpen={Boolean(activeShareInvoice)}
           onClose={() => setActiveShareInvoice(null)}
-          onShared={() => setInvoices(storage.getInvoices())}
+          onShared={() => refresh()}
         />
       )}
 
@@ -276,7 +276,7 @@ export default function InvoicesListPage() {
           invoice={activePaymentInvoice}
           isOpen={Boolean(activePaymentInvoice)}
           onClose={() => setActivePaymentInvoice(null)}
-          onPaymentRecorded={() => setInvoices(storage.getInvoices())}
+          onPaymentRecorded={() => refresh()}
         />
       )}
     </AppLayout>
