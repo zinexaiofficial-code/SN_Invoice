@@ -308,6 +308,44 @@ async function runTests() {
     }
     assert(allMatches, `10 consecutive refreshes returned identical entity, client, and invoice counts`);
 
+    // -------------------------------------------------------------------------
+    // TEST J: Cheque Persistence & drawerBank verification
+    // -------------------------------------------------------------------------
+    console.log(`\n[Test J] Testing Cheque Persistence & API Validation...`);
+    const testChequeId = `chq-test-${Date.now()}`;
+    const testCheque = {
+      id: testChequeId,
+      type: 'outgoing',
+      chequeNumber: 'CHK-998877',
+      drawerBank: 'Seylan Bank',
+      branch: 'Kadawatha Branch',
+      amount: 435454,
+      chequeDate: '2026-11-14',
+      receivedOrIssuedDate: '2026-11-14',
+      payerOrPayeeName: 'Vendor Supplier Corp',
+      status: 'issued',
+    };
+
+    const saveChqRes = await fetch(`${BASE_URL}/api/cheques`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(testCheque),
+    });
+    assert(saveChqRes.status === 200, `Save cheque with drawerBank returned HTTP 200`);
+    const saveChqData = await saveChqRes.json();
+    assert(saveChqData.data?.chequeNumber === 'CHK-998877', `Cheque number matches saved record`);
+    assert(saveChqData.data?.drawerBank === 'Seylan Bank', `Cheque drawerBank matches saved record`);
+
+    // Fetch all cheques
+    const listChqRes = await fetch(`${BASE_URL}/api/cheques`);
+    const listChqData = await listChqRes.json();
+    const foundChq = (listChqData.data || []).find((c) => c.id === testChequeId);
+    assert(Boolean(foundChq), `Cheque retrieved from persistent database`);
+    assert(foundChq?.amount === 435454, `Cheque amount matches: ${foundChq?.amount}`);
+
+    // Clean up test cheque
+    await fetch(`${BASE_URL}/api/cheques?id=${encodeURIComponent(testChequeId)}`, { method: 'DELETE' });
+
     console.log(`\n==========================================================`);
     console.log(`🏁 PERSISTENCE TEST SUITE FINISHED`);
     console.log(`Passed: ${passCount} | Failed: ${failCount}`);

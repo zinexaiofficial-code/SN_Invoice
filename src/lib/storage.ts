@@ -2481,7 +2481,10 @@ class StorageService {
       fetch('/api/cheques', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(saved),
+        body: JSON.stringify({
+          ...saved,
+          bankName: saved.drawerBank || (saved as any).bankName,
+        }),
       }).catch(err => console.error('API save cheque error:', err));
     }
 
@@ -2499,6 +2502,9 @@ class StorageService {
     const updated = list.filter(c => c.id !== id);
     if (this.isBrowser()) {
       localStorage.setItem(STORAGE_KEYS.CHEQUES, JSON.stringify(updated));
+      fetch(`/api/cheques?id=${encodeURIComponent(id)}`, {
+        method: 'DELETE',
+      }).catch(err => console.error('API delete cheque error:', err));
     }
     return true;
   }
@@ -2574,6 +2580,14 @@ class StorageService {
     list[index] = updated;
     if (this.isBrowser()) {
       localStorage.setItem(STORAGE_KEYS.CHEQUES, JSON.stringify(list));
+      fetch('/api/cheques', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          ...updated,
+          bankName: updated.drawerBank || (updated as any).bankName,
+        }),
+      }).catch(err => console.error('API save cheque status error:', err));
     }
     return updated;
   }

@@ -21,10 +21,27 @@ export async function GET() {
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
-    if (!body || !body.chequeNumber || !body.bankName) {
-      return NextResponse.json({ error: 'Missing required cheque fields' }, { status: 400, headers: NO_CACHE_HEADERS });
+    const bank = body?.drawerBank || body?.bankName;
+    if (!body || !body.chequeNumber || !bank) {
+      return NextResponse.json(
+        { error: 'Missing required cheque fields: chequeNumber and bank/drawerBank are required' },
+        { status: 400, headers: NO_CACHE_HEADERS }
+      );
     }
-    const saved = await saveCheque(body);
+
+    const today = new Date().toISOString().split('T')[0];
+    const chequeToSave = {
+      ...body,
+      id: body.id || `chq-${Date.now()}-${Math.random().toString(36).substring(2, 8)}`,
+      bankName: bank,
+      drawerBank: bank,
+      amount: Number(body.amount) || 0,
+      chequeDate: body.chequeDate || today,
+      receivedOrIssuedDate: body.receivedOrIssuedDate || body.issueDate || today,
+      type: body.type || 'incoming',
+    };
+
+    const saved = await saveCheque(chequeToSave);
     return NextResponse.json({ success: true, data: saved }, { headers: NO_CACHE_HEADERS });
   } catch (err: any) {
     console.error('Failed to save cheque:', err);

@@ -270,6 +270,7 @@ export async function initializeDatabase(): Promise<boolean> {
         created_at TIMESTAMPTZ DEFAULT NOW(),
         updated_at TIMESTAMPTZ DEFAULT NOW()
       );
+      ALTER TABLE cheques ADD COLUMN IF NOT EXISTS type TEXT DEFAULT 'incoming';
     `);
 
     // 9. Branding Settings

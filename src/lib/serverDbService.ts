@@ -696,13 +696,42 @@ export async function getAllCheques(): Promise<Cheque[]> {
 
 export async function saveCheque(cheque: Cheque): Promise<Cheque> {
   const pool = getDbPool();
+  const chequeId = cheque.id || `chq-${Date.now()}-${Math.random().toString(36).substring(2, 8)}`;
+  const chequeWithId = { ...cheque, id: chequeId };
+
   if (!pool) {
     const data = getFallbackData();
-    const idx = data.cheques.findIndex((c) => c.id === cheque.id);
-    if (idx >= 0) data.cheques[idx] = cheque;
-    else data.cheques.push(cheque);
+    const idx = data.cheques.findIndex((c) => c.id === chequeId);
+    if (idx >= 0) data.cheques[idx] = chequeWithId;
+    else data.cheques.push(chequeWithId);
     writeFallbackDb(data);
-    return cheque;
+    return chequeWithId;
+  }
+
+  // Validate Foreign Keys to ensure references exist in PostgreSQL
+  let validClientId: string | null = null;
+  if (cheque.clientId) {
+    try {
+      const cRes = await pool.query('SELECT 1 FROM clients WHERE id = $1', [cheque.clientId]);
+      if (cRes.rows.length > 0) validClientId = cheque.clientId;
+    } catch {}
+  }
+
+  let validEntityId: string | null = null;
+  if (cheque.billingEntityId) {
+    try {
+      const eRes = await pool.query('SELECT 1 FROM billing_entities WHERE id = $1', [cheque.billingEntityId]);
+      if (eRes.rows.length > 0) validEntityId = cheque.billingEntityId;
+    } catch {}
+  }
+
+  let validInvoiceId: string | null = null;
+  const invId = (cheque as any).invoiceId;
+  if (invId) {
+    try {
+      const iRes = await pool.query('SELECT 1 FROM invoices WHERE id = $1', [invId]);
+      if (iRes.rows.length > 0) validInvoiceId = invId;
+    } catch {}
   }
 
   const query = `
@@ -710,9 +739,9 @@ export async function saveCheque(cheque: Cheque): Promise<Cheque> {
       id, cheque_number, bank_name, bank_branch, amount, issue_date, cheque_date,
       client_id, billing_entity_id, invoice_id, payee_name, status, drawer_name,
       notes, image_url, reminders_enabled, reminder_days_before, last_reminder_sent_at,
-      cleared_date, bounced_date, bounced_reason, updated_at
+      cleared_date, bounced_date, bounced_reason, type, updated_at
     ) VALUES (
-      $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, NOW()
+      $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, NOW()
     )
     ON CONFLICT (id) DO UPDATE SET
       cheque_number = EXCLUDED.cheque_number,
@@ -735,21 +764,22 @@ export async function saveCheque(cheque: Cheque): Promise<Cheque> {
       cleared_date = EXCLUDED.cleared_date,
       bounced_date = EXCLUDED.bounced_date,
       bounced_reason = EXCLUDED.bounced_reason,
+      type = EXCLUDED.type,
       updated_at = NOW()
     RETURNING *;
   `;
 
   const values = [
-    cheque.id,
+    chequeId,
     cheque.chequeNumber,
     cheque.drawerBank || (cheque as any).bankName || '',
     cheque.branch || (cheque as any).bankBranch || '',
-    cheque.amount,
+    Number(cheque.amount) || 0,
     cheque.receivedOrIssuedDate || (cheque as any).issueDate || new Date().toISOString().split('T')[0],
-    cheque.chequeDate,
-    cheque.clientId || null,
-    cheque.billingEntityId || null,
-    (cheque as any).invoiceId || null,
+    cheque.chequeDate || new Date().toISOString().split('T')[0],
+    validClientId,
+    validEntityId,
+    validInvoiceId,
     cheque.payerOrPayeeName || (cheque as any).payeeName || '',
     cheque.status || 'pending',
     (cheque as any).drawerName || cheque.payerOrPayeeName || '',
@@ -761,6 +791,7 @@ export async function saveCheque(cheque: Cheque): Promise<Cheque> {
     cheque.actualClearanceDate || (cheque as any).clearedDate || null,
     (cheque as any).bouncedDate || null,
     (cheque as any).bouncedReason || '',
+    cheque.type || 'incoming',
   ];
 
   const res = await pool.query(query, values);
@@ -1072,7 +1103,7 @@ function mapPaymentRow(r: any): any {
 function mapChequeRow(r: any): Cheque {
   return {
     id: r.id,
-    type: 'incoming',
+    type: (r.type || 'incoming') as ChequeType,
     chequeNumber: r.cheque_number,
     drawerBank: r.bank_name || '',
     branch: r.bank_branch || '',
