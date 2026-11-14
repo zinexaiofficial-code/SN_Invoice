@@ -1,3 +1,6 @@
+import type { Cheque } from './index';
+export type { Cheque };
+
 export type A4Orientation = 'portrait' | 'landscape';
 export type RotationAngle = 0 | 90 | 180 | 270;
 export type FeedDirection = 'top' | 'bottom' | 'left' | 'right' | 'manual_center';
