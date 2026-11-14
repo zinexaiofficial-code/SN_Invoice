@@ -44,3 +44,4 @@ export async function DELETE(req: NextRequest) {
     return NextResponse.json({ error: err.message || 'Failed to delete template' }, { status: 500, headers: NO_CACHE_HEADERS });
   }
 }
+

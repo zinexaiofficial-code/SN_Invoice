@@ -29,3 +29,4 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: err.message || 'Failed to record print job' }, { status: 500, headers: NO_CACHE_HEADERS });
   }
 }
+

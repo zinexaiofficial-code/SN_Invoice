@@ -314,3 +314,4 @@ export function downloadChequePdf(payload: ChequePrintPayload, filename?: string
   const defaultName = `Cheque_${payload.liveData.chequeNumber || 'Print'}_${payload.printType}.pdf`;
   doc.save(filename || defaultName);
 }
+

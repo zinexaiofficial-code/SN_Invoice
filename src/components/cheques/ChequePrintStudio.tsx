@@ -785,43 +785,6 @@ export function ChequePrintStudio({ isOpen, onClose, cheque, onSaved }: ChequePr
                 </div>
               </div>
             </div>
-                  <label className="text-[10px] text-slate-400">Cheque Y (mm)</label>
-                  <input
-                    type="number"
-                    step="0.5"
-                    value={activeTemplate.chequeY}
-                    onChange={(e) =>
-                      updateTemplate((prev) => ({ ...prev, chequeY: Number(e.target.value) || 0 }))
-                    }
-                    className="w-full bg-slate-900 border border-slate-700 text-slate-200 rounded px-2 py-1 text-xs font-mono"
-                  />
-                </div>
-              </div>
-
-              {/* Cheque Rotation */}
-              <div>
-                <label className="text-[11px] text-slate-300 block mb-1">
-                  Cheque Rotation: {activeTemplate.chequeRotation}°
-                </label>
-                <div className="grid grid-cols-4 gap-1">
-                  {[0, 90, 180, 270].map((deg) => (
-                    <button
-                      key={deg}
-                      onClick={() =>
-                        updateTemplate((prev) => ({ ...prev, chequeRotation: deg as RotationAngle }))
-                      }
-                      className={`py-1 text-[11px] rounded font-mono ${
-                        activeTemplate.chequeRotation === deg
-                          ? "bg-emerald-600 text-white font-bold"
-                          : "bg-slate-900 text-slate-300 hover:bg-slate-800"
-                      }`}
-                    >
-                      {deg}°
-                    </button>
-                  ))}
-                </div>
-              </div>
-            </div>
 
             {/* Canvas Helpers */}
             <div className="pt-2 border-t border-navy-800/80 space-y-2">

@@ -269,3 +269,4 @@ export const DEFAULT_PRINTER_PROFILES: ChequePrinterProfile[] = [
     updatedAt: new Date().toISOString(),
   },
 ];
+
