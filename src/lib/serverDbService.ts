@@ -6,6 +6,7 @@ import {
   Invoice,
   InvoiceItem,
   Cheque,
+  ChequeType,
   BrandingSettings,
   MediaChannel,
 } from '@/types';
