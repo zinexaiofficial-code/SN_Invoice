@@ -167,6 +167,23 @@ export function ChequeModal({
       }
     };
     reader.readAsDataURL(file);
+
+    // Upload to server persistent storage
+    const formData = new FormData();
+    formData.append("file", file);
+    formData.append("prefix", isFront ? "cheque_front" : "cheque_back");
+    fetch("/api/upload", { method: "POST", body: formData })
+      .then((res) => res.json())
+      .then((data) => {
+        if (data.url) {
+          if (isFront) {
+            setImageFrontUrl(data.url);
+          } else {
+            setImageBackUrl(data.url);
+          }
+        }
+      })
+      .catch((err) => console.error("Cheque upload to persistent server failed:", err));
   };
 
   // Allocations total

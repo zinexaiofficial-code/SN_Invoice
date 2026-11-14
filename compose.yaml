@@ -1,11 +1,30 @@
 # ==============================================================================
 # SN INVOICE — PRODUCTION DOCKER COMPOSE CONFIGURATION
+# Multi-container Architecture: Next.js Standalone + Dedicated PostgreSQL 16
 # Optimized for Hostinger Ubuntu VPS Deployment
 # ==============================================================================
 
-version: '3.8'
-
 services:
+  db:
+    image: postgres:16-alpine
+    container_name: sn-invoice-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-sn_user}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-sn_secure_pass_2026}
+      POSTGRES_DB: ${POSTGRES_DB:-sn_invoice}
+    volumes:
+      # Persistent named volume for all PostgreSQL tables, indexes, and constraints
+      - sn_invoice_postgres_data:/var/lib/postgresql/data
+    networks:
+      - sn_invoice_network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-sn_user} -d ${POSTGRES_DB:-sn_invoice}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
   sn-invoice:
     build:
       context: .
@@ -20,12 +39,17 @@ services:
         NEXT_PUBLIC_DEFAULT_VAT_RATE: "${NEXT_PUBLIC_DEFAULT_VAT_RATE:-18}"
     container_name: sn-invoice-app
     restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
     env_file:
       - .env.production
     environment:
       - NODE_ENV=production
       - PORT=3000
       - HOSTNAME=0.0.0.0
+      - DATABASE_URL=${DATABASE_URL:-postgresql://sn_user:sn_secure_pass_2026@db:5432/sn_invoice}
+      - DATA_DIR=/app/data
     ports:
       # Bound strictly to 127.0.0.1 (localhost) so external traffic must go through reverse proxy with SSL
       - "127.0.0.1:${APP_PORT:-3000}:3000"
@@ -44,9 +68,10 @@ services:
 volumes:
   sn_invoice_data:
     name: sn_invoice_production_data
+  sn_invoice_postgres_data:
+    name: sn_invoice_production_postgres_data
 
 networks:
   sn_invoice_network:
     name: sn_invoice_network
     driver: bridge
-

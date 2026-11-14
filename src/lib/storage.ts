@@ -1406,6 +1406,13 @@ class StorageService {
       localStorage.setItem(STORAGE_KEYS.BILLING_ENTITIES, JSON.stringify(list));
       window.dispatchEvent(new Event('entity-updated'));
       window.dispatchEvent(new Event('storage'));
+
+      // Backend Database Persistence
+      fetch('/api/billing-entities', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(saved),
+      }).catch(err => console.error('API save billing entity error:', err));
     }
 
     if (isSupabaseConfigured) {
@@ -1479,6 +1486,14 @@ class StorageService {
     list.push(newChannel);
     if (this.isBrowser()) {
       localStorage.setItem(STORAGE_KEYS.MEDIA_CHANNELS, JSON.stringify(list));
+      window.dispatchEvent(new Event('storage'));
+
+      // Backend Database Persistence
+      fetch('/api/media-channels', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(newChannel),
+      }).catch(err => console.error('API save media channel error:', err));
     }
     return newChannel;
   }
@@ -1487,6 +1502,7 @@ class StorageService {
     const list = this.getMediaChannels().filter(c => c.id !== id);
     if (this.isBrowser()) {
       localStorage.setItem(STORAGE_KEYS.MEDIA_CHANNELS, JSON.stringify(list));
+      window.dispatchEvent(new Event('storage'));
     }
   }
 
@@ -1570,6 +1586,15 @@ class StorageService {
     }
     if (this.isBrowser()) {
       localStorage.setItem(STORAGE_KEYS.SERVICES, JSON.stringify(list));
+      window.dispatchEvent(new Event('service-updated'));
+      window.dispatchEvent(new Event('storage'));
+
+      // Backend Database Persistence
+      fetch('/api/services', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(saved),
+      }).catch(err => console.error('API save service error:', err));
     }
     return saved;
   }
@@ -1639,6 +1664,13 @@ class StorageService {
       localStorage.setItem(STORAGE_KEYS.CLIENTS, JSON.stringify(list));
       window.dispatchEvent(new Event('client-updated'));
       window.dispatchEvent(new Event('storage'));
+
+      // Backend Database Persistence
+      fetch('/api/clients', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(saved),
+      }).catch(err => console.error('API save client error:', err));
     }
 
     if (isSupabaseConfigured) {
@@ -1907,6 +1939,13 @@ class StorageService {
       localStorage.setItem(STORAGE_KEYS.INVOICES, JSON.stringify(list));
       window.dispatchEvent(new CustomEvent('invoice-updated', { detail: saved }));
       window.dispatchEvent(new Event('storage'));
+
+      // Backend Database Persistence
+      fetch('/api/invoices', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(saved),
+      }).catch(err => console.error('API save invoice error:', err));
     }
 
     // Supabase cloud persistence
@@ -2342,6 +2381,15 @@ class StorageService {
     };
     if (this.isBrowser()) {
       localStorage.setItem(STORAGE_KEYS.BRANDING, JSON.stringify(updated));
+      window.dispatchEvent(new Event('branding-updated'));
+      window.dispatchEvent(new Event('storage'));
+
+      // Backend Database Persistence
+      fetch('/api/branding', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(updated),
+      }).catch(err => console.error('API save branding error:', err));
     }
     return updated;
   }
@@ -2504,6 +2552,13 @@ class StorageService {
       localStorage.setItem(STORAGE_KEYS.CHEQUES, JSON.stringify(list));
       window.dispatchEvent(new Event('cheque-updated'));
       window.dispatchEvent(new Event('storage'));
+
+      // Backend Database Persistence
+      fetch('/api/cheques', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(saved),
+      }).catch(err => console.error('API save cheque error:', err));
     }
 
     if (isSupabaseConfigured) {
@@ -2763,6 +2818,77 @@ class StorageService {
 
     if (updated && this.isBrowser()) {
       localStorage.setItem(STORAGE_KEYS.CHEQUES, JSON.stringify(list));
+    }
+  }
+
+  /**
+   * Synchronizes latest authoritative data from Backend PostgreSQL database into local cache
+   */
+  async syncWithServer(): Promise<{ synced: boolean }> {
+    if (!this.isBrowser()) return { synced: false };
+    try {
+      const res = await fetch('/api/bootstrap');
+      if (!res.ok) return { synced: false };
+      const json = await res.json();
+      if (!json.success || !json.data) return { synced: false };
+
+      const { billingEntities, clients, services, mediaChannels, invoices, cheques, branding } = json.data;
+
+      // Check for unmigrated local browser invoices (one-time safe migration)
+      const localInvoices = this.getInvoices();
+      const localClients = this.getClients();
+      const localEntities = this.getBillingEntities();
+
+      const serverInvoiceIds = new Set((invoices || []).map((i: any) => i.id));
+      const unmigrated = localInvoices.filter(i => !serverInvoiceIds.has(i.id));
+
+      if (unmigrated.length > 0) {
+        console.log(`[Database Migration] Migrating ${unmigrated.length} local browser invoices to backend PostgreSQL...`);
+        fetch('/api/sync/migrate-from-browser', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            invoices: unmigrated,
+            clients: localClients,
+            billingEntities: localEntities,
+          }),
+        }).catch(err => console.warn('Browser data migration warning:', err));
+      }
+
+      // Authoritative overwrite with server database records
+      if (billingEntities && billingEntities.length > 0) {
+        localStorage.setItem(STORAGE_KEYS.BILLING_ENTITIES, JSON.stringify(billingEntities));
+        window.dispatchEvent(new Event('entity-updated'));
+      }
+      if (clients && clients.length > 0) {
+        localStorage.setItem(STORAGE_KEYS.CLIENTS, JSON.stringify(clients));
+        window.dispatchEvent(new Event('client-updated'));
+      }
+      if (services && services.length > 0) {
+        localStorage.setItem(STORAGE_KEYS.SERVICES, JSON.stringify(services));
+        window.dispatchEvent(new Event('service-updated'));
+      }
+      if (mediaChannels && mediaChannels.length > 0) {
+        localStorage.setItem(STORAGE_KEYS.MEDIA_CHANNELS, JSON.stringify(mediaChannels));
+      }
+      if (invoices && invoices.length > 0) {
+        localStorage.setItem(STORAGE_KEYS.INVOICES, JSON.stringify(invoices));
+        window.dispatchEvent(new Event('invoice-updated'));
+      }
+      if (cheques && cheques.length > 0) {
+        localStorage.setItem(STORAGE_KEYS.CHEQUES, JSON.stringify(cheques));
+        window.dispatchEvent(new Event('cheque-updated'));
+      }
+      if (branding) {
+        localStorage.setItem(STORAGE_KEYS.BRANDING, JSON.stringify(branding));
+        window.dispatchEvent(new Event('branding-updated'));
+      }
+
+      window.dispatchEvent(new Event('storage'));
+      return { synced: true };
+    } catch (err) {
+      console.warn('Backend database synchronization warning:', err);
+      return { synced: false };
     }
   }
 

@@ -217,6 +217,19 @@ export function EntityModal({ isOpen, onClose, entityToEdit, onSaved }: EntityMo
       setError("");
     };
     reader.readAsDataURL(file);
+
+    // Upload to server persistent storage
+    const formData = new FormData();
+    formData.append("file", file);
+    formData.append("prefix", "logo");
+    fetch("/api/upload", { method: "POST", body: formData })
+      .then((res) => res.json())
+      .then((data) => {
+        if (data.url) {
+          setLogoUrl(data.url);
+        }
+      })
+      .catch((err) => console.error("Logo upload to persistent server failed:", err));
   };
 
   // Handle Signature Upload
@@ -228,8 +241,8 @@ export function EntityModal({ isOpen, onClose, entityToEdit, onSaved }: EntityMo
       setError("Signature must be PNG, JPG, or WebP format.");
       return;
     }
-    if (file.size > 2 * 1024 * 1024) {
-      setError("Signature file size must be less than 2MB.");
+    if (file.size > 5 * 1024 * 1024) {
+      setError("Signature file size must be less than 5MB.");
       return;
     }
 
@@ -241,6 +254,20 @@ export function EntityModal({ isOpen, onClose, entityToEdit, onSaved }: EntityMo
       setError("");
     };
     reader.readAsDataURL(file);
+
+    // Upload to server persistent storage
+    const formData = new FormData();
+    formData.append("file", file);
+    formData.append("prefix", "signature");
+    fetch("/api/upload", { method: "POST", body: formData })
+      .then((res) => res.json())
+      .then((data) => {
+        if (data.url) {
+          setSignatureUrl(data.url);
+          setSignatureImageUrl(data.url);
+        }
+      })
+      .catch((err) => console.error("Signature upload to persistent server failed:", err));
   };
 
   const handleSave = (e: React.FormEvent) => {
