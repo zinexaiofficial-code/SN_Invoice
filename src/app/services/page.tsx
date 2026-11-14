@@ -44,6 +44,7 @@ import {
 
 export default function ServicesPage() {
   const { services, mediaChannels, saveService, deleteService, refresh } = useDatabase();
+  const channels = mediaChannels;
   const [templates, setTemplates] = useState<InvoiceTemplate[]>([]);
   const [isServiceModalOpen, setIsServiceModalOpen] = useState(false);
   const [editingService, setEditingService] = useState<Service | null>(null);
