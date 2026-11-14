@@ -63,9 +63,6 @@ export default function ClientDetailPage() {
       </AppLayout>
     );
   }
-      </AppLayout>
-    );
-  }
 
   // Financial aggregates
   const validInvoices = invoices.filter((i) => i.status !== "void");
