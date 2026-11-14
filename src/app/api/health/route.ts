@@ -8,3 +8,4 @@ export async function GET() {
     uptime: Math.round(process.uptime()),
   }, { status: 200 });
 }
+

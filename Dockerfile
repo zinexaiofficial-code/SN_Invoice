@@ -23,12 +23,16 @@ COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 
 # Pass build-time environment variable placeholders for static compilation
+ARG NEXT_PUBLIC_SUPABASE_URL=""
+ARG NEXT_PUBLIC_SUPABASE_ANON_KEY=""
 ARG NEXT_PUBLIC_APP_NAME="SN Invoice"
-ARG NEXT_PUBLIC_APP_URL="https://sn-invoice.vercel.app"
+ARG NEXT_PUBLIC_APP_URL="https://sn-invoice.duckdns.org"
 ARG NEXT_PUBLIC_DEFAULT_CURRENCY="LKR"
 ARG NEXT_PUBLIC_DEFAULT_TIMEZONE="Asia/Colombo"
 ARG NEXT_PUBLIC_DEFAULT_VAT_RATE=18
 
+ENV NEXT_PUBLIC_SUPABASE_URL=$NEXT_PUBLIC_SUPABASE_URL
+ENV NEXT_PUBLIC_SUPABASE_ANON_KEY=$NEXT_PUBLIC_SUPABASE_ANON_KEY
 ENV NEXT_PUBLIC_APP_NAME=$NEXT_PUBLIC_APP_NAME
 ENV NEXT_PUBLIC_APP_URL=$NEXT_PUBLIC_APP_URL
 ENV NEXT_PUBLIC_DEFAULT_CURRENCY=$NEXT_PUBLIC_DEFAULT_CURRENCY
@@ -67,3 +71,4 @@ HEALTHCHECK --interval=30s --timeout=5s --start-period=15s --retries=3 \
   CMD wget --no-verbose --tries=1 --spider http://127.0.0.1:3000/api/health || exit 1
 
 CMD ["node", "server.js"]
+

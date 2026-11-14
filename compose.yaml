@@ -11,8 +11,10 @@ services:
       context: .
       dockerfile: Dockerfile
       args:
+        NEXT_PUBLIC_SUPABASE_URL: "${NEXT_PUBLIC_SUPABASE_URL:-}"
+        NEXT_PUBLIC_SUPABASE_ANON_KEY: "${NEXT_PUBLIC_SUPABASE_ANON_KEY:-}"
         NEXT_PUBLIC_APP_NAME: "${NEXT_PUBLIC_APP_NAME:-SN Invoice}"
-        NEXT_PUBLIC_APP_URL: "${NEXT_PUBLIC_APP_URL:-https://invoice.snadvertising.lk}"
+        NEXT_PUBLIC_APP_URL: "${NEXT_PUBLIC_APP_URL:-https://sn-invoice.duckdns.org}"
         NEXT_PUBLIC_DEFAULT_CURRENCY: "${NEXT_PUBLIC_DEFAULT_CURRENCY:-LKR}"
         NEXT_PUBLIC_DEFAULT_TIMEZONE: "${NEXT_PUBLIC_DEFAULT_TIMEZONE:-Asia/Colombo}"
         NEXT_PUBLIC_DEFAULT_VAT_RATE: "${NEXT_PUBLIC_DEFAULT_VAT_RATE:-18}"
@@ -47,3 +49,4 @@ networks:
   sn_invoice_network:
     name: sn_invoice_network
     driver: bridge
+

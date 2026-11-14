@@ -31,3 +31,4 @@ your-custom-domain.com { # Replace with your domain (e.g. invoice.snadvertising.
     # Gzip / Zstandard compression
     encode gzip zstd
 }
+

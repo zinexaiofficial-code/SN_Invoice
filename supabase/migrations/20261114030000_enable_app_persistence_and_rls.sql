@@ -124,3 +124,4 @@ CREATE POLICY "Allow update of branding_settings"
   ON public.branding_settings FOR UPDATE
   USING (true)
   WITH CHECK (true);
+
