@@ -14,7 +14,8 @@ import {
   CheckCircle2,
   Image as ImageIcon,
   Clock,
-  Layers
+  Layers,
+  Printer
 } from "lucide-react";
 import {
   Cheque,
@@ -32,6 +33,7 @@ interface ChequeModalProps {
   isOpen: boolean;
   onClose: () => void;
   onSaved: () => void;
+  onSaveAndPrint?: (cheque: Cheque) => void;
   defaultType?: ChequeType;
   defaultInvoiceId?: string;
 }
@@ -56,6 +58,7 @@ export function ChequeModal({
   isOpen,
   onClose,
   onSaved,
+  onSaveAndPrint,
   defaultType = "incoming",
   defaultInvoiceId
 }: ChequeModalProps) {
@@ -66,6 +69,7 @@ export function ChequeModal({
   const [clients, setClients] = useState<Client[]>([]);
   const [invoices, setInvoices] = useState<Invoice[]>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [shouldOpenPrint, setShouldOpenPrint] = useState(false);
 
   // Form State
   const [type, setType] = useState<ChequeType>(cheque?.type || defaultType);
@@ -281,7 +285,7 @@ export function ChequeModal({
         reminders: cheque?.reminders || []
       };
 
-      storage.saveCheque(chequeData);
+      const saved = storage.saveCheque(chequeData);
 
       if (typeof window !== "undefined") {
         window.dispatchEvent(new CustomEvent("cheque-updated"));
@@ -289,10 +293,15 @@ export function ChequeModal({
 
       onSaved();
       onClose();
+
+      if (shouldOpenPrint && onSaveAndPrint) {
+        onSaveAndPrint(saved);
+      }
     } catch (err: any) {
       alert(err.message || "Failed to save cheque");
     } finally {
       setIsSubmitting(false);
+      setShouldOpenPrint(false);
     }
   };
 
@@ -898,6 +907,20 @@ export function ChequeModal({
               >
                 Cancel
               </button>
+
+              {type === "outgoing" && (
+                <button
+                  type="submit"
+                  disabled={isSubmitting}
+                  onClick={() => setShouldOpenPrint(true)}
+                  className="px-4 py-2 bg-navy-950 hover:bg-navy-900 text-white rounded-xl text-xs font-bold transition flex items-center space-x-1.5 active:scale-95 shadow-md shadow-navy-950/20 disabled:opacity-50"
+                  title="Save cheque and open calibration print studio"
+                >
+                  <Printer className="w-3.5 h-3.5 text-emerald-400" />
+                  <span>Save &amp; Print</span>
+                </button>
+              )}
+
               <button
                 type="submit"
                 disabled={isSubmitting}

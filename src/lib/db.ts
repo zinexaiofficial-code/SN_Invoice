@@ -293,6 +293,55 @@ export async function initializeDatabase(): Promise<boolean> {
       );
     `);
 
+    // 10. Cheque Print Templates
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS cheque_print_templates (
+        id TEXT PRIMARY KEY,
+        bank_name TEXT NOT NULL,
+        template_name TEXT NOT NULL,
+        cheque_width NUMERIC NOT NULL DEFAULT 178,
+        cheque_height NUMERIC NOT NULL DEFAULT 89,
+        a4_orientation TEXT NOT NULL DEFAULT 'landscape',
+        a4_rotation INTEGER NOT NULL DEFAULT 0,
+        cheque_rotation INTEGER NOT NULL DEFAULT 0,
+        feed_direction TEXT NOT NULL DEFAULT 'top',
+        cheque_x NUMERIC NOT NULL DEFAULT 10,
+        cheque_y NUMERIC NOT NULL DEFAULT 10,
+        fields JSONB NOT NULL DEFAULT '{}'::jsonb,
+        is_default BOOLEAN DEFAULT false,
+        created_at TIMESTAMPTZ DEFAULT NOW(),
+        updated_at TIMESTAMPTZ DEFAULT NOW()
+      );
+    `);
+
+    // 11. Cheque Printer Profiles
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS cheque_printer_profiles (
+        id TEXT PRIMARY KEY,
+        name TEXT NOT NULL,
+        offset_x NUMERIC NOT NULL DEFAULT 0,
+        offset_y NUMERIC NOT NULL DEFAULT 0,
+        rotation_correction INTEGER NOT NULL DEFAULT 0,
+        feed_notes TEXT DEFAULT '',
+        is_default BOOLEAN DEFAULT false,
+        created_at TIMESTAMPTZ DEFAULT NOW(),
+        updated_at TIMESTAMPTZ DEFAULT NOW()
+      );
+    `);
+
+    // 12. Cheque Print Jobs
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS cheque_print_jobs (
+        id TEXT PRIMARY KEY,
+        cheque_id TEXT,
+        template_id TEXT,
+        printer_profile_id TEXT,
+        print_type TEXT NOT NULL DEFAULT 'final',
+        printed_at TIMESTAMPTZ DEFAULT NOW(),
+        settings_snapshot JSONB DEFAULT '{}'::jsonb
+      );
+    `);
+
     await client.query('COMMIT');
     isDbInitialized = true;
     console.log('✅ PostgreSQL Schema Verified & Initialized successfully.');

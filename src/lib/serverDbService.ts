@@ -9,7 +9,14 @@ import {
   ChequeType,
   BrandingSettings,
   MediaChannel,
+  ChequePrintTemplate,
+  ChequePrinterProfile,
+  ChequePrintJob,
 } from '@/types';
+import {
+  DEFAULT_CHEQUE_TEMPLATES,
+  DEFAULT_PRINTER_PROFILES,
+} from '@/lib/chequeDefaults';
 import {
   INITIAL_BILLING_ENTITIES,
   INITIAL_CLIENTS,
@@ -1141,4 +1148,254 @@ function mapBrandingRow(r: any): BrandingSettings {
     defaultVatRate: Number(r.default_vat_rate) || 18,
     updatedAt: r.updated_at ? new Date(r.updated_at).toISOString() : new Date().toISOString(),
   };
+}
+
+// -----------------------------------------------------------------------------
+// CHEQUE PRINT TEMPLATES & PRINTER PROFILES
+// -----------------------------------------------------------------------------
+
+function mapChequeTemplateRow(r: any): ChequePrintTemplate {
+  return {
+    id: r.id,
+    bankName: r.bank_name,
+    templateName: r.template_name,
+    chequeWidth: Number(r.cheque_width) || 178,
+    chequeHeight: Number(r.cheque_height) || 89,
+    a4Orientation: r.a4_orientation || 'landscape',
+    a4Rotation: (Number(r.a4_rotation) || 0) as any,
+    chequeRotation: (Number(r.cheque_rotation) || 0) as any,
+    feedDirection: r.feed_direction || 'top',
+    chequeX: Number(r.cheque_x) ?? 10,
+    chequeY: Number(r.cheque_y) ?? 10,
+    fields: typeof r.fields === 'string' ? JSON.parse(r.fields) : (r.fields || {}),
+    isDefault: Boolean(r.is_default),
+    createdAt: r.created_at ? new Date(r.created_at).toISOString() : new Date().toISOString(),
+    updatedAt: r.updated_at ? new Date(r.updated_at).toISOString() : new Date().toISOString(),
+  };
+}
+
+function mapPrinterProfileRow(r: any): ChequePrinterProfile {
+  return {
+    id: r.id,
+    name: r.name,
+    offsetX: Number(r.offset_x) || 0,
+    offsetY: Number(r.offset_y) || 0,
+    rotationCorrection: (Number(r.rotation_correction) || 0) as any,
+    feedNotes: r.feed_notes || '',
+    isDefault: Boolean(r.is_default),
+    createdAt: r.created_at ? new Date(r.created_at).toISOString() : new Date().toISOString(),
+    updatedAt: r.updated_at ? new Date(r.updated_at).toISOString() : new Date().toISOString(),
+  };
+}
+
+export async function getAllChequeTemplates(): Promise<ChequePrintTemplate[]> {
+  const pool = getDbPool();
+  if (!pool) return [...DEFAULT_CHEQUE_TEMPLATES];
+
+  try {
+    const res = await pool.query('SELECT * FROM cheque_print_templates ORDER BY is_default DESC, bank_name ASC');
+    if (res.rows.length === 0) {
+      // Seed default templates if empty
+      for (const tpl of DEFAULT_CHEQUE_TEMPLATES) {
+        await saveChequeTemplate(tpl);
+      }
+      const recheck = await pool.query('SELECT * FROM cheque_print_templates ORDER BY is_default DESC, bank_name ASC');
+      return recheck.rows.map(mapChequeTemplateRow);
+    }
+    return res.rows.map(mapChequeTemplateRow);
+  } catch (err) {
+    console.error('Error fetching cheque templates:', err);
+    return [...DEFAULT_CHEQUE_TEMPLATES];
+  }
+}
+
+export async function saveChequeTemplate(tpl: ChequePrintTemplate): Promise<ChequePrintTemplate> {
+  const pool = getDbPool();
+  const templateId = tpl.id || `tpl-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
+  const templateWithId = { ...tpl, id: templateId };
+
+  if (!pool) return templateWithId;
+
+  const query = `
+    INSERT INTO cheque_print_templates (
+      id, bank_name, template_name, cheque_width, cheque_height,
+      a4_orientation, a4_rotation, cheque_rotation, feed_direction,
+      cheque_x, cheque_y, fields, is_default, updated_at
+    ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, NOW())
+    ON CONFLICT (id) DO UPDATE SET
+      bank_name = EXCLUDED.bank_name,
+      template_name = EXCLUDED.template_name,
+      cheque_width = EXCLUDED.cheque_width,
+      cheque_height = EXCLUDED.cheque_height,
+      a4_orientation = EXCLUDED.a4_orientation,
+      a4_rotation = EXCLUDED.a4_rotation,
+      cheque_rotation = EXCLUDED.cheque_rotation,
+      feed_direction = EXCLUDED.feed_direction,
+      cheque_x = EXCLUDED.cheque_x,
+      cheque_y = EXCLUDED.cheque_y,
+      fields = EXCLUDED.fields,
+      is_default = EXCLUDED.is_default,
+      updated_at = NOW()
+    RETURNING *;
+  `;
+
+  const values = [
+    templateId,
+    tpl.bankName || 'General Bank',
+    tpl.templateName || 'Default Cheque Layout',
+    Number(tpl.chequeWidth) || 178,
+    Number(tpl.chequeHeight) || 89,
+    tpl.a4Orientation || 'landscape',
+    Number(tpl.a4Rotation) || 0,
+    Number(tpl.chequeRotation) || 0,
+    tpl.feedDirection || 'top',
+    Number(tpl.chequeX) ?? 10,
+    Number(tpl.chequeY) ?? 10,
+    JSON.stringify(tpl.fields || {}),
+    Boolean(tpl.isDefault),
+  ];
+
+  const res = await pool.query(query, values);
+  return mapChequeTemplateRow(res.rows[0]);
+}
+
+export async function deleteChequeTemplate(id: string): Promise<boolean> {
+  const pool = getDbPool();
+  if (!pool) return false;
+  const res = await pool.query('DELETE FROM cheque_print_templates WHERE id = $1', [id]);
+  return (res.rowCount ?? 0) > 0;
+}
+
+export async function getAllChequePrinterProfiles(): Promise<ChequePrinterProfile[]> {
+  const pool = getDbPool();
+  if (!pool) return [...DEFAULT_PRINTER_PROFILES];
+
+  try {
+    const res = await pool.query('SELECT * FROM cheque_printer_profiles ORDER BY is_default DESC, name ASC');
+    if (res.rows.length === 0) {
+      for (const prn of DEFAULT_PRINTER_PROFILES) {
+        await saveChequePrinterProfile(prn);
+      }
+      const recheck = await pool.query('SELECT * FROM cheque_printer_profiles ORDER BY is_default DESC, name ASC');
+      return recheck.rows.map(mapPrinterProfileRow);
+    }
+    return res.rows.map(mapPrinterProfileRow);
+  } catch (err) {
+    console.error('Error fetching printer profiles:', err);
+    return [...DEFAULT_PRINTER_PROFILES];
+  }
+}
+
+export async function saveChequePrinterProfile(prn: ChequePrinterProfile): Promise<ChequePrinterProfile> {
+  const pool = getDbPool();
+  const profileId = prn.id || `prn-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
+  const profileWithId = { ...prn, id: profileId };
+
+  if (!pool) return profileWithId;
+
+  const query = `
+    INSERT INTO cheque_printer_profiles (
+      id, name, offset_x, offset_y, rotation_correction, feed_notes, is_default, updated_at
+    ) VALUES ($1, $2, $3, $4, $5, $6, $7, NOW())
+    ON CONFLICT (id) DO UPDATE SET
+      name = EXCLUDED.name,
+      offset_x = EXCLUDED.offset_x,
+      offset_y = EXCLUDED.offset_y,
+      rotation_correction = EXCLUDED.rotation_correction,
+      feed_notes = EXCLUDED.feed_notes,
+      is_default = EXCLUDED.is_default,
+      updated_at = NOW()
+    RETURNING *;
+  `;
+
+  const values = [
+    profileId,
+    prn.name || 'Printer Profile',
+    Number(prn.offsetX) || 0,
+    Number(prn.offsetY) || 0,
+    Number(prn.rotationCorrection) || 0,
+    prn.feedNotes || '',
+    Boolean(prn.isDefault),
+  ];
+
+  const res = await pool.query(query, values);
+  return mapPrinterProfileRow(res.rows[0]);
+}
+
+export async function deleteChequePrinterProfile(id: string): Promise<boolean> {
+  const pool = getDbPool();
+  if (!pool) return false;
+  const res = await pool.query('DELETE FROM cheque_printer_profiles WHERE id = $1', [id]);
+  return (res.rowCount ?? 0) > 0;
+}
+
+export async function recordChequePrintJob(job: Partial<ChequePrintJob>): Promise<ChequePrintJob> {
+  const pool = getDbPool();
+  const jobId = job.id || `job-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
+  const now = new Date().toISOString();
+
+  if (!pool) {
+    return {
+      id: jobId,
+      chequeId: job.chequeId,
+      templateId: job.templateId,
+      printerProfileId: job.printerProfileId,
+      printType: job.printType || 'final',
+      printedAt: now,
+      settingsSnapshot: job.settingsSnapshot,
+    };
+  }
+
+  const query = `
+    INSERT INTO cheque_print_jobs (
+      id, cheque_id, template_id, printer_profile_id, print_type, printed_at, settings_snapshot
+    ) VALUES ($1, $2, $3, $4, $5, NOW(), $6)
+    RETURNING *;
+  `;
+
+  const values = [
+    jobId,
+    job.chequeId || null,
+    job.templateId || null,
+    job.printerProfileId || null,
+    job.printType || 'final',
+    JSON.stringify(job.settingsSnapshot || {}),
+  ];
+
+  const res = await pool.query(query, values);
+  const row = res.rows[0];
+  return {
+    id: row.id,
+    chequeId: row.cheque_id,
+    templateId: row.template_id,
+    printerProfileId: row.printer_profile_id,
+    printType: row.print_type,
+    printedAt: new Date(row.printed_at).toISOString(),
+    settingsSnapshot: typeof row.settings_snapshot === 'string' ? JSON.parse(row.settings_snapshot) : (row.settings_snapshot || {}),
+  };
+}
+
+export async function getChequePrintJobs(chequeId?: string): Promise<ChequePrintJob[]> {
+  const pool = getDbPool();
+  if (!pool) return [];
+
+  try {
+    const query = chequeId
+      ? 'SELECT * FROM cheque_print_jobs WHERE cheque_id = $1 ORDER BY printed_at DESC LIMIT 50'
+      : 'SELECT * FROM cheque_print_jobs ORDER BY printed_at DESC LIMIT 50';
+    const params = chequeId ? [chequeId] : [];
+    const res = await pool.query(query, params);
+    return res.rows.map((row) => ({
+      id: row.id,
+      chequeId: row.cheque_id,
+      templateId: row.template_id,
+      printerProfileId: row.printer_profile_id,
+      printType: row.print_type,
+      printedAt: new Date(row.printed_at).toISOString(),
+      settingsSnapshot: typeof row.settings_snapshot === 'string' ? JSON.parse(row.settings_snapshot) : (row.settings_snapshot || {}),
+    }));
+  } catch (err) {
+    console.error('Error fetching print jobs:', err);
+    return [];
+  }
 }

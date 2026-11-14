@@ -22,7 +22,8 @@ import {
   RotateCcw,
   Clock4,
   ExternalLink,
-  ChevronDown
+  ChevronDown,
+  Printer
 } from "lucide-react";
 import { storage } from "@/lib/storage";
 import { useDatabase } from "@/context/DatabaseContext";
@@ -31,6 +32,7 @@ import { ChequeModal } from "@/components/cheques/ChequeModal";
 import { ChequeStatusModal } from "@/components/cheques/ChequeStatusModal";
 import { ChequeDetailsModal } from "@/components/cheques/ChequeDetailsModal";
 import { ChequeCalendar } from "@/components/cheques/ChequeCalendar";
+import { ChequePrintStudio } from "@/components/cheques/ChequePrintStudio";
 import { AppLayout } from "@/components/layout/AppLayout";
 import { cn } from "@/lib/utils";
 
@@ -69,6 +71,8 @@ function ChequesPageContent() {
   const [editingCheque, setEditingCheque] = useState<Cheque | null>(null);
   const [statusTargetCheque, setStatusTargetCheque] = useState<Cheque | null>(null);
   const [detailsTargetCheque, setDetailsTargetCheque] = useState<Cheque | null>(null);
+  const [isPrintStudioOpen, setIsPrintStudioOpen] = useState(false);
+  const [studioCheque, setStudioCheque] = useState<Cheque | null>(null);
 
   const loadData = () => {
     const entList = dbEntities.length > 0 ? dbEntities : storage.getBillingEntities();
@@ -283,6 +287,19 @@ function ChequesPageContent() {
           >
             <Download className="w-3.5 h-3.5 text-slate-500" />
             <span>Export CSV</span>
+          </button>
+
+          {/* Cheque Calibration & Printing Studio */}
+          <button
+            onClick={() => {
+              setStudioCheque(null);
+              setIsPrintStudioOpen(true);
+            }}
+            className="px-3.5 py-2 bg-navy-950 hover:bg-navy-900 text-white rounded-xl text-xs font-bold shadow-md shadow-navy-950/20 transition-all active:scale-95 flex items-center space-x-1.5"
+            title="Open Interactive Cheque Calibration & Printing Studio"
+          >
+            <Printer className="w-3.5 h-3.5 text-emerald-400" />
+            <span>Print &amp; Calibrate</span>
           </button>
 
           {/* Record Incoming */}
@@ -772,6 +789,16 @@ function ChequesPageContent() {
                           onClick={(e) => e.stopPropagation()}
                         >
                           <button
+                            onClick={() => {
+                              setStudioCheque(chq);
+                              setIsPrintStudioOpen(true);
+                            }}
+                            className="p-1.5 text-slate-600 hover:text-emerald-700 hover:bg-emerald-50 rounded-lg transition-colors"
+                            title="Calibrate & Print Cheque"
+                          >
+                            <Printer className="w-3.5 h-3.5 text-emerald-600" />
+                          </button>
+                          <button
                             onClick={() => setStatusTargetCheque(chq)}
                             className="p-1.5 text-slate-600 hover:text-emerald-700 hover:bg-slate-100 rounded-lg transition-colors"
                             title="Update Status"
@@ -817,6 +844,10 @@ function ChequesPageContent() {
           setEditingCheque(null);
         }}
         onSaved={loadData}
+        onSaveAndPrint={(savedCheque) => {
+          setStudioCheque(savedCheque);
+          setIsPrintStudioOpen(true);
+        }}
       />
 
       {/* 2. Change Status Modal */}
@@ -841,6 +872,17 @@ function ChequesPageContent() {
           storage.deleteCheque(c.id);
           loadData();
         }}
+      />
+
+      {/* 4. Cheque Calibration & Printing Studio */}
+      <ChequePrintStudio
+        isOpen={isPrintStudioOpen}
+        cheque={studioCheque}
+        onClose={() => {
+          setIsPrintStudioOpen(false);
+          setStudioCheque(null);
+        }}
+        onSaved={loadData}
       />
       </div>
     </AppLayout>

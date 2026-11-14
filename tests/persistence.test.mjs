@@ -346,6 +346,79 @@ async function runTests() {
     // Clean up test cheque
     await fetch(`${BASE_URL}/api/cheques?id=${encodeURIComponent(testChequeId)}`, { method: 'DELETE' });
 
+    // -------------------------------------------------------------------------
+    // TEST K: Cheque Calibration Templates & Vector PDF Generation
+    // -------------------------------------------------------------------------
+    console.log(`\n[Test K] Testing Cheque Calibration Studio Backend & PDF Engine...`);
+
+    // 1. Get templates
+    const tplListRes = await fetch(`${BASE_URL}/api/cheques/templates`);
+    assert(tplListRes.status === 200, `Templates list API returned HTTP 200`);
+    const tplListData = await tplListRes.json();
+    assert(Array.isArray(tplListData.data) && tplListData.data.length > 0, `Pre-seeded bank templates returned (${tplListData.data?.length || 0} templates)`);
+
+    // 2. Save custom template
+    const testTplId = `tpl-test-${Date.now()}`;
+    const customTpl = {
+      id: testTplId,
+      bankName: 'Seylan Custom Branch',
+      templateName: 'Seylan High-Speed Continuous',
+      chequeWidth: 178,
+      chequeHeight: 89,
+      a4Orientation: 'landscape',
+      a4Rotation: 0,
+      chequeRotation: 180,
+      feedDirection: 'top',
+      chequeX: 117,
+      chequeY: 0,
+      fields: {
+        date: { x: 132, y: 12, width: 40, height: 8, fontSize: 11, isVisible: true, isLocked: false },
+        payee: { x: 30, y: 28, width: 118, height: 9, fontSize: 11, isVisible: true, isLocked: false },
+        amountWords: { x: 28, y: 38, width: 120, height: 15, fontSize: 10, isVisible: true, isLocked: false },
+        amountFigures: { x: 128, y: 46, width: 42, height: 9, fontSize: 12, isVisible: true, isLocked: false },
+        crossing: { x: 14, y: 8, width: 32, height: 12, fontSize: 8, isVisible: true, isLocked: false },
+      },
+    };
+
+    const saveTplRes = await fetch(`${BASE_URL}/api/cheques/templates`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(customTpl),
+    });
+    assert(saveTplRes.status === 200, `Save custom calibration template returned HTTP 200`);
+    const saveTplData = await saveTplRes.json();
+    assert(saveTplData.data?.templateName === customTpl.templateName, `Saved template name matches`);
+    assert(saveTplData.data?.chequeRotation === 180, `Saved cheque rotation (180°) matches`);
+
+    // 3. Printer profiles
+    const prnListRes = await fetch(`${BASE_URL}/api/cheques/printer-profiles`);
+    assert(prnListRes.status === 200, `Printer profiles API returned HTTP 200`);
+    const prnListData = await prnListRes.json();
+    assert(Array.isArray(prnListData.data) && prnListData.data.length > 0, `Pre-seeded printer profiles returned`);
+
+    // 4. Vector PDF Generation (Test Print)
+    const printPdfRes = await fetch(`${BASE_URL}/api/cheques/print-pdf`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        template: customTpl,
+        printerProfile: prnListData.data[0],
+        liveData: {
+          chequeNumber: 'CHK-776655',
+          date: '14 / 11 / 2026',
+          payeeName: 'SAMPLE MOTORS (PVT) LTD',
+          amountFigures: '435,454.00',
+          amountWords: 'Four Hundred Thirty Five Thousand Four Hundred Fifty Four Rupees Only',
+        },
+        printType: 'test',
+      }),
+    });
+    assert(printPdfRes.status === 200, `Generate vector print PDF returned HTTP 200`);
+    assert(printPdfRes.headers.get('content-type') === 'application/pdf', `PDF response Content-Type is application/pdf`);
+
+    // 5. Clean up test template
+    await fetch(`${BASE_URL}/api/cheques/templates?id=${encodeURIComponent(testTplId)}`, { method: 'DELETE' });
+
     console.log(`\n==========================================================`);
     console.log(`🏁 PERSISTENCE TEST SUITE FINISHED`);
     console.log(`Passed: ${passCount} | Failed: ${failCount}`);
