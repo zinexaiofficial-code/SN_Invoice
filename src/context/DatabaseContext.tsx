@@ -51,7 +51,11 @@ export function DatabaseProvider({ children }: { children: React.ReactNode }) {
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
 
+  const isFetchingRef = React.useRef(false);
+
   const fetchBootstrap = useCallback(async () => {
+    if (isFetchingRef.current) return;
+    isFetchingRef.current = true;
     try {
       setError(null);
       const res = await fetch("/api/bootstrap", {
@@ -94,23 +98,12 @@ export function DatabaseProvider({ children }: { children: React.ReactNode }) {
       setBranding(storage.getBranding());
     } finally {
       setIsLoading(false);
+      isFetchingRef.current = false;
     }
   }, []);
 
   useEffect(() => {
     fetchBootstrap();
-
-    const handleStorageChange = () => {
-      fetchBootstrap();
-    };
-
-    window.addEventListener("storage", handleStorageChange);
-    window.addEventListener("database-synced", handleStorageChange);
-
-    return () => {
-      window.removeEventListener("storage", handleStorageChange);
-      window.removeEventListener("database-synced", handleStorageChange);
-    };
   }, [fetchBootstrap]);
 
   // --- CRUD Actions ---

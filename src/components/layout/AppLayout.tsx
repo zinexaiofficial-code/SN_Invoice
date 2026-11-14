@@ -43,10 +43,6 @@ export function AppLayout({ children }: AppLayoutProps) {
     const b = storage.getBranding();
     if (b) setBranding({ businessName: b.businessName, logoUrl: b.logoUrl || '/logo.png' });
 
-    // Authoritative backend database synchronization
-    storage.syncWithServer();
-    storage.syncFromSupabase();
-
     const handleOnline = () => setIsOnline(true);
     const handleOffline = () => setIsOnline(false);
 

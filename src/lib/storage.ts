@@ -2765,8 +2765,6 @@ class StorageService {
     window.dispatchEvent(new Event('invoice-updated'));
     window.dispatchEvent(new Event('cheque-updated'));
     window.dispatchEvent(new Event('branding-updated'));
-    window.dispatchEvent(new Event('storage'));
-    window.dispatchEvent(new Event('database-synced'));
   }
 
   saveClientLocally(client: Client): void {
