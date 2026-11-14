@@ -4,7 +4,7 @@ import React, { useState, useEffect } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { AppLayout } from "@/components/layout/AppLayout";
-import { Invoice, InvoiceTemplateKey, Cheque, InvoicePdfFormat } from "@/types";
+import { Invoice, InvoiceTemplateKey, Cheque, InvoicePdfFormat, PdfTypographySettings } from "@/types";
 import { storage } from "@/lib/storage";
 import { formatLKR, formatDate, formatDateTime } from "@/lib/utils";
 import { downloadInvoicePdf } from "@/lib/pdf";
@@ -14,6 +14,8 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { InvoiceTemplateRenderer } from "@/components/invoices/InvoiceTemplateRenderer";
+import { PdfLayoutControls } from "@/components/invoices/PdfLayoutControls";
+import { resolveTypography } from "@/lib/pdfTypography";
 import { ShareInvoiceModal } from "@/components/invoices/ShareInvoiceModal";
 import { RecordPaymentModal } from "@/components/invoices/RecordPaymentModal";
 import { ChequeModal } from "@/components/cheques/ChequeModal";
@@ -48,6 +50,10 @@ export default function InvoiceDetailPage() {
   const [invoice, setInvoice] = useState<Invoice | null>(null);
   const [templateKey, setTemplateKey] = useState<InvoiceTemplateKey>("standard");
   const [selectedFormat, setSelectedFormat] = useState<InvoicePdfFormat>("digital");
+  const [typography, setTypography] = useState<PdfTypographySettings>(() =>
+    resolveTypography(undefined)
+  );
+  const [zoomScale, setZoomScale] = useState<number>(1);
   const [isShareModalOpen, setIsShareModalOpen] = useState(false);
   const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
   const [isChequeModalOpen, setIsChequeModalOpen] = useState(false);
@@ -61,19 +67,34 @@ export default function InvoiceDetailPage() {
     setCheques(storage.getCheques());
   };
 
+  const handleTypographyChange = (newTypo: PdfTypographySettings) => {
+    setTypography(newTypo);
+    if (invoice) {
+      const updated = storage.saveInvoice({ ...invoice, pdfLayout: newTypo });
+      setInvoice(updated);
+    }
+  };
+
   useEffect(() => {
     setUserRole(storage.getUserRole());
     const found = storage.getInvoiceById(invoiceId);
     if (found) {
       setInvoice(found);
       setTemplateKey(found.templateKey || "standard");
+      if (found.signatureFormat) {
+        setSelectedFormat(found.signatureFormat);
+      }
+      setTypography(resolveTypography(found.pdfLayout, found.items, found.vatApplicable, !!found.specialNotes));
     }
     loadCheques();
 
     const handleChequeUpdated = () => {
       loadCheques();
       const updatedInv = storage.getInvoiceById(invoiceId);
-      if (updatedInv) setInvoice(updatedInv);
+      if (updatedInv) {
+        setInvoice(updatedInv);
+        setTypography(resolveTypography(updatedInv.pdfLayout, updatedInv.items, updatedInv.vatApplicable, !!updatedInv.specialNotes));
+      }
     };
 
     window.addEventListener("cheque-updated", handleChequeUpdated);
@@ -373,60 +394,27 @@ export default function InvoiceDetailPage() {
           </Card>
         </div>
 
-        {/* Format Selector Bar for Live Invoice Display */}
-        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 bg-white p-3.5 rounded-xl border border-slate-200 shadow-2xs">
-          <div className="flex items-center space-x-2">
-            <span className="text-xs font-bold text-slate-600">Select Format:</span>
-            <div className="flex items-center bg-slate-100 p-1 rounded-lg border border-slate-200 text-xs font-bold">
-              <button
-                type="button"
-                onClick={() => setSelectedFormat("digital")}
-                className={`px-3 py-1.5 rounded-md flex items-center space-x-1.5 transition-all ${
-                  selectedFormat === "digital"
-                    ? "bg-navy-950 text-white shadow-xs"
-                    : "text-slate-600 hover:text-navy-950"
-                }`}
-              >
-                <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" />
-                <span>Option A: Digital Signature (Adobe)</span>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => setSelectedFormat("print")}
-                className={`px-3 py-1.5 rounded-md flex items-center space-x-1.5 transition-all ${
-                  selectedFormat === "print"
-                    ? "bg-navy-950 text-white shadow-xs"
-                    : "text-slate-600 hover:text-navy-950"
-                }`}
-              >
-                <Printer className="w-3.5 h-3.5" />
-                <span>Option B: Blank Signature (Hard Copy)</span>
-              </button>
-            </div>
-          </div>
-
-          <div className="flex items-center space-x-2">
-            <Button
-              size="sm"
-              variant="outline"
-              onClick={() => handlePrint(selectedFormat)}
-              className="text-xs font-bold"
-            >
-              <Printer className="w-3.5 h-3.5 mr-1" />
-              <span>Print {selectedFormat === "digital" ? "Digital" : "Print"} View</span>
-            </Button>
-            <Button
-              size="sm"
-              disabled={isDownloading || (selectedFormat === "digital" && invoice.status === "draft")}
-              onClick={selectedFormat === "digital" ? handleDownloadDigitalPdf : handleDownloadPrintPdf}
-              className="bg-navy-950 hover:bg-navy-900 text-white text-xs font-bold shadow-sm"
-            >
-              <Download className="w-3.5 h-3.5 mr-1.5" />
-              <span>{isDownloading ? "Exporting..." : "Download Selected PDF"}</span>
-            </Button>
-          </div>
-        </div>
+        {/* PDF Layout Controls, Format Selector & Page Fit Mode */}
+        <PdfLayoutControls
+          format={selectedFormat}
+          onFormatChange={setSelectedFormat}
+          templateKey={templateKey}
+          onTemplateChange={(newKey) => {
+            setTemplateKey(newKey);
+            if (invoice) {
+              const updated = storage.saveInvoice({ ...invoice, templateKey: newKey });
+              setInvoice(updated);
+            }
+          }}
+          typography={typography}
+          onTypographyChange={handleTypographyChange}
+          zoomScale={zoomScale}
+          onZoomChange={setZoomScale}
+          onDownload={selectedFormat === "digital" ? handleDownloadDigitalPdf : handleDownloadPrintPdf}
+          onPrint={() => handlePrint(selectedFormat)}
+          isDownloading={isDownloading}
+          downloadDisabled={selectedFormat === "digital" && invoice.status === "draft"}
+        />
 
         {/* Invoice Preview */}
         <div className="bg-slate-200/60 p-4 md:p-8 rounded-2xl flex justify-center overflow-x-auto shadow-inner">
@@ -434,6 +422,8 @@ export default function InvoiceDetailPage() {
             <InvoiceTemplateRenderer
               invoice={{ ...invoice, templateKey }}
               format={selectedFormat}
+              typographySettings={typography}
+              zoomScale={zoomScale}
             />
           </div>
         </div>
@@ -445,6 +435,7 @@ export default function InvoiceDetailPage() {
               invoice={{ ...invoice, templateKey }}
               format="print"
               printMode={true}
+              typographySettings={typography}
             />
           </div>
         </div>

@@ -73,10 +73,9 @@ export default function InvoicePrintPDFPage() {
   const handleDownload = async () => {
     setIsDownloading(true);
     try {
-      const filename =
-        format === "digital"
-          ? `${invoice.billingSnapshot?.prefix || "SN"}-${invoice.invoiceNumber}-Digital.pdf`
-          : `${invoice.billingSnapshot?.prefix || "SN"}-${invoice.invoiceNumber}-Print.pdf`;
+      const prefix = invoice.billingSnapshot?.prefix || "SN";
+      const cleanNum = invoice.invoiceNumber.startsWith(prefix) ? invoice.invoiceNumber : `${prefix}-${invoice.invoiceNumber}`;
+      const filename = `${cleanNum}-${format === "digital" ? "Digital" : "Print"}.pdf`;
 
       const verificationUrl =
         format === "digital"

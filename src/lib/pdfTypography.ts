@@ -1,41 +1,71 @@
-import { InvoiceItem, LayoutDensity, PdfTypographySettings } from "@/types";
+import { InvoiceItem, LayoutDensity, PageFitMode, PdfTypographySettings } from "@/types";
 
 export const RECOMMENDED_TYPOGRAPHY: Record<LayoutDensity, PdfTypographySettings> = {
   comfortable: {
+    pageFitMode: "single_page",
+    masterScale: 1.0,
     mode: "smart",
     density: "comfortable",
-    titleSizePt: 20,
-    headerSizePt: 14,
-    sectionHeadingPt: 11,
-    tableHeaderPt: 10,
-    bodySizePt: 11,
-    descriptionSizePt: 9.5,
-    footerSizePt: 9.5,
-    showPageNumbers: true,
-  },
-  balanced: {
-    mode: "smart",
-    density: "balanced",
-    titleSizePt: 18,
+    titleSizePt: 19,
     headerSizePt: 13,
     sectionHeadingPt: 10.5,
     tableHeaderPt: 9.5,
-    bodySizePt: 10,
+    bodySizePt: 10.5,
     descriptionSizePt: 9,
     footerSizePt: 9,
     showPageNumbers: true,
+    blocksConfig: {
+      showBankDetails: true,
+      showSpecialNotes: true,
+      showAmountInWords: true,
+      showDueDates: true,
+      showSignatureBlock: true,
+      customNoteText: "",
+    },
   },
-  compact: {
+  balanced: {
+    pageFitMode: "single_page",
+    masterScale: 1.0,
     mode: "smart",
-    density: "compact",
-    titleSizePt: 16,
-    headerSizePt: 12,
+    density: "balanced",
+    titleSizePt: 17,
+    headerSizePt: 12.5,
     sectionHeadingPt: 10,
     tableHeaderPt: 9,
     bodySizePt: 9.5,
     descriptionSizePt: 8.5,
     footerSizePt: 8.5,
     showPageNumbers: true,
+    blocksConfig: {
+      showBankDetails: true,
+      showSpecialNotes: true,
+      showAmountInWords: true,
+      showDueDates: true,
+      showSignatureBlock: true,
+      customNoteText: "",
+    },
+  },
+  compact: {
+    pageFitMode: "single_page",
+    masterScale: 0.95,
+    mode: "smart",
+    density: "compact",
+    titleSizePt: 15,
+    headerSizePt: 11.5,
+    sectionHeadingPt: 9.5,
+    tableHeaderPt: 8.5,
+    bodySizePt: 9,
+    descriptionSizePt: 8,
+    footerSizePt: 8,
+    showPageNumbers: true,
+    blocksConfig: {
+      showBankDetails: true,
+      showSpecialNotes: true,
+      showAmountInWords: true,
+      showDueDates: true,
+      showSignatureBlock: true,
+      customNoteText: "",
+    },
   },
 };
 
@@ -43,12 +73,13 @@ export const DEFAULT_TYPOGRAPHY: PdfTypographySettings = RECOMMENDED_TYPOGRAPHY.
 
 /**
  * Intelligently computes font sizes and density based on invoice content,
- * guaranteeing comfortable readability without shrinking text below safe limits (min 9pt body).
+ * defaulting to FIT ON ONE PAGE unless multi-page mode is requested.
  */
 export function computeSmartAutoFit(
   items: InvoiceItem[] = [],
   hasVat: boolean = false,
-  hasSpecialNotes: boolean = false
+  hasSpecialNotes: boolean = false,
+  pageFitMode: PageFitMode = "single_page"
 ): PdfTypographySettings {
   const itemCount = items.length;
   
@@ -59,9 +90,9 @@ export function computeSmartAutoFit(
 
   let selectedDensity: LayoutDensity = "balanced";
 
-  if (itemCount <= 4 && !hasLongDescriptions) {
+  if (itemCount <= 3 && !hasLongDescriptions) {
     selectedDensity = "comfortable";
-  } else if (itemCount <= 6 && !hasLongDescriptions) {
+  } else if (itemCount <= 5 && !hasLongDescriptions) {
     selectedDensity = "balanced";
   } else {
     selectedDensity = "compact";
@@ -71,6 +102,7 @@ export function computeSmartAutoFit(
 
   return {
     ...base,
+    pageFitMode,
     mode: "smart",
     density: selectedDensity,
   };
@@ -78,6 +110,7 @@ export function computeSmartAutoFit(
 
 /**
  * Resolves final active typography settings, merging user overrides with defaults.
+ * Supports Master Font Scale: changing masterScale proportionally scales all elements!
  */
 export function resolveTypography(
   overrides?: Partial<PdfTypographySettings>,
@@ -85,28 +118,58 @@ export function resolveTypography(
   hasVat: boolean = false,
   hasSpecialNotes: boolean = false
 ): PdfTypographySettings {
+  const pageFitMode: PageFitMode = overrides?.pageFitMode || "single_page";
+  const masterScale: number = overrides?.masterScale ?? 1.0;
+
+  let base: PdfTypographySettings;
+
   if (!overrides || overrides.mode === "smart" || !overrides.mode) {
-    const smart = computeSmartAutoFit(items, hasVat, hasSpecialNotes);
-    if (overrides?.density && overrides.density !== smart.density) {
-      // User picked a specific density preset
-      const preset = RECOMMENDED_TYPOGRAPHY[overrides.density];
-      return { ...preset, mode: "smart", density: overrides.density };
+    base = computeSmartAutoFit(items, hasVat, hasSpecialNotes, pageFitMode);
+    if (overrides?.density && overrides.density !== base.density) {
+      base = { ...RECOMMENDED_TYPOGRAPHY[overrides.density], mode: "smart", density: overrides.density };
     }
-    return smart;
+  } else {
+    // Manual mode
+    base = {
+      mode: "manual",
+      pageFitMode,
+      masterScale,
+      density: overrides.density || "balanced",
+      titleSizePt: clamp(overrides.titleSizePt ?? 17, 13, 22),
+      headerSizePt: clamp(overrides.headerSizePt ?? 12.5, 10, 18),
+      sectionHeadingPt: clamp(overrides.sectionHeadingPt ?? 10, 9, 13),
+      tableHeaderPt: clamp(overrides.tableHeaderPt ?? 9, 8, 12),
+      bodySizePt: clamp(overrides.bodySizePt ?? 9.5, 8, 13),
+      descriptionSizePt: clamp(overrides.descriptionSizePt ?? 8.5, 7.5, 12),
+      footerSizePt: clamp(overrides.footerSizePt ?? 8.5, 7.5, 11),
+      showPageNumbers: overrides.showPageNumbers ?? true,
+      blocksConfig: overrides.blocksConfig,
+    };
   }
 
-  // Manual mode: clamp to safe ranges specified in requirements
+  // Apply master scale if different from 1.0
+  const scale = clamp(masterScale, 0.75, 1.3);
+
   return {
-    mode: "manual",
-    density: overrides.density || "balanced",
-    titleSizePt: clamp(overrides.titleSizePt ?? 18, 14, 22),
-    headerSizePt: clamp(overrides.headerSizePt ?? 13, 11, 18),
-    sectionHeadingPt: clamp(overrides.sectionHeadingPt ?? 10.5, 10, 12),
-    tableHeaderPt: clamp(overrides.tableHeaderPt ?? 9.5, 8, 12),
-    bodySizePt: clamp(overrides.bodySizePt ?? 10, 8, 13),
-    descriptionSizePt: clamp(overrides.descriptionSizePt ?? 9, 8, 12),
-    footerSizePt: clamp(overrides.footerSizePt ?? 9, 8, 11),
-    showPageNumbers: overrides.showPageNumbers ?? true,
+    ...base,
+    pageFitMode,
+    masterScale: scale,
+    titleSizePt: Math.round(base.titleSizePt * scale * 10) / 10,
+    headerSizePt: Math.round(base.headerSizePt * scale * 10) / 10,
+    sectionHeadingPt: Math.round(base.sectionHeadingPt * scale * 10) / 10,
+    tableHeaderPt: Math.round(base.tableHeaderPt * scale * 10) / 10,
+    bodySizePt: Math.round(base.bodySizePt * scale * 10) / 10,
+    descriptionSizePt: Math.round(base.descriptionSizePt * scale * 10) / 10,
+    footerSizePt: Math.round(base.footerSizePt * scale * 10) / 10,
+    showPageNumbers: overrides?.showPageNumbers ?? base.showPageNumbers,
+    blocksConfig: {
+      showBankDetails: overrides?.blocksConfig?.showBankDetails ?? true,
+      showSpecialNotes: overrides?.blocksConfig?.showSpecialNotes ?? true,
+      showAmountInWords: overrides?.blocksConfig?.showAmountInWords ?? true,
+      showDueDates: overrides?.blocksConfig?.showDueDates ?? true,
+      showSignatureBlock: overrides?.blocksConfig?.showSignatureBlock ?? true,
+      customNoteText: overrides?.blocksConfig?.customNoteText ?? "",
+    },
   };
 }
 
@@ -125,13 +188,15 @@ export interface PaginatedPage {
 }
 
 /**
- * Paginates invoice line items onto true A4 pages without shrinking text.
- * - Single-page invoices: Header + Items + Totals/Footer all on Page 1.
- * - Multi-page invoices: Flow across Page 1, Page 2..N with repeated headers.
+ * Paginates invoice line items.
+ * By default (single_page mode), invoices with up to 8-10 items stay on ONE SINGLE PAGE
+ * by auto-scaling fonts and padding.
+ * Only if user explicitly requests multi_page or if item count is massive (>10 items) does it split.
  */
 export function paginateInvoiceItems(
   items: InvoiceItem[],
-  density: LayoutDensity = "balanced"
+  density: LayoutDensity = "balanced",
+  pageFitMode: PageFitMode = "single_page"
 ): PaginatedPage[] {
   if (!items || items.length === 0) {
     return [
@@ -147,28 +212,8 @@ export function paginateInvoiceItems(
     ];
   }
 
-  // Calculate approximate weight per item based on description line count and media tags
-  const getItemWeight = (it: InvoiceItem) => {
-    let weight = 1.0;
-    if (it.description && it.description.length > 50) {
-      weight += Math.min(2.0, Math.ceil(it.description.length / 50) * 0.5);
-    }
-    if (it.mediaChannel || it.referenceNumber) {
-      weight += 0.4;
-    }
-    return weight;
-  };
-
-  // Capacity limits by density
-  const singlePageCapacity = density === "comfortable" ? 5.5 : density === "balanced" ? 6.5 : 7.5;
-  const page1MultiCapacity = density === "comfortable" ? 8.0 : density === "balanced" ? 9.5 : 11.0;
-  const contMidCapacity = density === "comfortable" ? 13.0 : density === "balanced" ? 15.0 : 17.0;
-  const contEndCapacity = density === "comfortable" ? 7.0 : density === "balanced" ? 8.5 : 10.0;
-
-  const totalWeight = items.reduce((acc, it) => acc + getItemWeight(it), 0);
-
-  // If everything fits on one single page comfortably
-  if (totalWeight <= singlePageCapacity) {
+  // If SINGLE PAGE MODE is active: FIT ON ONE SINGLE PAGE
+  if (pageFitMode === "single_page" || items.length <= 1) {
     return [
       {
         pageIndex: 0,
@@ -182,12 +227,27 @@ export function paginateInvoiceItems(
     ];
   }
 
-  // Multi-page distribution
+  // Multi-page mode requested by user
+  const getItemWeight = (it: InvoiceItem) => {
+    let weight = 1.0;
+    if (it.description && it.description.length > 50) {
+      weight += Math.min(2.0, Math.ceil(it.description.length / 50) * 0.5);
+    }
+    if (it.mediaChannel || it.referenceNumber) {
+      weight += 0.4;
+    }
+    return weight;
+  };
+
+  // In multi-page mode, allow clean split across 2+ pages
+  const page1Capacity = density === "comfortable" ? 3.5 : density === "balanced" ? 4.5 : 5.5;
+  const contMidCapacity = density === "comfortable" ? 8.0 : density === "balanced" ? 10.0 : 12.0;
+  const contEndCapacity = density === "comfortable" ? 5.0 : density === "balanced" ? 6.5 : 8.0;
+
   const pages: { items: InvoiceItem[]; startIndex: number }[] = [];
   let remaining = [...items];
   let currentIndex = 0;
 
-  // Page 1
   let currentBatch: InvoiceItem[] = [];
   let currentWeight = 0;
 
@@ -196,8 +256,8 @@ export function paginateInvoiceItems(
     const weight = getItemWeight(nextItem);
 
     if (pages.length === 0) {
-      // We are on Page 1
-      if (currentWeight + weight <= page1MultiCapacity || currentBatch.length === 0) {
+      // Page 1
+      if (currentWeight + weight <= page1Capacity || currentBatch.length === 0) {
         currentBatch.push(remaining.shift()!);
         currentWeight += weight;
       } else {
@@ -207,8 +267,7 @@ export function paginateInvoiceItems(
         currentWeight = 0;
       }
     } else {
-      // We are on continuation pages (Page 2+)
-      // Check if the rest can fit on this page as the final page
+      // Continuation pages
       const restWeight = remaining.reduce((acc, it) => acc + getItemWeight(it), 0);
       const limit = restWeight <= contEndCapacity ? contEndCapacity : contMidCapacity;
 

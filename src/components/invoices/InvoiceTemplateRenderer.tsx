@@ -29,7 +29,6 @@ export interface InvoiceTemplateRendererProps {
 
 /**
  * Clean Corporate Logo or White Lettermark Badge.
- * Replaces old heavy dark blocks with a crisp, professional corporate mark.
  */
 function EntityLogoOrBadge({
   logoUrl,
@@ -45,9 +44,9 @@ function EntityLogoOrBadge({
   const [imgError, setImgError] = React.useState(false);
 
   const sizeDimensions = {
-    sm: "w-10 h-10 text-xs",
-    md: "w-14 h-14 text-sm",
-    lg: "w-16 h-16 text-base",
+    sm: "w-9 h-9 text-xs",
+    md: "w-12 h-12 text-sm",
+    lg: "w-14 h-14 text-base",
   }[size];
 
   if (logoUrl && !imgError) {
@@ -60,7 +59,7 @@ function EntityLogoOrBadge({
           className="object-contain object-left"
           priority
           onError={() => setImgError(true)}
-          sizes="64px"
+          sizes="56px"
         />
       </div>
     );
@@ -79,11 +78,11 @@ function EntityLogoOrBadge({
 }
 
 /**
- * Service line item cell with professional secondary advertising metadata tags.
+ * Service line item cell with secondary advertising metadata tags.
  */
 function ItemServiceCell({
   item,
-  descriptionSizePt = 9,
+  descriptionSizePt = 8.5,
 }: {
   item: InvoiceItem;
   descriptionSizePt?: number;
@@ -98,7 +97,7 @@ function ItemServiceCell({
       <div className="font-bold text-slate-900 flex flex-wrap items-center gap-1.5">
         <span>{item.serviceName}</span>
         {hasMediaChannel && (
-          <span className="text-emerald-800 font-semibold bg-emerald-50/90 border border-emerald-200 px-1.5 py-0.5 rounded text-[10px] inline-flex items-center space-x-1">
+          <span className="text-emerald-800 font-semibold bg-emerald-50 border border-emerald-200 px-1.5 py-0.2 rounded text-[9.5px] inline-flex items-center space-x-1">
             <span>—</span>
             <span>{item.mediaChannel}</span>
           </span>
@@ -108,12 +107,12 @@ function ItemServiceCell({
       {/* Media Reference Line (RO Number, Booking Ref, Spot ID) */}
       {hasRefNumber && (
         <div className="flex flex-wrap items-center gap-1.5 pt-0.5">
-          <span className="inline-flex items-center space-x-1 font-mono text-[9.5px] font-semibold text-slate-700 bg-slate-100 border border-slate-200 px-1.5 py-0.5 rounded">
+          <span className="inline-flex items-center space-x-1 font-mono text-[9px] font-semibold text-slate-700 bg-slate-100 border border-slate-200 px-1.5 py-0.2 rounded">
             <span className="text-slate-500 uppercase">{item.referenceType || "RO No"}:</span>
             <span className="text-slate-900 font-bold">{item.referenceNumber}</span>
           </span>
           {hasCategory && (
-            <span className="text-[9px] font-medium text-slate-500 uppercase tracking-wide">
+            <span className="text-[8.5px] font-medium text-slate-500 uppercase tracking-wide">
               ({item.category})
             </span>
           )}
@@ -122,12 +121,12 @@ function ItemServiceCell({
 
       {/* Category without Ref */}
       {!hasRefNumber && hasCategory && (
-        <div className="text-[9px] font-medium text-slate-500 uppercase tracking-wide">
+        <div className="text-[8.5px] font-medium text-slate-500 uppercase tracking-wide">
           ({item.category})
         </div>
       )}
 
-      {/* Work Description / Campaign Details */}
+      {/* Work Description */}
       {item.description && (
         <div
           className="text-slate-600 whitespace-pre-line pt-0.5 leading-relaxed"
@@ -149,7 +148,7 @@ export function InvoiceTemplateRenderer({
   zoomScale = 1,
 }: InvoiceTemplateRendererProps) {
   const {
-    invoiceNumber,
+    invoiceNumber = "",
     invoiceDate,
     dueDate,
     regNo,
@@ -176,12 +175,18 @@ export function InvoiceTemplateRenderer({
   const entityName =
     billingSnapshot?.displayName || billingSnapshot?.name || "SN Advertising";
   const entityLegal = billingSnapshot?.name;
-  const entityPrefix = billingSnapshot?.prefix || "SN";
+  const entityPrefix = (billingSnapshot?.prefix || "SN").trim();
   const entityFooter =
     billingSnapshot?.footerText ||
     `Thank you for partnering with ${entityName} — Colombo, Sri Lanka`;
   const effectiveFormat: InvoicePdfFormat =
     format || invoice?.signatureFormat || "digital";
+
+  // Prevent duplicate prefix bug e.g. HRP-HRP-2026-23468
+  const cleanInvoiceNo =
+    invoiceNumber.startsWith(`${entityPrefix}-`) || invoiceNumber.startsWith(`${entityPrefix}`)
+      ? invoiceNumber
+      : `${entityPrefix}-${invoiceNumber}`;
 
   // Resolve typography scaling based on invoice layout settings or smart auto-fit
   const mergedSettings = {
@@ -197,8 +202,21 @@ export function InvoiceTemplateRenderer({
     Boolean(specialNotes)
   );
 
-  // Paginate items onto true ISO A4 sheets
-  const pages: PaginatedPage[] = paginateInvoiceItems(items, typo.density);
+  const blocks = typo.blocksConfig || {
+    showBankDetails: true,
+    showSpecialNotes: true,
+    showAmountInWords: true,
+    showDueDates: true,
+    showSignatureBlock: true,
+    customNoteText: "",
+  };
+
+  // Paginate items onto true ISO A4 sheets respecting pageFitMode
+  const pages: PaginatedPage[] = paginateInvoiceItems(
+    items,
+    typo.density,
+    typo.pageFitMode || "single_page"
+  );
 
   // Default payment instruction fallback
   const defaultBankText = billingSnapshot?.bankName
@@ -224,12 +242,15 @@ export function InvoiceTemplateRenderer({
       : "INVOICE";
 
   // Density-specific table row padding classes
+  const isSinglePage = typo.pageFitMode === "single_page" || pages.length === 1;
   const rowPaddingClass =
-    typo.density === "comfortable"
-      ? "py-3 px-3.5"
-      : typo.density === "compact"
+    isSinglePage && items.length >= 4
       ? "py-1.5 px-2.5"
-      : "py-2.5 px-3";
+      : typo.density === "comfortable"
+      ? "py-2.5 px-3"
+      : typo.density === "compact"
+      ? "py-1 px-2"
+      : "py-2 px-2.5";
 
   return (
     <div
@@ -243,16 +264,15 @@ export function InvoiceTemplateRenderer({
       {pages.map((page) => (
         <div
           key={`a4-page-${page.pageNumber}`}
-          className={`a4-page-sheet bg-white text-slate-900 border border-slate-200 box-border relative flex flex-col justify-between overflow-hidden ${
+          className={`a4-page-sheet bg-white text-slate-900 border border-slate-200 box-border relative flex flex-col justify-between ${
             printMode
               ? "print:m-0 print:border-none print:shadow-none"
-              : "shadow-lg rounded-xl mb-8 last:mb-0 ring-1 ring-slate-900/5"
+              : "shadow-md rounded-xl mb-6 last:mb-0 ring-1 ring-slate-900/5"
           }`}
           style={{
             width: "210mm",
             minHeight: "297mm",
-            maxHeight: "297mm",
-            padding: "13mm 14mm 10mm 14mm",
+            padding: "9mm 12mm 8mm 12mm",
             boxSizing: "border-box",
             backgroundColor: "#FFFFFF",
           }}
@@ -263,9 +283,9 @@ export function InvoiceTemplateRenderer({
             {page.isFirstPage ? (
               <div>
                 {/* Header: Company Logo & Details (Left) + Address & Tax (Right) */}
-                <div className="flex items-start justify-between border-b border-slate-200 pb-3.5">
+                <div className="flex items-start justify-between border-b border-slate-200 pb-2.5">
                   {/* Left: Logo & Company Name */}
-                  <div className="flex items-start space-x-3 max-w-[55%]">
+                  <div className="flex items-start space-x-2.5 max-w-[55%]">
                     <EntityLogoOrBadge
                       logoUrl={billingSnapshot?.logoUrl}
                       entityName={entityName}
@@ -274,37 +294,37 @@ export function InvoiceTemplateRenderer({
                     />
                     <div className="space-y-0.5">
                       <h1
-                        className="font-extrabold tracking-tight text-slate-900 uppercase"
+                        className="font-extrabold tracking-tight text-slate-900 uppercase leading-snug"
                         style={{ fontSize: `${typo.headerSizePt}pt` }}
                       >
                         {entityName}
                       </h1>
                       {entityLegal && entityLegal !== entityName && (
-                        <p className="text-[10px] text-slate-500 font-semibold uppercase">
+                        <p className="text-[9.5px] text-slate-500 font-semibold uppercase leading-tight">
                           {entityLegal}
                         </p>
                       )}
-                      <p className="text-[10px] text-slate-500 font-medium">
+                      <p className="text-[9.5px] text-slate-500 font-medium">
                         Advertising &amp; Media Services
                       </p>
                     </div>
                   </div>
 
                   {/* Right: Invoice Number Badge & Issuer Info */}
-                  <div className="text-right space-y-0.5 max-w-[42%] text-slate-600">
+                  <div className="text-right space-y-0.5 max-w-[44%] text-slate-600">
                     <div className="font-mono text-xs font-bold text-slate-800 tracking-wide uppercase">
-                      INVOICE NO. {entityPrefix}-{invoiceNumber}
+                      INVOICE NO. {cleanInvoiceNo}
                     </div>
                     {billingSnapshot?.address && (
-                      <p className="text-[9.5px] leading-tight text-slate-500 whitespace-pre-line pt-0.5">
+                      <p className="text-[9px] leading-tight text-slate-500 whitespace-pre-line pt-0.5">
                         {billingSnapshot.address}
                       </p>
                     )}
-                    <div className="text-[9px] text-slate-500 space-x-2 pt-0.5">
+                    <div className="text-[8.5px] text-slate-500 space-x-1.5 pt-0.5">
                       {billingSnapshot?.email && <span>{billingSnapshot.email}</span>}
                       {billingSnapshot?.phone && <span>• {billingSnapshot.phone}</span>}
                     </div>
-                    <div className="text-[9px] text-slate-500 space-x-2 font-mono">
+                    <div className="text-[8.5px] text-slate-500 space-x-1.5 font-mono">
                       {billingSnapshot?.brn && <span>BRN: {billingSnapshot.brn}</span>}
                       {billingSnapshot?.vatNumber && (
                         <span className="font-semibold text-emerald-800">
@@ -316,17 +336,17 @@ export function InvoiceTemplateRenderer({
                 </div>
 
                 {/* Document Title Banner & Meta Grid */}
-                <div className="pt-3 pb-3 flex items-start justify-between">
+                <div className="pt-2 pb-2.5 flex items-start justify-between">
                   {/* Left: Document Heading & Client "Bill To" */}
-                  <div className="space-y-1 max-w-[60%]">
+                  <div className="space-y-0.5 max-w-[60%]">
                     <h2
-                      className="font-black text-slate-900 uppercase tracking-tight"
+                      className="font-black text-slate-900 uppercase tracking-tight leading-tight"
                       style={{ fontSize: `${typo.titleSizePt}pt` }}
                     >
                       {documentTitle}
                     </h2>
-                    <div className="text-slate-600">
-                      <span className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider block">
+                    <div className="text-slate-600 pt-0.5">
+                      <span className="text-[9px] font-bold text-slate-400 uppercase tracking-wider block">
                         BILL TO:
                       </span>
                       <p
@@ -336,17 +356,17 @@ export function InvoiceTemplateRenderer({
                         {clientSnapshot?.name || "Client Name"}
                       </p>
                       {clientSnapshot?.address && (
-                        <p className="text-[9.5px] text-slate-500 whitespace-pre-line mt-0.5 leading-tight">
+                        <p className="text-[9px] text-slate-500 whitespace-pre-line leading-tight">
                           {clientSnapshot.address}
                         </p>
                       )}
                       {clientSnapshot?.vatNumber && (
-                        <p className="text-[9px] font-mono text-slate-700 font-semibold mt-1">
+                        <p className="text-[8.5px] font-mono text-slate-700 font-semibold mt-0.5">
                           Client VAT: {clientSnapshot.vatNumber}
                         </p>
                       )}
                       {clientSnapshot?.contactPerson && (
-                        <p className="text-[9px] text-slate-500 mt-0.5">
+                        <p className="text-[8.5px] text-slate-500">
                           Attn: {clientSnapshot.contactPerson}
                         </p>
                       )}
@@ -354,44 +374,46 @@ export function InvoiceTemplateRenderer({
                   </div>
 
                   {/* Right: Key Dates & References */}
-                  <div className="text-right space-y-1 text-slate-600 min-w-[130px]">
-                    <div className="text-xs">
-                      <span className="text-slate-400 mr-2 text-[10px]">Date:</span>
-                      <span className="font-bold text-slate-900 font-mono">
-                        {formatDate(invoiceDate)}
-                      </span>
-                    </div>
-                    {dueDate && (
+                  {blocks.showDueDates !== false && (
+                    <div className="text-right space-y-0.5 text-slate-600 min-w-[125px]">
                       <div className="text-xs">
-                        <span className="text-slate-400 mr-2 text-[10px]">Due Date:</span>
-                        <span className="font-semibold text-slate-800 font-mono">
-                          {formatDate(dueDate)}
+                        <span className="text-slate-400 mr-1.5 text-[9.5px]">Date:</span>
+                        <span className="font-bold text-slate-900 font-mono">
+                          {formatDate(invoiceDate)}
                         </span>
                       </div>
-                    )}
-                    {regNo && (
-                      <div className="text-xs">
-                        <span className="text-slate-400 mr-2 text-[10px]">Ref / Reg:</span>
-                        <span className="font-mono text-slate-800 font-bold">{regNo}</span>
-                      </div>
-                    )}
-                    {yourRef && (
-                      <div className="text-xs">
-                        <span className="text-slate-400 mr-2 text-[10px]">Your Ref:</span>
-                        <span className="font-medium text-slate-800">{yourRef}</span>
-                      </div>
-                    )}
-                    {includeServicePeriod && servicePeriodStart && servicePeriodEnd && (
-                      <div className="text-[10px] text-emerald-800 font-mono font-semibold pt-0.5">
-                        Period: {formatServicePeriod(servicePeriodStart, servicePeriodEnd)}
-                      </div>
-                    )}
-                  </div>
+                      {dueDate && (
+                        <div className="text-xs">
+                          <span className="text-slate-400 mr-1.5 text-[9.5px]">Due Date:</span>
+                          <span className="font-semibold text-slate-800 font-mono">
+                            {formatDate(dueDate)}
+                          </span>
+                        </div>
+                      )}
+                      {regNo && (
+                        <div className="text-xs">
+                          <span className="text-slate-400 mr-1.5 text-[9.5px]">Ref:</span>
+                          <span className="font-mono text-slate-800 font-bold">{regNo}</span>
+                        </div>
+                      )}
+                      {yourRef && (
+                        <div className="text-xs">
+                          <span className="text-slate-400 mr-1.5 text-[9.5px]">Client Ref:</span>
+                          <span className="font-medium text-slate-800">{yourRef}</span>
+                        </div>
+                      )}
+                      {includeServicePeriod && servicePeriodStart && servicePeriodEnd && (
+                        <div className="text-[9px] text-emerald-800 font-mono font-semibold pt-0.5">
+                          Period: {formatServicePeriod(servicePeriodStart, servicePeriodEnd)}
+                        </div>
+                      )}
+                    </div>
+                  )}
                 </div>
               </div>
             ) : (
               /* ----------------- CONTINUATION PAGE HEADER ----------------- */
-              <div className="border-b border-slate-200 pb-2 mb-3 flex items-center justify-between text-xs text-slate-600">
+              <div className="border-b border-slate-200 pb-1.5 mb-2.5 flex items-center justify-between text-xs text-slate-600">
                 <div className="flex items-center space-x-2">
                   <span className="font-extrabold text-slate-900 uppercase">
                     {entityName}
@@ -400,7 +422,7 @@ export function InvoiceTemplateRenderer({
                   <span className="text-slate-500">{documentTitle} (Continuation)</span>
                 </div>
                 <div className="font-mono text-slate-700 font-bold">
-                  INVOICE NO. {entityPrefix}-{invoiceNumber}
+                  INVOICE NO. {cleanInvoiceNo}
                 </div>
               </div>
             )}
@@ -413,17 +435,17 @@ export function InvoiceTemplateRenderer({
                     className="bg-slate-50/80 text-slate-600 border-b border-slate-200 font-bold tracking-wider uppercase"
                     style={{ fontSize: `${typo.tableHeaderPt}pt` }}
                   >
-                    <th className="py-2 px-3 w-28 font-semibold">Period / Date</th>
-                    <th className="py-2 px-3.5 font-semibold">Description of Service</th>
-                    <th className="py-2 px-2.5 text-center w-14 font-semibold">Qty</th>
-                    <th className="py-2 px-3 text-right w-24 font-semibold">Price (Rs.)</th>
-                    <th className="py-2 px-3.5 text-right w-28 font-semibold">Amount (Rs.)</th>
+                    <th className="py-1.5 px-3 w-28 font-semibold">Period / Date</th>
+                    <th className="py-1.5 px-3 font-semibold">Description of Service</th>
+                    <th className="py-1.5 px-2 text-center w-12 font-semibold">Qty</th>
+                    <th className="py-1.5 px-3 text-right w-24 font-semibold">Price (Rs.)</th>
+                    <th className="py-1.5 px-3 text-right w-28 font-semibold">Amount (Rs.)</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100 text-slate-800">
                   {page.items.map((item, idx) => (
                     <tr key={item.id || `${page.startIndex + idx}`}>
-                      <td className={`${rowPaddingClass} font-mono text-[9px] text-slate-500 align-top`}>
+                      <td className={`${rowPaddingClass} font-mono text-[8.5px] text-slate-500 align-top`}>
                         {item.servicePeriod || formatDate(invoiceDate)}
                       </td>
                       <td className={`${rowPaddingClass} align-top`}>
@@ -447,10 +469,10 @@ export function InvoiceTemplateRenderer({
               </table>
             </div>
 
-            {/* If continuation page with more items following, show subtle continuation hint */}
+            {/* Subtle continuation notice if multiple pages */}
             {!page.isLastPage && (
-              <div className="pt-2 text-right">
-                <span className="text-[9.5px] italic text-slate-400">
+              <div className="pt-1.5 text-right">
+                <span className="text-[9px] italic text-slate-400">
                   Continued on next page...
                 </span>
               </div>
@@ -458,31 +480,42 @@ export function InvoiceTemplateRenderer({
 
             {/* ----------------- TOTALS & FINANCIAL SUMMARY (LAST PAGE ONLY) ----------------- */}
             {page.isLastPage && (
-              <div className="mt-3.5 pt-2 flex items-start justify-between gap-6">
-                {/* Left: Words, Special Notes, Advance */}
-                <div className="flex-1 space-y-1.5 text-slate-600 max-w-sm">
-                  <div>
-                    <span className="text-[9px] font-bold text-slate-400 uppercase tracking-wider block">
-                      AMOUNT IN WORDS:
-                    </span>
-                    <p className="text-[9.5px] italic text-slate-700 font-medium">
-                      {numberToWordsLKR(grandTotal)}
-                    </p>
-                  </div>
+              <div className="mt-2.5 pt-1 flex items-start justify-between gap-5">
+                {/* Left: Words, Special Notes, Custom Clause */}
+                <div className="flex-1 space-y-1 text-slate-600 max-w-sm">
+                  {blocks.showAmountInWords !== false && (
+                    <div>
+                      <span className="text-[8.5px] font-bold text-slate-400 uppercase tracking-wider block">
+                        AMOUNT IN WORDS:
+                      </span>
+                      <p className="text-[9px] italic text-slate-700 font-medium">
+                        {numberToWordsLKR(grandTotal)}
+                      </p>
+                    </div>
+                  )}
 
-                  {specialNotes && (
+                  {blocks.showSpecialNotes !== false && specialNotes && (
                     <div className="pt-0.5">
-                      <span className="text-[9px] font-bold text-slate-400 uppercase tracking-wider block">
+                      <span className="text-[8.5px] font-bold text-slate-400 uppercase tracking-wider block">
                         SPECIAL NOTE:
                       </span>
-                      <p className="text-[9.5px] text-slate-800 font-semibold leading-snug">
+                      <p className="text-[9px] text-slate-800 font-semibold leading-snug">
                         {specialNotes}
                       </p>
                     </div>
                   )}
 
+                  {/* Optional Custom Note / Block */}
+                  {blocks.customNoteText && (
+                    <div className="pt-0.5">
+                      <p className="text-[8.5px] text-slate-600 italic bg-slate-50 p-1.5 rounded border border-slate-200">
+                        {blocks.customNoteText}
+                      </p>
+                    </div>
+                  )}
+
                   {advancePercentage > 0 && (
-                    <div className="text-[9px] text-slate-700 pt-0.5">
+                    <div className="text-[8.5px] text-slate-700 pt-0.5">
                       <span className="font-semibold text-slate-900">Advance Required: </span>
                       <span>
                         {advancePercentage}% ({formatLKR(grandTotal * (advancePercentage / 100))})
@@ -492,7 +525,7 @@ export function InvoiceTemplateRenderer({
                 </div>
 
                 {/* Right: Clean Financial Summary (NO solid black boxes!) */}
-                <div className="w-64 space-y-1 text-right text-xs">
+                <div className="w-60 space-y-0.5 text-right text-xs">
                   <div className="flex justify-between text-slate-500 py-0.5">
                     <span>
                       {vatApplicable && showVatSeparately === false
@@ -514,18 +547,18 @@ export function InvoiceTemplateRenderer({
                   )}
 
                   {/* Clean Separator */}
-                  <div className="border-t border-slate-300 my-1 pt-1.5 flex justify-between items-baseline">
-                    <span className="text-slate-500 font-semibold text-sm">Grand Total</span>
-                    <span className="font-mono font-extrabold text-slate-900 text-base tracking-tight">
+                  <div className="border-t border-slate-300 my-1 pt-1 flex justify-between items-baseline">
+                    <span className="text-slate-500 font-semibold text-xs">Grand Total</span>
+                    <span className="font-mono font-extrabold text-slate-900 text-sm tracking-tight">
                       Rs. {formatLKR(grandTotal)}
                     </span>
                   </div>
 
                   {/* Payment tracking balance if partial payment exists */}
                   {invoice.totalPaid > 0 && (
-                    <div className="pt-1 border-t border-slate-100 text-[10px] space-y-0.5">
+                    <div className="pt-0.5 border-t border-slate-100 text-[9.5px] space-y-0.5">
                       <div className="flex justify-between text-emerald-800">
-                        <span>Paid to Date:</span>
+                        <span>Paid:</span>
                         <span className="font-mono font-bold">{formatLKR(invoice.totalPaid)}</span>
                       </div>
                       <div className="flex justify-between text-slate-900 font-bold">
@@ -540,36 +573,42 @@ export function InvoiceTemplateRenderer({
           </div>
 
           {/* ===================== PAGE BOTTOM (FOOTER) ===================== */}
-          <div className="mt-auto pt-3">
+          <div className="mt-auto pt-2">
             {/* Payment Details & Signature Block (Rendered on Last Page) */}
             {page.isLastPage ? (
-              <div className="border-t border-slate-200 pt-3 grid grid-cols-1 md:grid-cols-2 gap-4 items-end">
+              <div className="border-t border-slate-200 pt-2 grid grid-cols-1 md:grid-cols-2 gap-3 items-end">
                 {/* Left: Payment Instructions & Bank Details */}
-                <div className="text-slate-600 space-y-1">
-                  <p className="font-bold text-slate-900 text-[10px] uppercase tracking-wider">
-                    PAYMENT INSTRUCTIONS &amp; BANK DETAILS
-                  </p>
-                  <p
-                    className="text-slate-600 leading-relaxed font-normal"
-                    style={{ fontSize: `${typo.footerSizePt}pt` }}
-                  >
-                    {finalPaymentInstructions}
-                  </p>
-                </div>
+                {blocks.showBankDetails !== false ? (
+                  <div className="text-slate-600 space-y-0.5">
+                    <p className="font-bold text-slate-900 text-[9.5px] uppercase tracking-wider">
+                      PAYMENT INSTRUCTIONS &amp; BANK DETAILS
+                    </p>
+                    <p
+                      className="text-slate-600 leading-relaxed font-normal"
+                      style={{ fontSize: `${typo.footerSizePt}pt` }}
+                    >
+                      {finalPaymentInstructions}
+                    </p>
+                  </div>
+                ) : (
+                  <div></div>
+                )}
 
                 {/* Right: Digital Approval or Blank Signature Block */}
-                <div>
-                  <DigitalApprovalBlock
-                    invoice={invoice}
-                    format={effectiveFormat}
-                    isDraftPreview={isDraftPreview}
-                  />
-                </div>
+                {blocks.showSignatureBlock !== false && (
+                  <div>
+                    <DigitalApprovalBlock
+                      invoice={invoice}
+                      format={effectiveFormat}
+                      isDraftPreview={isDraftPreview}
+                    />
+                  </div>
+                )}
               </div>
             ) : null}
 
-            {/* Bottom Tagline & Page Numbering (Rendered on Every Page) */}
-            <div className="border-t border-slate-100 pt-2.5 mt-2 flex items-center justify-between text-[9px] text-slate-400">
+            {/* Bottom Tagline & Page Numbering */}
+            <div className="border-t border-slate-100 pt-2 mt-1.5 flex items-center justify-between text-[8.5px] text-slate-400">
               <span className="truncate max-w-[450px]">{entityFooter}</span>
               {typo.showPageNumbers && (
                 <span className="font-mono font-semibold text-slate-500 shrink-0">

@@ -84,8 +84,20 @@ export interface VerificationResult {
 
 export type FontSizePreset = 'smart' | 'manual';
 export type LayoutDensity = 'comfortable' | 'balanced' | 'compact';
+export type PageFitMode = 'single_page' | 'multi_page';
+
+export interface InvoiceBlocksConfig {
+  showBankDetails?: boolean;
+  showSpecialNotes?: boolean;
+  showAmountInWords?: boolean;
+  showDueDates?: boolean;
+  showSignatureBlock?: boolean;
+  customNoteText?: string;
+}
 
 export interface PdfTypographySettings {
+  pageFitMode?: PageFitMode; // 'single_page' (default) | 'multi_page'
+  masterScale?: number; // 0.75 to 1.25 (default 1.0)
   mode: FontSizePreset; // 'smart' | 'manual'
   density: LayoutDensity; // 'comfortable' | 'balanced' | 'compact'
   titleSizePt: number; // 14–22 pt (default 18)
@@ -96,6 +108,7 @@ export interface PdfTypographySettings {
   descriptionSizePt: number; // 8–12 pt (default 9)
   footerSizePt: number; // 8–11 pt (default 9)
   showPageNumbers?: boolean; // default true
+  blocksConfig?: InvoiceBlocksConfig;
 }
 
 export interface BillingEntity {

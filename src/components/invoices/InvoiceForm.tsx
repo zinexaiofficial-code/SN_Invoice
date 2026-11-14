@@ -13,7 +13,8 @@ import {
   InvoicePdfFormat,
   MediaChannel,
   REFERENCE_TYPES,
-  AdvertisingReferenceType
+  AdvertisingReferenceType,
+  PdfTypographySettings,
 } from "@/types";
 import { storage } from "@/lib/storage";
 import { formatLKR, formatDate, formatServicePeriod } from "@/lib/utils";
@@ -26,6 +27,8 @@ import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ClientModal } from "@/components/clients/ClientModal";
 import { InvoiceTemplateRenderer } from "@/components/invoices/InvoiceTemplateRenderer";
+import { PdfLayoutControls } from "@/components/invoices/PdfLayoutControls";
+import { resolveTypography } from "@/lib/pdfTypography";
 import { DigitalApprovalBlock } from "@/components/invoices/DigitalApprovalBlock";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import {
@@ -82,6 +85,10 @@ export function InvoiceForm({ initialInvoice }: InvoiceFormProps) {
   const [isDownloading, setIsDownloading] = useState(false);
   const [approvalConfirmed, setApprovalConfirmed] = useState(false);
   const [error, setError] = useState<string>("");
+  const [formTypography, setFormTypography] = useState<PdfTypographySettings>(() =>
+    resolveTypography(initialInvoice?.pdfLayout)
+  );
+  const [formZoom, setFormZoom] = useState<number>(0.92);
 
   // Form State
   const [invoiceNumber, setInvoiceNumber] = useState<string>("");
@@ -377,7 +384,7 @@ export function InvoiceForm({ initialInvoice }: InvoiceFormProps) {
       billingEntityId: selectedBillingEntityId,
       templateKey,
       signatureFormat: selectedSignatureFormat,
-      pdfLayout: initialInvoice?.pdfLayout || entity?.defaultPdfLayout,
+      pdfLayout: formTypography || initialInvoice?.pdfLayout || entity?.defaultPdfLayout,
       status: newStatus,
       invoiceDate,
       dueDate: dueDate || undefined,
@@ -1527,81 +1534,50 @@ export function InvoiceForm({ initialInvoice }: InvoiceFormProps) {
 
       {/* PDF Layout Preview Dialog with Format Selector */}
       <Dialog open={isPreviewOpen} onOpenChange={setIsPreviewOpen}>
-        <DialogContent className="max-w-4xl max-h-[92vh] overflow-y-auto p-4 sm:p-6">
+        <DialogContent className="max-w-5xl max-h-[94vh] overflow-y-auto p-4 sm:p-6 bg-slate-50">
           <DialogHeader>
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-slate-200">
               <div>
                 <DialogTitle className="text-navy-950 flex items-center space-x-2">
                   <Printer className="w-5 h-5 text-emerald-600" />
-                  <span>Invoice PDF Layout Preview</span>
+                  <span>Invoice PDF Layout &amp; Page Fit Preview</span>
                 </DialogTitle>
                 <p className="text-xs text-slate-500 mt-0.5">
-                  Choose between Digitally Approved format or Unsigned Printable format.
+                  1-Page auto-fit default, multi-page toggle, master proportional font scale, and custom block controls.
                 </p>
-              </div>
-
-              {/* Format Selector: Option A vs Option B */}
-              <div className="flex flex-wrap items-center gap-2">
-                <div className="flex items-center bg-slate-100 p-1 rounded-xl border border-slate-200 text-xs font-bold">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setPreviewFormat("digital");
-                      setSelectedSignatureFormat("digital");
-                    }}
-                    className={`px-3 py-1.5 rounded-lg flex items-center space-x-1.5 transition-all ${
-                      previewFormat === "digital"
-                        ? "bg-navy-950 text-white shadow-sm"
-                        : "text-slate-600 hover:text-navy-950"
-                    }`}
-                  >
-                    <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" />
-                    <span>Digital Signature (Adobe)</span>
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setPreviewFormat("print");
-                      setSelectedSignatureFormat("print");
-                    }}
-                    className={`px-3 py-1.5 rounded-lg flex items-center space-x-1.5 transition-all ${
-                      previewFormat === "print" || previewFormat === "blank"
-                        ? "bg-navy-950 text-white shadow-sm"
-                        : "text-slate-600 hover:text-navy-950"
-                    }`}
-                  >
-                    <Printer className="w-3.5 h-3.5" />
-                    <span>Blank Signature (Hard Copy)</span>
-                  </button>
-                </div>
-
-                {/* Template switch in preview */}
-                <select
-                  value={templateKey}
-                  onChange={(e) => setTemplateKey(e.target.value as InvoiceTemplateKey)}
-                  className="h-8 rounded-lg border border-slate-300 bg-white px-2.5 text-xs font-semibold"
-                >
-                  <option value="standard">Standard Advertising</option>
-                  <option value="vat">VAT Invoice</option>
-                  <option value="sponsorship">Sponsorship Invoice</option>
-                  <option value="custom">Custom Invoice</option>
-                </select>
               </div>
             </div>
           </DialogHeader>
 
-          <div className="py-2 overflow-x-auto">
+          {/* Embedded Layout Controls */}
+          <PdfLayoutControls
+            format={previewFormat}
+            onFormatChange={(f) => {
+              setPreviewFormat(f);
+              setSelectedSignatureFormat(f);
+            }}
+            templateKey={templateKey}
+            onTemplateChange={(t) => setTemplateKey(t)}
+            typography={formTypography}
+            onTypographyChange={setFormTypography}
+            zoomScale={formZoom}
+            onZoomChange={setFormZoom}
+            compactMode={true}
+          />
+
+          <div className="py-4 px-2 bg-slate-200/50 rounded-2xl overflow-x-auto flex justify-center max-h-[70vh] overflow-y-auto shadow-inner border border-slate-200">
             <InvoiceTemplateRenderer
               invoice={currentPreviewInvoice}
               format={previewFormat}
               isDraftPreview={true}
+              typographySettings={formTypography}
+              zoomScale={formZoom}
             />
           </div>
 
           <DialogFooter className="gap-2 sm:gap-0 pt-3 border-t border-slate-200 flex items-center justify-between">
-            <span className="text-[11px] text-slate-400">
-              Format: {previewFormat === "digital" ? "Digitally Approved Preview" : "Print (Unsigned) Preview"}
+            <span className="text-[11px] text-slate-500">
+              Mode: <strong className="text-slate-800">{formTypography.pageFitMode === "multi_page" ? "Multi-Page (2+ Pages)" : "1 Page (Fit to Page)"}</strong> &bull; Scale: <strong className="text-slate-800">{Math.round((formTypography.masterScale ?? 1.0) * 100)}%</strong>
             </span>
             <div className="flex items-center space-x-2">
               <Button variant="outline" onClick={() => setIsPreviewOpen(false)}>
@@ -1612,7 +1588,7 @@ export function InvoiceForm({ initialInvoice }: InvoiceFormProps) {
                   setIsPreviewOpen(false);
                   handleSave("issued");
                 }}
-                className="bg-emerald-600 hover:bg-emerald-700 text-white font-semibold flex items-center space-x-1.5"
+                className="bg-emerald-600 hover:bg-emerald-700 text-white font-semibold flex items-center space-x-1.5 shadow-sm"
               >
                 <CheckCircle2 className="w-4 h-4" />
                 <span>Authorize &amp; Issue Invoice</span>
