@@ -15,9 +15,11 @@ export async function GET() {
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
-    if (!body || !body.companyName) {
-      return NextResponse.json({ error: 'Missing company name' }, { status: 400 });
+    const clientName = body?.name || body?.companyName;
+    if (!body || !clientName) {
+      return NextResponse.json({ error: 'Missing client name' }, { status: 400 });
     }
+    body.name = clientName;
     const saved = await saveClient(body);
     return NextResponse.json({ success: true, data: saved });
   } catch (err: any) {
