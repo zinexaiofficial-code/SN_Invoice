@@ -39,8 +39,12 @@ self.addEventListener('fetch', (event) => {
 
   const url = new URL(event.request.url);
 
-  // Do NOT cache API requests, sensitive invoice payloads, or auth calls
-  if (url.pathname.startsWith('/api') || url.pathname.includes('/auth/')) {
+  // Do NOT cache API requests, verification endpoints, sensitive invoice payloads, or auth calls
+  if (
+    url.pathname.startsWith('/api') ||
+    url.pathname.includes('/auth/') ||
+    url.pathname.startsWith('/verify')
+  ) {
     return;
   }
 
@@ -48,19 +52,22 @@ self.addEventListener('fetch', (event) => {
   if (event.request.headers.get('accept')?.includes('text/html')) {
     event.respondWith(
       fetch(event.request).catch(() => {
-        return caches.match('/offline.html') || caches.match('/');
+        return caches.match('/offline.html') || caches.match('/') || new Response('Offline', { status: 503 });
       })
     );
     return;
   }
 
-  // Stale-while-revalidate for static assets
+  // Stale-while-revalidate for static assets with safe error rejection handling
   event.respondWith(
     caches.match(event.request).then((cachedResponse) => {
       if (cachedResponse) {
         return cachedResponse;
       }
-      return fetch(event.request);
+      return fetch(event.request).catch((err) => {
+        console.warn('SN Invoice ServiceWorker fetch fallback:', event.request.url, err);
+        return new Response('', { status: 408, statusText: 'Network Timeout / Offline' });
+      });
     })
   );
 });
