@@ -2,22 +2,40 @@
 
 import React from "react";
 import Image from "next/image";
-import { Invoice, InvoiceItem, InvoicePdfFormat } from "@/types";
-import { formatLKR, formatDate, numberToWordsLKR, formatServicePeriod } from "@/lib/utils";
+import {
+  Invoice,
+  InvoiceItem,
+  InvoicePdfFormat,
+  PdfTypographySettings,
+  LayoutDensity,
+} from "@/types";
+import {
+  formatLKR,
+  formatDate,
+  numberToWordsLKR,
+  formatServicePeriod,
+} from "@/lib/utils";
+import { resolveTypography, paginateInvoiceItems, PaginatedPage } from "@/lib/pdfTypography";
 import { DigitalApprovalBlock } from "@/components/invoices/DigitalApprovalBlock";
 
-interface InvoiceTemplateRendererProps {
+export interface InvoiceTemplateRendererProps {
   invoice: Invoice;
   printMode?: boolean;
   format?: InvoicePdfFormat;
   isDraftPreview?: boolean;
+  typographySettings?: Partial<PdfTypographySettings>;
+  zoomScale?: number;
 }
 
+/**
+ * Clean Corporate Logo or White Lettermark Badge.
+ * Replaces old heavy dark blocks with a crisp, professional corporate mark.
+ */
 function EntityLogoOrBadge({
   logoUrl,
   entityName,
   prefix,
-  size = "md"
+  size = "md",
 }: {
   logoUrl?: string;
   entityName?: string;
@@ -25,55 +43,62 @@ function EntityLogoOrBadge({
   size?: "sm" | "md" | "lg";
 }) {
   const [imgError, setImgError] = React.useState(false);
-  const sizeClasses = {
-    sm: "w-12 h-12 text-sm",
-    md: "w-20 h-20 text-base",
-    lg: "w-24 h-24 text-lg",
+
+  const sizeDimensions = {
+    sm: "w-10 h-10 text-xs",
+    md: "w-14 h-14 text-sm",
+    lg: "w-16 h-16 text-base",
   }[size];
 
   if (logoUrl && !imgError) {
     return (
-      <div className={`${sizeClasses} relative shrink-0`}>
+      <div className={`${sizeDimensions} relative shrink-0 overflow-hidden`}>
         <Image
           src={logoUrl}
           alt={entityName || "Billing Entity Logo"}
           fill
-          className="object-contain"
+          className="object-contain object-left"
           priority
           onError={() => setImgError(true)}
+          sizes="64px"
         />
       </div>
     );
   }
 
-  const initials = prefix || (entityName ? entityName.slice(0, 3).toUpperCase() : "ENT");
+  const initials =
+    prefix || (entityName ? entityName.slice(0, 3).toUpperCase() : "ENT");
+
   return (
     <div
-      className={`${sizeClasses} rounded-xl bg-gradient-to-br from-navy-950 via-slate-900 to-slate-800 text-white font-black flex flex-col items-center justify-center tracking-wider shadow-sm shrink-0 border border-slate-300`}
+      className={`${sizeDimensions} rounded-xl border border-slate-300 bg-white text-slate-800 font-extrabold flex flex-col items-center justify-center tracking-wider shrink-0 shadow-2xs`}
     >
-      <span className="text-sm font-extrabold">{initials}</span>
+      <span className="text-xs font-black tracking-tight">{initials}</span>
     </div>
   );
 }
 
+/**
+ * Service line item cell with professional secondary advertising metadata tags.
+ */
 function ItemServiceCell({
   item,
-  mediaRefDisplay = "separate"
+  descriptionSizePt = 9,
 }: {
   item: InvoiceItem;
-  mediaRefDisplay?: "separate" | "inline";
+  descriptionSizePt?: number;
 }) {
   const hasMediaChannel = Boolean(item.mediaChannel && item.mediaChannel.trim());
   const hasRefNumber = Boolean(item.referenceNumber && item.referenceNumber.trim());
   const hasCategory = Boolean(item.category && item.category !== "Other Services");
 
   return (
-    <div>
+    <div className="space-y-0.5 leading-snug">
       {/* Title Line: Service Name + Media Channel */}
-      <div className="font-bold text-navy-950 text-sm flex flex-wrap items-center gap-1.5">
+      <div className="font-bold text-slate-900 flex flex-wrap items-center gap-1.5">
         <span>{item.serviceName}</span>
         {hasMediaChannel && (
-          <span className="text-emerald-800 font-bold bg-emerald-50 border border-emerald-200/90 px-1.5 py-0.5 rounded text-[11px] inline-flex items-center space-x-1">
+          <span className="text-emerald-800 font-semibold bg-emerald-50/90 border border-emerald-200 px-1.5 py-0.5 rounded text-[10px] inline-flex items-center space-x-1">
             <span>—</span>
             <span>{item.mediaChannel}</span>
           </span>
@@ -82,31 +107,32 @@ function ItemServiceCell({
 
       {/* Media Reference Line (RO Number, Booking Ref, Spot ID) */}
       {hasRefNumber && (
-        <div className="mt-1 flex flex-wrap items-center gap-1.5">
-          <span className="inline-flex items-center space-x-1 font-mono text-[11px] font-bold text-slate-800 bg-slate-100 border border-slate-300 px-2 py-0.5 rounded">
+        <div className="flex flex-wrap items-center gap-1.5 pt-0.5">
+          <span className="inline-flex items-center space-x-1 font-mono text-[9.5px] font-semibold text-slate-700 bg-slate-100 border border-slate-200 px-1.5 py-0.5 rounded">
             <span className="text-slate-500 uppercase">{item.referenceType || "RO No"}:</span>
-            <span className="text-navy-950">{item.referenceNumber}</span>
+            <span className="text-slate-900 font-bold">{item.referenceNumber}</span>
           </span>
           {hasCategory && (
-            <span className="text-[10px] font-semibold text-slate-500 uppercase tracking-wide">
+            <span className="text-[9px] font-medium text-slate-500 uppercase tracking-wide">
               ({item.category})
             </span>
           )}
         </div>
       )}
 
-      {/* If category present but no ref number */}
+      {/* Category without Ref */}
       {!hasRefNumber && hasCategory && (
-        <div className="mt-0.5">
-          <span className="text-[10px] font-semibold text-slate-500 uppercase tracking-wide">
-            ({item.category})
-          </span>
+        <div className="text-[9px] font-medium text-slate-500 uppercase tracking-wide">
+          ({item.category})
         </div>
       )}
 
       {/* Work Description / Campaign Details */}
       {item.description && (
-        <div className="text-xs text-slate-600 whitespace-pre-line mt-1 leading-relaxed">
+        <div
+          className="text-slate-600 whitespace-pre-line pt-0.5 leading-relaxed"
+          style={{ fontSize: `${descriptionSizePt}pt` }}
+        >
           {item.description}
         </div>
       )}
@@ -119,6 +145,8 @@ export function InvoiceTemplateRenderer({
   printMode = false,
   format = "digital",
   isDraftPreview = false,
+  typographySettings,
+  zoomScale = 1,
 }: InvoiceTemplateRendererProps) {
   const {
     invoiceNumber,
@@ -129,823 +157,429 @@ export function InvoiceTemplateRenderer({
     product,
     clientSnapshot,
     billingSnapshot,
-    items,
-    subtotal,
-    vatApplicable,
-    vatRate,
-    vatAmount,
-    grandTotal,
-    advancePercentage,
+    items = [],
+    subtotal = 0,
+    vatApplicable = false,
+    vatRate = 0,
+    vatAmount = 0,
+    grandTotal = 0,
+    advancePercentage = 0,
     specialNotes,
     paymentInstructions,
-    templateKey = 'standard',
+    templateKey = "standard",
     includeServicePeriod,
     servicePeriodStart,
     servicePeriodEnd,
-    showVatSeparately = true
+    showVatSeparately = true,
   } = invoice;
 
-  const entityName = billingSnapshot?.displayName || billingSnapshot?.name || "SN Advertising";
+  const entityName =
+    billingSnapshot?.displayName || billingSnapshot?.name || "SN Advertising";
   const entityLegal = billingSnapshot?.name;
   const entityPrefix = billingSnapshot?.prefix || "SN";
-  const entityFooter = billingSnapshot?.footerText || `Thank you for partnering with ${entityName} — Sri Lanka`;
-  const signatoryName = billingSnapshot?.signatoryName || "Authorized Signatory";
-  const signatoryTitle = billingSnapshot?.signatoryDesignation || `For ${entityName}`;
-  const effectiveFormat: InvoicePdfFormat = format || invoice?.signatureFormat || "digital";
+  const entityFooter =
+    billingSnapshot?.footerText ||
+    `Thank you for partnering with ${entityName} — Colombo, Sri Lanka`;
+  const effectiveFormat: InvoicePdfFormat =
+    format || invoice?.signatureFormat || "digital";
 
-  // Default payment instruction fallback if entity didn't set one
+  // Resolve typography scaling based on invoice layout settings or smart auto-fit
+  const mergedSettings = {
+    ...billingSnapshot?.pdfLayout,
+    ...invoice.pdfLayout,
+    ...typographySettings,
+  };
+
+  const typo: PdfTypographySettings = resolveTypography(
+    mergedSettings,
+    items,
+    vatApplicable,
+    Boolean(specialNotes)
+  );
+
+  // Paginate items onto true ISO A4 sheets
+  const pages: PaginatedPage[] = paginateInvoiceItems(items, typo.density);
+
+  // Default payment instruction fallback
   const defaultBankText = billingSnapshot?.bankName
-    ? `Bank transfers to ${billingSnapshot?.accountName || entityName}, A/C: ${billingSnapshot?.accountNumber || ''}, ${billingSnapshot?.bankName} – ${billingSnapshot?.branch || ''}.`
-    : '';
-  const finalPaymentInstructions = paymentInstructions || billingSnapshot?.paymentInstructions ||
-    `Cheques should be drawn in favour of ${billingSnapshot?.chequePayee || entityName} and crossed "ACCOUNT PAYEE" only. ${defaultBankText}`;
+    ? `Bank transfers to ${billingSnapshot?.accountName || entityName}, A/C: ${
+        billingSnapshot?.accountNumber || ""
+      }, ${billingSnapshot?.bankName} – ${billingSnapshot?.branch || ""}.`
+    : "";
+  const finalPaymentInstructions =
+    paymentInstructions ||
+    billingSnapshot?.paymentInstructions ||
+    `Cheques should be drawn in favour of ${
+      billingSnapshot?.chequePayee || entityName
+    } and crossed "ACCOUNT PAYEE" only. ${defaultBankText}`;
+
+  // Document Heading Title based on template and VAT registration
+  const documentTitle =
+    templateKey === "vat" || (vatApplicable && billingSnapshot?.vatNumber)
+      ? "TAX INVOICE"
+      : templateKey === "sponsorship"
+      ? "MEDIA SPONSORSHIP INVOICE"
+      : templateKey === "custom"
+      ? "COMMERCIAL INVOICE"
+      : "INVOICE";
+
+  // Density-specific table row padding classes
+  const rowPaddingClass =
+    typo.density === "comfortable"
+      ? "py-3 px-3.5"
+      : typo.density === "compact"
+      ? "py-1.5 px-2.5"
+      : "py-2.5 px-3";
 
   return (
     <div
       id="printable-invoice"
-      className={`bg-white text-slate-900 mx-auto select-text font-sans ${printMode
-          ? "w-[210mm] min-h-[297mm] p-10 print:p-8 print:m-0"
-          : "w-full max-w-4xl p-6 md:p-10 shadow-lg rounded-xl border border-slate-200"
-        }`}
-      style={{ boxSizing: "border-box" }}
+      className="invoice-render-container flex flex-col items-center select-text font-sans not-prose"
+      style={{
+        transform: zoomScale !== 1 ? `scale(${zoomScale})` : undefined,
+        transformOrigin: "top center",
+      }}
     >
-      {/* ===================== TEMPLATE 1: STANDARD ADVERTISING (EXCEL EXACT) ===================== */}
-      {templateKey === 'standard' && (
-        <div className="flex flex-col justify-between min-h-full">
-          <div>
-            {/* Header: Dynamic Entity Logo and Letterhead */}
-            <div className="flex items-start justify-between border-b-2 border-navy-950 pb-5">
-              <div className="flex items-center space-x-4">
-                <EntityLogoOrBadge
-                  logoUrl={billingSnapshot?.logoUrl}
-                  entityName={entityName}
-                  prefix={entityPrefix}
-                  size="md"
-                />
-                <div>
-                  <h1 className="text-2xl font-black tracking-tight text-navy-950 uppercase">
+      {pages.map((page) => (
+        <div
+          key={`a4-page-${page.pageNumber}`}
+          className={`a4-page-sheet bg-white text-slate-900 border border-slate-200 box-border relative flex flex-col justify-between overflow-hidden ${
+            printMode
+              ? "print:m-0 print:border-none print:shadow-none"
+              : "shadow-lg rounded-xl mb-8 last:mb-0 ring-1 ring-slate-900/5"
+          }`}
+          style={{
+            width: "210mm",
+            minHeight: "297mm",
+            maxHeight: "297mm",
+            padding: "13mm 14mm 10mm 14mm",
+            boxSizing: "border-box",
+            backgroundColor: "#FFFFFF",
+          }}
+        >
+          {/* ===================== PAGE CONTENT TOP ===================== */}
+          <div className="flex-1 flex flex-col">
+            {/* ----------------- FIRST PAGE HEADER ----------------- */}
+            {page.isFirstPage ? (
+              <div>
+                {/* Header: Company Logo & Details (Left) + Address & Tax (Right) */}
+                <div className="flex items-start justify-between border-b border-slate-200 pb-3.5">
+                  {/* Left: Logo & Company Name */}
+                  <div className="flex items-start space-x-3 max-w-[55%]">
+                    <EntityLogoOrBadge
+                      logoUrl={billingSnapshot?.logoUrl}
+                      entityName={entityName}
+                      prefix={entityPrefix}
+                      size="md"
+                    />
+                    <div className="space-y-0.5">
+                      <h1
+                        className="font-extrabold tracking-tight text-slate-900 uppercase"
+                        style={{ fontSize: `${typo.headerSizePt}pt` }}
+                      >
+                        {entityName}
+                      </h1>
+                      {entityLegal && entityLegal !== entityName && (
+                        <p className="text-[10px] text-slate-500 font-semibold uppercase">
+                          {entityLegal}
+                        </p>
+                      )}
+                      <p className="text-[10px] text-slate-500 font-medium">
+                        Advertising &amp; Media Services
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* Right: Invoice Number Badge & Issuer Info */}
+                  <div className="text-right space-y-0.5 max-w-[42%] text-slate-600">
+                    <div className="font-mono text-xs font-bold text-slate-800 tracking-wide uppercase">
+                      INVOICE NO. {entityPrefix}-{invoiceNumber}
+                    </div>
+                    {billingSnapshot?.address && (
+                      <p className="text-[9.5px] leading-tight text-slate-500 whitespace-pre-line pt-0.5">
+                        {billingSnapshot.address}
+                      </p>
+                    )}
+                    <div className="text-[9px] text-slate-500 space-x-2 pt-0.5">
+                      {billingSnapshot?.email && <span>{billingSnapshot.email}</span>}
+                      {billingSnapshot?.phone && <span>• {billingSnapshot.phone}</span>}
+                    </div>
+                    <div className="text-[9px] text-slate-500 space-x-2 font-mono">
+                      {billingSnapshot?.brn && <span>BRN: {billingSnapshot.brn}</span>}
+                      {billingSnapshot?.vatNumber && (
+                        <span className="font-semibold text-emerald-800">
+                          • VAT: {billingSnapshot.vatNumber}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                </div>
+
+                {/* Document Title Banner & Meta Grid */}
+                <div className="pt-3 pb-3 flex items-start justify-between">
+                  {/* Left: Document Heading & Client "Bill To" */}
+                  <div className="space-y-1 max-w-[60%]">
+                    <h2
+                      className="font-black text-slate-900 uppercase tracking-tight"
+                      style={{ fontSize: `${typo.titleSizePt}pt` }}
+                    >
+                      {documentTitle}
+                    </h2>
+                    <div className="text-slate-600">
+                      <span className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider block">
+                        BILL TO:
+                      </span>
+                      <p
+                        className="font-bold text-slate-900 uppercase leading-snug"
+                        style={{ fontSize: `${typo.sectionHeadingPt}pt` }}
+                      >
+                        {clientSnapshot?.name || "Client Name"}
+                      </p>
+                      {clientSnapshot?.address && (
+                        <p className="text-[9.5px] text-slate-500 whitespace-pre-line mt-0.5 leading-tight">
+                          {clientSnapshot.address}
+                        </p>
+                      )}
+                      {clientSnapshot?.vatNumber && (
+                        <p className="text-[9px] font-mono text-slate-700 font-semibold mt-1">
+                          Client VAT: {clientSnapshot.vatNumber}
+                        </p>
+                      )}
+                      {clientSnapshot?.contactPerson && (
+                        <p className="text-[9px] text-slate-500 mt-0.5">
+                          Attn: {clientSnapshot.contactPerson}
+                        </p>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Right: Key Dates & References */}
+                  <div className="text-right space-y-1 text-slate-600 min-w-[130px]">
+                    <div className="text-xs">
+                      <span className="text-slate-400 mr-2 text-[10px]">Date:</span>
+                      <span className="font-bold text-slate-900 font-mono">
+                        {formatDate(invoiceDate)}
+                      </span>
+                    </div>
+                    {dueDate && (
+                      <div className="text-xs">
+                        <span className="text-slate-400 mr-2 text-[10px]">Due Date:</span>
+                        <span className="font-semibold text-slate-800 font-mono">
+                          {formatDate(dueDate)}
+                        </span>
+                      </div>
+                    )}
+                    {regNo && (
+                      <div className="text-xs">
+                        <span className="text-slate-400 mr-2 text-[10px]">Ref / Reg:</span>
+                        <span className="font-mono text-slate-800 font-bold">{regNo}</span>
+                      </div>
+                    )}
+                    {yourRef && (
+                      <div className="text-xs">
+                        <span className="text-slate-400 mr-2 text-[10px]">Your Ref:</span>
+                        <span className="font-medium text-slate-800">{yourRef}</span>
+                      </div>
+                    )}
+                    {includeServicePeriod && servicePeriodStart && servicePeriodEnd && (
+                      <div className="text-[10px] text-emerald-800 font-mono font-semibold pt-0.5">
+                        Period: {formatServicePeriod(servicePeriodStart, servicePeriodEnd)}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+            ) : (
+              /* ----------------- CONTINUATION PAGE HEADER ----------------- */
+              <div className="border-b border-slate-200 pb-2 mb-3 flex items-center justify-between text-xs text-slate-600">
+                <div className="flex items-center space-x-2">
+                  <span className="font-extrabold text-slate-900 uppercase">
                     {entityName}
-                  </h1>
-                  {entityLegal && entityLegal !== entityName && (
-                    <p className="text-xs text-slate-500 font-semibold">{entityLegal}</p>
-                  )}
-                  {billingSnapshot?.brn && (
-                    <p className="text-[11px] text-slate-500 font-mono mt-0.5">BRN: {billingSnapshot.brn}</p>
-                  )}
-                  {billingSnapshot?.vatNumber && (
-                    <p className="text-[11px] text-emerald-800 font-mono font-semibold">
-                      VAT Reg: {billingSnapshot.vatNumber}
-                    </p>
-                  )}
+                  </span>
+                  <span className="text-slate-300">|</span>
+                  <span className="text-slate-500">{documentTitle} (Continuation)</span>
+                </div>
+                <div className="font-mono text-slate-700 font-bold">
+                  INVOICE NO. {entityPrefix}-{invoiceNumber}
                 </div>
               </div>
+            )}
 
-              <div className="text-right text-xs text-slate-700 leading-relaxed font-sans max-w-xs">
-                {billingSnapshot?.address && (
-                  <p className="font-semibold text-slate-900 whitespace-pre-line">{billingSnapshot.address}</p>
-                )}
-                {billingSnapshot?.email && (
-                  <p className="text-navy-900 font-medium mt-1">{billingSnapshot.email}</p>
-                )}
-                {billingSnapshot?.phone && (
-                  <p className="font-mono text-slate-800 mt-0.5">{billingSnapshot.phone}</p>
-                )}
-                {billingSnapshot?.secondaryPhone && (
-                  <p className="font-mono text-slate-800">{billingSnapshot.secondaryPhone}</p>
-                )}
-                {billingSnapshot?.website && (
-                  <p className="text-slate-500 text-[11px]">{billingSnapshot.website}</p>
-                )}
-              </div>
+            {/* ----------------- SERVICE ITEMS TABLE ----------------- */}
+            <div className="border border-slate-200 rounded-xl overflow-hidden bg-white shadow-2xs">
+              <table className="w-full text-left border-collapse" style={{ fontSize: `${typo.bodySizePt}pt` }}>
+                <thead>
+                  <tr
+                    className="bg-slate-50/80 text-slate-600 border-b border-slate-200 font-bold tracking-wider uppercase"
+                    style={{ fontSize: `${typo.tableHeaderPt}pt` }}
+                  >
+                    <th className="py-2 px-3 w-28 font-semibold">Period / Date</th>
+                    <th className="py-2 px-3.5 font-semibold">Description of Service</th>
+                    <th className="py-2 px-2.5 text-center w-14 font-semibold">Qty</th>
+                    <th className="py-2 px-3 text-right w-24 font-semibold">Price (Rs.)</th>
+                    <th className="py-2 px-3.5 text-right w-28 font-semibold">Amount (Rs.)</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100 text-slate-800">
+                  {page.items.map((item, idx) => (
+                    <tr key={item.id || `${page.startIndex + idx}`}>
+                      <td className={`${rowPaddingClass} font-mono text-[9px] text-slate-500 align-top`}>
+                        {item.servicePeriod || formatDate(invoiceDate)}
+                      </td>
+                      <td className={`${rowPaddingClass} align-top`}>
+                        <ItemServiceCell
+                          item={item}
+                          descriptionSizePt={typo.descriptionSizePt}
+                        />
+                      </td>
+                      <td className={`${rowPaddingClass} text-center font-mono align-top text-slate-700`}>
+                        {item.quantity}
+                      </td>
+                      <td className={`${rowPaddingClass} text-right font-mono align-top text-slate-600`}>
+                        {formatLKR(item.unitPrice)}
+                      </td>
+                      <td className={`${rowPaddingClass} text-right font-mono font-bold text-slate-900 align-top`}>
+                        {formatLKR(item.lineTotal)}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
             </div>
 
-            {/* Document Title Banner */}
-            <div className="mt-4 flex items-center justify-between">
-              <div>
-                <span className="text-xs font-bold tracking-widest text-slate-400 uppercase">DOCUMENT</span>
-                <h2 className="text-2xl font-black text-navy-950 tracking-wider uppercase">INVOICE</h2>
+            {/* If continuation page with more items following, show subtle continuation hint */}
+            {!page.isLastPage && (
+              <div className="pt-2 text-right">
+                <span className="text-[9.5px] italic text-slate-400">
+                  Continued on next page...
+                </span>
               </div>
-              <div className="text-right">
-                <span className="text-xs text-slate-500 block">INVOICE NO:</span>
-                <span className="text-xl font-mono font-bold text-navy-900">{invoiceNumber}</span>
-              </div>
-            </div>
+            )}
 
-            {/* Client & Meta Info Grid */}
-            <div className="mt-5 grid grid-cols-2 gap-4 border border-slate-300 rounded-lg p-4 bg-slate-50/50 text-sm">
-              <div>
-                <p className="text-[11px] font-bold uppercase tracking-wider text-slate-500 mb-1">
-                  Name of the advertiser &amp; address
-                </p>
-                <p className="font-bold text-base text-navy-950 uppercase leading-snug">
-                  {clientSnapshot?.name || "Client Name"}
-                </p>
-                <p className="text-slate-700 text-xs whitespace-pre-line mt-1">
-                  {clientSnapshot?.address}
-                </p>
-                {clientSnapshot?.vatNumber && (
-                  <p className="text-xs font-semibold text-slate-800 mt-2 font-mono">
-                    CLIENT VAT NO: {clientSnapshot.vatNumber}
-                  </p>
-                )}
-                {clientSnapshot?.contactPerson && (
-                  <p className="text-xs text-slate-600 mt-1">
-                    Attn: {clientSnapshot.contactPerson}
-                  </p>
-                )}
-              </div>
-
-              <div className="space-y-1.5 text-right flex flex-col justify-between">
-                <div className="space-y-1">
-                  <div className="flex justify-end space-x-2 text-xs">
-                    <span className="text-slate-500 font-medium">Date:</span>
-                    <span className="font-bold text-slate-900 font-mono">{formatDate(invoiceDate)}</span>
+            {/* ----------------- TOTALS & FINANCIAL SUMMARY (LAST PAGE ONLY) ----------------- */}
+            {page.isLastPage && (
+              <div className="mt-3.5 pt-2 flex items-start justify-between gap-6">
+                {/* Left: Words, Special Notes, Advance */}
+                <div className="flex-1 space-y-1.5 text-slate-600 max-w-sm">
+                  <div>
+                    <span className="text-[9px] font-bold text-slate-400 uppercase tracking-wider block">
+                      AMOUNT IN WORDS:
+                    </span>
+                    <p className="text-[9.5px] italic text-slate-700 font-medium">
+                      {numberToWordsLKR(grandTotal)}
+                    </p>
                   </div>
-                  {dueDate && (
-                    <div className="flex justify-end space-x-2 text-xs">
-                      <span className="text-slate-500 font-medium">Due Date:</span>
-                      <span className="font-bold text-slate-900 font-mono">{formatDate(dueDate)}</span>
+
+                  {specialNotes && (
+                    <div className="pt-0.5">
+                      <span className="text-[9px] font-bold text-slate-400 uppercase tracking-wider block">
+                        SPECIAL NOTE:
+                      </span>
+                      <p className="text-[9.5px] text-slate-800 font-semibold leading-snug">
+                        {specialNotes}
+                      </p>
                     </div>
                   )}
-                  {regNo && (
-                    <div className="flex justify-end space-x-2 text-xs">
-                      <span className="text-slate-500 font-medium">Reg. No:</span>
-                      <span className="font-bold text-slate-900 font-mono">{regNo}</span>
-                    </div>
-                  )}
-                  {yourRef && (
-                    <div className="flex justify-end space-x-2 text-xs">
-                      <span className="text-slate-500 font-medium">Your Ref:</span>
-                      <span className="font-bold text-slate-900">{yourRef}</span>
-                    </div>
-                  )}
-                  {product && (
-                    <div className="flex justify-end space-x-2 text-xs">
-                      <span className="text-slate-500 font-medium">Product:</span>
-                      <span className="font-bold text-slate-900">{product}</span>
-                    </div>
-                  )}
-                  {includeServicePeriod && servicePeriodStart && servicePeriodEnd && (
-                    <div className="flex justify-end space-x-2 text-xs">
-                      <span className="text-slate-500 font-medium">Service Period:</span>
-                      <span className="font-bold text-emerald-800 font-mono">
-                        {formatServicePeriod(servicePeriodStart, servicePeriodEnd)}
+
+                  {advancePercentage > 0 && (
+                    <div className="text-[9px] text-slate-700 pt-0.5">
+                      <span className="font-semibold text-slate-900">Advance Required: </span>
+                      <span>
+                        {advancePercentage}% ({formatLKR(grandTotal * (advancePercentage / 100))})
                       </span>
                     </div>
                   )}
                 </div>
 
-                <div className="pt-2 border-t border-slate-200">
-                  <span className="text-[11px] text-slate-500">Billing Entity: </span>
-                  <span className="text-xs font-bold text-navy-950">{entityName}</span>
-                </div>
-              </div>
-            </div>
-
-            {/* Line Items Table */}
-            <div className="mt-5 border border-slate-300 rounded-lg overflow-hidden">
-              <table className="w-full text-left text-sm border-collapse">
-                <thead>
-                  <tr className="bg-navy-950 text-white text-xs font-bold uppercase tracking-wider">
-                    <th className="py-2.5 px-3 border-r border-navy-900 w-32">Period</th>
-                    <th className="py-2.5 px-4 border-r border-navy-900">Description of Service</th>
-                    <th className="py-2.5 px-3 border-r border-navy-900 text-center w-16">Qty</th>
-                    <th className="py-2.5 px-3 border-r border-navy-900 text-right w-28">Price (Rs.)</th>
-                    <th className="py-2.5 px-4 text-right w-36">Amount (Rs.)</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-200 text-slate-800">
-                  {items.map((item, idx) => (
-                    <tr key={item.id || idx}>
-                      <td className="py-3 px-3 text-xs font-mono font-medium border-r border-slate-200 align-top">
-                        {item.servicePeriod || formatDate(invoiceDate)}
-                      </td>
-                      <td className="py-3 px-4 border-r border-slate-200 align-top">
-                        <ItemServiceCell item={item} mediaRefDisplay={invoice.mediaRefDisplay} />
-                      </td>
-                      <td className="py-3 px-3 text-xs text-center border-r border-slate-200 align-top font-mono">
-                        {item.quantity}
-                      </td>
-                      <td className="py-3 px-3 text-xs text-right border-r border-slate-200 align-top font-mono">
-                        {formatLKR(item.unitPrice)}
-                      </td>
-                      <td className="py-3 px-4 text-sm text-right font-bold text-navy-950 align-top font-mono">
-                        {formatLKR(item.lineTotal)}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-
-            {/* Calculations & Totals */}
-            <div className="mt-4 flex flex-col md:flex-row justify-between items-start gap-4">
-              <div className="w-full md:max-w-md text-xs text-slate-600 space-y-1.5">
-                <p className="font-semibold text-slate-900">Amount in Words:</p>
-                <p className="italic text-slate-700 bg-slate-50 p-2 rounded border border-slate-200 font-medium">
-                  {numberToWordsLKR(grandTotal)}
-                </p>
-                {specialNotes && (
-                  <p className="font-bold text-navy-900 mt-2">
-                    {specialNotes}
-                  </p>
-                )}
-                {advancePercentage > 0 && (
-                  <div className="p-2 bg-blue-50/70 border border-blue-200 rounded text-blue-950 font-medium text-xs">
-                    <span>Advance Required: </span>
-                    <span className="font-bold">{advancePercentage}% ({formatLKR(grandTotal * (advancePercentage / 100))})</span>
+                {/* Right: Clean Financial Summary (NO solid black boxes!) */}
+                <div className="w-64 space-y-1 text-right text-xs">
+                  <div className="flex justify-between text-slate-500 py-0.5">
+                    <span>
+                      {vatApplicable && showVatSeparately === false
+                        ? "Subtotal (Net Amount):"
+                        : "Total / Subtotal:"}
+                    </span>
+                    <span className="font-mono font-medium text-slate-800">
+                      {formatLKR(subtotal)}
+                    </span>
                   </div>
-                )}
-              </div>
 
-              <div className="w-full md:w-72 border border-slate-300 rounded-lg overflow-hidden text-sm bg-slate-50">
-                <div className="flex justify-between py-2 px-3 border-b border-slate-200 text-xs">
-                  <span className="text-slate-600 font-medium">
-                    {vatApplicable && showVatSeparately === false ? "Subtotal (Net Amount):" : "Total / Subtotal:"}
-                  </span>
-                  <span className="font-bold text-slate-900 font-mono">{formatLKR(subtotal)}</span>
-                </div>
-                {vatApplicable && showVatSeparately !== false && (
-                  <div className="flex justify-between py-2 px-3 border-b border-slate-200 text-xs bg-amber-50/60">
-                    <span className="text-slate-700 font-medium">VAT ({vatRate}%):</span>
-                    <span className="font-bold text-amber-900 font-mono">{formatLKR(vatAmount)}</span>
-                  </div>
-                )}
-                <div className="flex justify-between py-2.5 px-3 bg-navy-950 text-white font-bold">
-                  <span className="tracking-wide">
-                    {vatApplicable && showVatSeparately === false ? "Total (Including VAT):" : "Grand Total:"}
-                  </span>
-                  <span className="font-mono text-base">{formatLKR(grandTotal)}</span>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {/* Footer & Payment Instructions */}
-          <div className="mt-8 pt-4 border-t-2 border-slate-300 text-xs text-slate-700 space-y-3">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 items-end">
-              <div>
-                <p className="font-bold text-navy-950 mb-1 uppercase tracking-wide text-[11px]">Payment Instructions:</p>
-                <p className="font-medium text-slate-800 leading-relaxed">
-                  {finalPaymentInstructions}
-                </p>
-              </div>
-
-              <div>
-                <DigitalApprovalBlock
-                  invoice={invoice}
-                  format={effectiveFormat}
-                  isDraftPreview={isDraftPreview}
-                />
-              </div>
-            </div>
-
-            <div className="text-center text-[10px] text-slate-400 pt-3 border-t border-slate-200">
-              {entityFooter}
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* ===================== TEMPLATE 2: VAT TAX INVOICE ===================== */}
-      {templateKey === 'vat' && (
-        <div className="flex flex-col justify-between min-h-full">
-          <div>
-            {/* Header: Dynamic Entity and IRD VAT Registration */}
-            <div className="flex items-start justify-between border-b-2 border-navy-900 pb-5">
-              <div className="flex items-center space-x-4">
-                <EntityLogoOrBadge
-                  logoUrl={billingSnapshot?.logoUrl}
-                  entityName={entityName}
-                  prefix={entityPrefix}
-                  size="md"
-                />
-                <div>
-                  <h1 className="text-2xl font-black text-navy-950 tracking-tight uppercase">{entityName}</h1>
-                  {entityLegal && entityLegal !== entityName && (
-                    <p className="text-xs text-slate-600 font-bold uppercase">{entityLegal}</p>
-                  )}
-                  {billingSnapshot?.brn && (
-                    <p className="text-xs text-slate-500 font-mono">BRN: {billingSnapshot.brn}</p>
-                  )}
-                  <p className="text-xs text-slate-500">Commercial &amp; Professional Advertising Services</p>
-                </div>
-              </div>
-
-              <div className="text-right text-xs text-slate-700 leading-relaxed font-sans max-w-xs">
-                <p className="font-semibold text-slate-900 whitespace-pre-line">{billingSnapshot?.address}</p>
-                {billingSnapshot?.email && <p className="text-navy-900">{billingSnapshot.email}</p>}
-                {billingSnapshot?.phone && <p className="font-mono text-slate-800 mt-0.5">{billingSnapshot.phone}</p>}
-                <div className="mt-2 bg-navy-900 text-white px-2.5 py-1 rounded text-right inline-block">
-                  <span className="text-[10px] font-bold block text-slate-300">ISSUER VAT REG NO:</span>
-                  <span className="text-xs font-mono font-bold tracking-wider">
-                    {billingSnapshot?.vatNumber || "114094498-7000"}
-                  </span>
-                </div>
-              </div>
-            </div>
-
-            {/* Document Title Banner */}
-            <div className="mt-4 flex items-center justify-between bg-slate-100 px-4 py-2.5 rounded-lg border border-slate-200">
-              <div>
-                <h2 className="text-xl font-extrabold text-navy-950 tracking-wider uppercase">TAX INVOICE (VAT)</h2>
-                <span className="text-[11px] text-slate-500">Issued under Inland Revenue Department Guidelines</span>
-              </div>
-              <div className="text-right">
-                <span className="text-xs text-slate-600 block">TAX INVOICE NO:</span>
-                <span className="text-lg font-mono font-bold text-navy-950">{invoiceNumber}</span>
-              </div>
-            </div>
-
-            {/* Two-Column Client & Tax Info */}
-            <div className="mt-4 grid grid-cols-2 gap-4 border border-slate-300 rounded-lg p-4 text-sm bg-white">
-              <div>
-                <p className="text-[11px] font-bold uppercase text-slate-500 mb-1">CUSTOMER / ADVERTISER DETAILS</p>
-                <p className="font-extrabold text-base text-navy-950 uppercase">{clientSnapshot?.name}</p>
-                <p className="text-slate-700 text-xs whitespace-pre-line mt-1">{clientSnapshot?.address}</p>
-
-                <div className="mt-3 p-2 bg-amber-50/80 border border-amber-300 rounded">
-                  <span className="text-[10px] uppercase font-bold text-amber-900 block">CLIENT VAT REGISTRATION NO:</span>
-                  <span className="text-xs font-mono font-extrabold text-amber-950">
-                    {clientSnapshot?.vatNumber || "UNREGISTERED / NOT PROVIDED"}
-                  </span>
-                </div>
-              </div>
-
-              <div className="space-y-1.5 text-right flex flex-col justify-between">
-                <div className="space-y-1">
-                  <div className="flex justify-end space-x-2 text-xs">
-                    <span className="text-slate-500">Tax Invoice Date:</span>
-                    <span className="font-bold text-slate-900 font-mono">{formatDate(invoiceDate)}</span>
-                  </div>
-                  {dueDate && (
-                    <div className="flex justify-end space-x-2 text-xs">
-                      <span className="text-slate-500">Due Date:</span>
-                      <span className="font-bold text-slate-900 font-mono">{formatDate(dueDate)}</span>
-                    </div>
-                  )}
-                  {regNo && (
-                    <div className="flex justify-end space-x-2 text-xs">
-                      <span className="text-slate-500">Job Reference:</span>
-                      <span className="font-bold text-slate-900 font-mono">{regNo}</span>
-                    </div>
-                  )}
-                  {product && (
-                    <div className="flex justify-end space-x-2 text-xs">
-                      <span className="text-slate-500">Product / Brand:</span>
-                      <span className="font-bold text-slate-900">{product}</span>
-                    </div>
-                  )}
-                  {includeServicePeriod && servicePeriodStart && servicePeriodEnd && (
-                    <div className="flex justify-end space-x-2 text-xs">
-                      <span className="text-slate-500">Service Period:</span>
-                      <span className="font-bold text-emerald-800 font-mono">
-                        {formatServicePeriod(servicePeriodStart, servicePeriodEnd)}
+                  {vatApplicable && showVatSeparately !== false && (
+                    <div className="flex justify-between text-slate-500 py-0.5">
+                      <span>VAT ({vatRate}%):</span>
+                      <span className="font-mono font-semibold text-slate-800">
+                        {formatLKR(vatAmount)}
                       </span>
                     </div>
                   )}
-                </div>
 
-                <div className="pt-2 border-t border-slate-200">
-                  <span className="text-[11px] text-slate-500">Payment Payee: </span>
-                  <span className="text-xs font-bold text-navy-950">{billingSnapshot?.chequePayee || entityName}</span>
-                </div>
-              </div>
-            </div>
-
-            {/* Line Items Table with VAT Detail */}
-            <div className="mt-5 border border-slate-300 rounded-lg overflow-hidden">
-              <table className="w-full text-left text-sm border-collapse">
-                <thead>
-                  <tr className="bg-navy-950 text-white text-xs font-bold uppercase tracking-wider">
-                    <th className="py-2.5 px-3 border-r border-navy-900 w-32">Advertising Period</th>
-                    <th className="py-2.5 px-4 border-r border-navy-900">Description of Service</th>
-                    <th className="py-2.5 px-3 border-r border-navy-900 text-center w-16">Qty</th>
-                    <th className="py-2.5 px-3 border-r border-navy-900 text-right w-28">Net Price</th>
-                    <th className="py-2.5 px-4 text-right w-36">Net Amount (Rs.)</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-200 text-slate-800">
-                  {items.map((item, idx) => (
-                    <tr key={item.id || idx}>
-                      <td className="py-3 px-3 text-xs font-mono font-medium border-r border-slate-200 align-top">
-                        {item.servicePeriod || formatDate(invoiceDate)}
-                      </td>
-                      <td className="py-3 px-4 border-r border-slate-200 align-top">
-                        <ItemServiceCell item={item} mediaRefDisplay={invoice.mediaRefDisplay} />
-                      </td>
-                      <td className="py-3 px-3 text-xs text-center border-r border-slate-200 align-top font-mono">
-                        {item.quantity}
-                      </td>
-                      <td className="py-3 px-3 text-xs text-right border-r border-slate-200 align-top font-mono">
-                        {formatLKR(item.unitPrice)}
-                      </td>
-                      <td className="py-3 px-4 text-sm text-right font-bold text-navy-950 align-top font-mono">
-                        {formatLKR(item.lineTotal)}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-
-            {/* Tax Breakdown Summary */}
-            <div className="mt-4 flex flex-col md:flex-row justify-between items-start gap-4">
-              <div className="w-full md:max-w-md text-xs text-slate-600 space-y-1.5">
-                <p className="font-semibold text-slate-900">Total Tax Invoice Value in Words:</p>
-                <p className="italic text-slate-700 bg-slate-50 p-2 rounded border border-slate-200 font-medium">
-                  {numberToWordsLKR(grandTotal)}
-                </p>
-                {specialNotes && <p className="font-bold text-navy-900">{specialNotes}</p>}
-              </div>
-
-              <div className="w-full md:w-80 border border-slate-300 rounded-lg overflow-hidden text-sm bg-slate-50">
-                <div className="flex justify-between py-2 px-3 border-b border-slate-200 text-xs">
-                  <span className="text-slate-600">Subtotal (Net Value):</span>
-                  <span className="font-bold text-slate-900 font-mono">{formatLKR(subtotal)}</span>
-                </div>
-                {vatApplicable && showVatSeparately !== false && (
-                  <div className="flex justify-between py-2 px-3 border-b border-slate-200 text-xs bg-amber-50">
-                    <span className="text-amber-900 font-semibold">Value Added Tax ({vatRate}%):</span>
-                    <span className="font-bold text-amber-950 font-mono">{formatLKR(vatAmount)}</span>
+                  {/* Clean Separator */}
+                  <div className="border-t border-slate-300 my-1 pt-1.5 flex justify-between items-baseline">
+                    <span className="text-slate-500 font-semibold text-sm">Grand Total</span>
+                    <span className="font-mono font-extrabold text-slate-900 text-base tracking-tight">
+                      Rs. {formatLKR(grandTotal)}
+                    </span>
                   </div>
-                )}
-                <div className="flex justify-between py-2.5 px-3 bg-navy-950 text-white font-bold">
-                  <span className="tracking-wide">
-                    {vatApplicable && showVatSeparately === false ? "Total (Including VAT):" : "Gross Total (Rs.):"}
-                  </span>
-                  <span className="font-mono text-base">{formatLKR(grandTotal)}</span>
-                </div>
-              </div>
-            </div>
-          </div>
 
-          {/* Footer */}
-          <div className="mt-8 pt-4 border-t-2 border-slate-300 text-xs text-slate-700 space-y-3">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 items-end">
-              <div>
-                <p className="font-bold text-navy-950 mb-1 uppercase tracking-wide text-[11px]">Payment Terms &amp; Instructions:</p>
-                <p className="font-medium text-slate-800 leading-relaxed">
-                  {finalPaymentInstructions}
-                </p>
-              </div>
-
-              <div>
-                <DigitalApprovalBlock
-                  invoice={invoice}
-                  format={effectiveFormat}
-                  isDraftPreview={isDraftPreview}
-                />
-              </div>
-            </div>
-
-            <div className="text-center text-[10px] text-slate-400 pt-3 border-t border-slate-200">
-              {entityFooter}
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* ===================== TEMPLATE 3: SPONSORSHIP INVOICE (RADIO / BROADCAST) ===================== */}
-      {templateKey === 'sponsorship' && (
-        <div className="flex flex-col justify-between min-h-full">
-          <div>
-            {/* Header: Radio & Broadcast branding */}
-            <div className="flex items-start justify-between border-b-2 border-navy-950 pb-5">
-              <div className="flex items-center space-x-4">
-                <EntityLogoOrBadge
-                  logoUrl={billingSnapshot?.logoUrl}
-                  entityName={entityName}
-                  prefix={entityPrefix}
-                  size="md"
-                />
-                <div>
-                  <h1 className="text-2xl font-black text-navy-950 tracking-tight uppercase">{entityName}</h1>
-                  <div className="inline-flex items-center px-2 py-0.5 mt-1 rounded bg-navy-100 text-navy-900 text-xs font-bold uppercase">
-                    Broadcast &amp; Media Sponsorship Division
-                  </div>
-                  {billingSnapshot?.vatNumber && (
-                    <p className="text-[11px] text-emerald-800 font-mono font-semibold mt-0.5">
-                      VAT: {billingSnapshot.vatNumber}
-                    </p>
+                  {/* Payment tracking balance if partial payment exists */}
+                  {invoice.totalPaid > 0 && (
+                    <div className="pt-1 border-t border-slate-100 text-[10px] space-y-0.5">
+                      <div className="flex justify-between text-emerald-800">
+                        <span>Paid to Date:</span>
+                        <span className="font-mono font-bold">{formatLKR(invoice.totalPaid)}</span>
+                      </div>
+                      <div className="flex justify-between text-slate-900 font-bold">
+                        <span>Balance Due:</span>
+                        <span className="font-mono">{formatLKR(invoice.outstandingBalance)}</span>
+                      </div>
+                    </div>
                   )}
                 </div>
               </div>
+            )}
+          </div>
 
-              <div className="text-right text-xs text-slate-700 leading-relaxed max-w-xs">
-                <p className="font-semibold text-slate-900 whitespace-pre-line">{billingSnapshot?.address}</p>
-                {billingSnapshot?.email && <p className="text-navy-900">{billingSnapshot.email}</p>}
-                {billingSnapshot?.phone && <p className="font-mono text-slate-800 mt-1">{billingSnapshot.phone}</p>}
-              </div>
-            </div>
-
-            {/* Document Title Banner */}
-            <div className="mt-4 flex items-center justify-between border-b border-slate-300 pb-3">
-              <div>
-                <h2 className="text-xl font-black text-navy-950 tracking-wider uppercase">MEDIA SPONSORSHIP INVOICE</h2>
-                <span className="text-xs text-slate-500">Radio, Television &amp; Digital Airtime Placement</span>
-              </div>
-              <div className="text-right">
-                <span className="text-xs text-slate-500 block">INVOICE NO:</span>
-                <span className="text-xl font-mono font-bold text-navy-900">{invoiceNumber}</span>
-              </div>
-            </div>
-
-            {/* Client and Program Slot Grid */}
-            <div className="mt-4 grid grid-cols-2 gap-4 border border-slate-300 rounded-lg p-4 bg-slate-50/60 text-sm">
-              <div>
-                <p className="text-[11px] font-bold uppercase tracking-wider text-slate-500 mb-1">
-                  SPONSOR / ADVERTISER:
-                </p>
-                <p className="font-bold text-base text-navy-950 uppercase">{clientSnapshot?.name}</p>
-                <p className="text-slate-700 text-xs whitespace-pre-line mt-1">{clientSnapshot?.address}</p>
-                {clientSnapshot?.vatNumber && (
-                  <p className="text-xs font-mono font-semibold text-slate-800 mt-1">
-                    VAT: {clientSnapshot.vatNumber}
+          {/* ===================== PAGE BOTTOM (FOOTER) ===================== */}
+          <div className="mt-auto pt-3">
+            {/* Payment Details & Signature Block (Rendered on Last Page) */}
+            {page.isLastPage ? (
+              <div className="border-t border-slate-200 pt-3 grid grid-cols-1 md:grid-cols-2 gap-4 items-end">
+                {/* Left: Payment Instructions & Bank Details */}
+                <div className="text-slate-600 space-y-1">
+                  <p className="font-bold text-slate-900 text-[10px] uppercase tracking-wider">
+                    PAYMENT INSTRUCTIONS &amp; BANK DETAILS
                   </p>
-                )}
-              </div>
-
-              <div className="text-right space-y-1 text-xs">
-                <div className="flex justify-end space-x-2">
-                  <span className="text-slate-500">Invoice Date:</span>
-                  <span className="font-bold text-slate-900 font-mono">{formatDate(invoiceDate)}</span>
+                  <p
+                    className="text-slate-600 leading-relaxed font-normal"
+                    style={{ fontSize: `${typo.footerSizePt}pt` }}
+                  >
+                    {finalPaymentInstructions}
+                  </p>
                 </div>
-                {regNo && (
-                  <div className="flex justify-end space-x-2">
-                    <span className="text-slate-500">Broadcast Ref:</span>
-                    <span className="font-bold text-navy-900 font-mono">{regNo}</span>
-                  </div>
-                )}
-                {includeServicePeriod && servicePeriodStart && servicePeriodEnd ? (
-                  <div className="flex justify-end space-x-2">
-                    <span className="text-slate-500">Service Period:</span>
-                    <span className="font-bold text-emerald-800 font-mono">
-                      {formatServicePeriod(servicePeriodStart, servicePeriodEnd)}
-                    </span>
-                  </div>
-                ) : invoice.servicePeriodText ? (
-                  <div className="flex justify-end space-x-2">
-                    <span className="text-slate-500">Campaign Period:</span>
-                    <span className="font-bold text-emerald-800 font-mono">{invoice.servicePeriodText}</span>
-                  </div>
-                ) : null}
-                <div className="flex justify-end space-x-2 pt-2 border-t border-slate-200">
-                  <span className="text-slate-500">Billing Entity:</span>
-                  <span className="font-bold text-navy-950">{entityName}</span>
-                </div>
-              </div>
-            </div>
 
-            {/* Line Items Table */}
-            <div className="mt-5 border border-slate-300 rounded-lg overflow-hidden">
-              <table className="w-full text-left text-sm border-collapse">
-                <thead>
-                  <tr className="bg-navy-950 text-white text-xs font-bold uppercase tracking-wider">
-                    <th className="py-2.5 px-3 border-r border-navy-900 w-36">Broadcast Period</th>
-                    <th className="py-2.5 px-4 border-r border-navy-900">Sponsorship Package &amp; Station Details</th>
-                    <th className="py-2.5 px-3 border-r border-navy-900 text-center w-16">Qty</th>
-                    <th className="py-2.5 px-4 text-right w-40">Total Amount (Rs.)</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-200 text-slate-800">
-                  {items.map((item, idx) => (
-                    <tr key={item.id || idx}>
-                      <td className="py-3 px-3 text-xs font-mono font-medium border-r border-slate-200 align-top">
-                        {item.servicePeriod || invoice.servicePeriodText || formatDate(invoiceDate)}
-                      </td>
-                      <td className="py-3 px-4 border-r border-slate-200 align-top">
-                        <ItemServiceCell item={item} mediaRefDisplay={invoice.mediaRefDisplay} />
-                      </td>
-                      <td className="py-3 px-3 text-xs text-center border-r border-slate-200 align-top font-mono">
-                        {item.quantity}
-                      </td>
-                      <td className="py-3 px-4 text-sm text-right font-bold text-navy-950 align-top font-mono">
-                        {formatLKR(item.lineTotal)}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-
-            {/* Totals */}
-            <div className="mt-4 flex flex-col md:flex-row justify-between items-start gap-4">
-              <div className="w-full md:max-w-md text-xs text-slate-600 space-y-1.5">
-                <p className="font-semibold text-slate-900">Amount in Words:</p>
-                <p className="italic text-slate-700 bg-slate-50 p-2 rounded border border-slate-200 font-medium">
-                  {numberToWordsLKR(grandTotal)}
-                </p>
-                {specialNotes && <p className="font-bold text-navy-900">{specialNotes}</p>}
-              </div>
-
-              <div className="w-full md:w-72 border border-slate-300 rounded-lg overflow-hidden text-sm bg-slate-50">
-                <div className="flex justify-between py-2 px-3 border-b border-slate-200 text-xs">
-                  <span className="text-slate-600">Package Subtotal:</span>
-                  <span className="font-bold text-slate-900 font-mono">{formatLKR(subtotal)}</span>
-                </div>
-                {vatApplicable && showVatSeparately !== false && (
-                  <div className="flex justify-between py-2 px-3 border-b border-slate-200 text-xs bg-amber-50">
-                    <span className="text-slate-700">VAT ({vatRate}%):</span>
-                    <span className="font-bold text-amber-900 font-mono">{formatLKR(vatAmount)}</span>
-                  </div>
-                )}
-                <div className="flex justify-between py-2.5 px-3 bg-navy-950 text-white font-bold">
-                  <span>{vatApplicable && showVatSeparately === false ? "Total (Including VAT):" : "Grand Total:"}</span>
-                  <span className="font-mono text-base">{formatLKR(grandTotal)}</span>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {/* Footer */}
-          <div className="mt-8 pt-4 border-t-2 border-slate-300 text-xs text-slate-700 space-y-3">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 items-end">
-              <div>
-                <p className="font-bold text-navy-950 mb-1 uppercase tracking-wide text-[11px]">Payment Details:</p>
-                <p className="font-medium text-slate-800 leading-relaxed">
-                  {finalPaymentInstructions}
-                </p>
-              </div>
-
-              <div>
-                <DigitalApprovalBlock
-                  invoice={invoice}
-                  format={effectiveFormat}
-                  isDraftPreview={isDraftPreview}
-                />
-              </div>
-            </div>
-
-            <div className="text-center text-[10px] text-slate-400 pt-3 border-t border-slate-200">
-              {entityFooter}
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* ===================== TEMPLATE 4: CUSTOM COMMERCIAL INVOICE ===================== */}
-      {templateKey === 'custom' && (
-        <div className="flex flex-col justify-between min-h-full">
-          <div>
-            {/* Header: Modern Corporate */}
-            <div className="flex items-start justify-between border-b-2 border-slate-800 pb-6">
-              <div className="flex items-center space-x-4">
-                <EntityLogoOrBadge
-                  logoUrl={billingSnapshot?.logoUrl}
-                  entityName={entityName}
-                  prefix={entityPrefix}
-                  size="md"
-                />
+                {/* Right: Digital Approval or Blank Signature Block */}
                 <div>
-                  <h1 className="text-2xl font-black text-navy-950 tracking-tight uppercase">{entityName}</h1>
-                  <p className="text-xs text-slate-500 font-medium">Smart Advertising, Production &amp; Commercial Growth</p>
+                  <DigitalApprovalBlock
+                    invoice={invoice}
+                    format={effectiveFormat}
+                    isDraftPreview={isDraftPreview}
+                  />
                 </div>
               </div>
+            ) : null}
 
-              <div className="text-right">
-                <span className="text-3xl font-extrabold text-navy-950 uppercase tracking-tight block">INVOICE</span>
-                <span className="text-sm font-mono font-bold text-slate-600">#{invoiceNumber}</span>
-              </div>
-            </div>
-
-            {/* Corporate Info Cards */}
-            <div className="mt-6 grid grid-cols-3 gap-4 text-xs">
-              <div className="bg-slate-50 p-3 rounded-lg border border-slate-200">
-                <span className="text-[10px] font-bold uppercase text-slate-400 block mb-1">ISSUED BY</span>
-                <p className="font-bold text-navy-950">{entityName}</p>
-                <p className="text-slate-600 mt-0.5">{billingSnapshot?.address}</p>
-                <p className="text-slate-600 mt-1 font-mono">{billingSnapshot?.phone}</p>
-                {billingSnapshot?.vatNumber && <p className="font-mono text-slate-700">VAT: {billingSnapshot.vatNumber}</p>}
-                {billingSnapshot?.brn && <p className="font-mono text-slate-700">BRN: {billingSnapshot.brn}</p>}
-              </div>
-
-              <div className="bg-slate-50 p-3 rounded-lg border border-slate-200">
-                <span className="text-[10px] font-bold uppercase text-slate-400 block mb-1">BILLED TO</span>
-                <p className="font-bold text-navy-950 uppercase">{clientSnapshot?.name}</p>
-                <p className="text-slate-600 mt-0.5">{clientSnapshot?.address}</p>
-                {clientSnapshot?.vatNumber && <p className="font-mono text-slate-700 mt-1">VAT: {clientSnapshot.vatNumber}</p>}
-                {clientSnapshot?.email && <p className="text-slate-600">{clientSnapshot.email}</p>}
-              </div>
-
-              <div className="bg-slate-50 p-3 rounded-lg border border-slate-200 space-y-1">
-                <span className="text-[10px] font-bold uppercase text-slate-400 block mb-1">INVOICE DETAILS</span>
-                <div className="flex justify-between">
-                  <span className="text-slate-500">Date:</span>
-                  <span className="font-bold font-mono">{formatDate(invoiceDate)}</span>
-                </div>
-                {dueDate && (
-                  <div className="flex justify-between">
-                    <span className="text-slate-500">Due Date:</span>
-                    <span className="font-bold font-mono">{formatDate(dueDate)}</span>
-                  </div>
-                )}
-                {regNo && (
-                  <div className="flex justify-between">
-                    <span className="text-slate-500">Ref No:</span>
-                    <span className="font-bold font-mono">{regNo}</span>
-                  </div>
-                )}
-                {yourRef && (
-                  <div className="flex justify-between">
-                    <span className="text-slate-500">Client Ref:</span>
-                    <span className="font-bold">{yourRef}</span>
-                  </div>
-                )}
-                {includeServicePeriod && servicePeriodStart && servicePeriodEnd && (
-                  <div className="flex justify-between pt-1 border-t border-slate-200">
-                    <span className="text-slate-500">Service Period:</span>
-                    <span className="font-bold text-emerald-800 font-mono">
-                      {formatServicePeriod(servicePeriodStart, servicePeriodEnd)}
-                    </span>
-                  </div>
-                )}
-              </div>
-            </div>
-
-            {/* Line Items Table */}
-            <div className="mt-6 border border-slate-200 rounded-lg overflow-hidden">
-              <table className="w-full text-left text-sm border-collapse">
-                <thead>
-                  <tr className="bg-slate-900 text-white text-xs font-semibold uppercase">
-                    <th className="py-2.5 px-3 w-10 text-center">#</th>
-                    <th className="py-2.5 px-3">Service / Task</th>
-                    <th className="py-2.5 px-3 w-32">Period</th>
-                    <th className="py-2.5 px-3 text-center w-16">Qty</th>
-                    <th className="py-2.5 px-3 text-right w-28">Rate</th>
-                    <th className="py-2.5 px-4 text-right w-36">Total</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-200">
-                  {items.map((item, idx) => (
-                    <tr key={item.id || idx}>
-                      <td className="py-3 px-3 text-xs text-center text-slate-400 font-mono">{idx + 1}</td>
-                      <td className="py-3 px-3">
-                        <ItemServiceCell item={item} mediaRefDisplay={invoice.mediaRefDisplay} />
-                      </td>
-                      <td className="py-3 px-3 text-xs font-mono text-slate-600">{item.servicePeriod || '-'}</td>
-                      <td className="py-3 px-3 text-xs text-center font-mono">{item.quantity}</td>
-                      <td className="py-3 px-3 text-xs text-right font-mono">{formatLKR(item.unitPrice)}</td>
-                      <td className="py-3 px-4 text-sm text-right font-bold text-navy-950 font-mono">
-                        {formatLKR(item.lineTotal)}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-
-            {/* Summary */}
-            <div className="mt-4 flex flex-col md:flex-row justify-between items-start gap-4">
-              <div className="w-full md:max-w-md text-xs text-slate-600 space-y-1">
-                <p className="font-semibold text-slate-800">Total in Words:</p>
-                <p className="italic text-slate-700 bg-slate-50 p-2 rounded border border-slate-200 font-medium">
-                  {numberToWordsLKR(grandTotal)}
-                </p>
-                {specialNotes && <p className="font-medium text-navy-900 mt-1">{specialNotes}</p>}
-              </div>
-
-              <div className="w-full md:w-72 border border-slate-200 rounded-lg overflow-hidden text-sm bg-slate-50">
-                <div className="flex justify-between py-2 px-3 border-b border-slate-200 text-xs">
-                  <span className="text-slate-600">Subtotal:</span>
-                  <span className="font-bold font-mono">{formatLKR(subtotal)}</span>
-                </div>
-                {vatApplicable && showVatSeparately !== false && (
-                  <div className="flex justify-between py-2 px-3 border-b border-slate-200 text-xs">
-                    <span className="text-slate-600">VAT ({vatRate}%):</span>
-                    <span className="font-bold font-mono">{formatLKR(vatAmount)}</span>
-                  </div>
-                )}
-                <div className="flex justify-between py-2.5 px-3 bg-slate-900 text-white font-bold">
-                  <span>{vatApplicable && showVatSeparately === false ? "Total (Including VAT):" : "Grand Total:"}</span>
-                  <span className="font-mono text-base">{formatLKR(grandTotal)}</span>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {/* Footer */}
-          <div className="mt-8 pt-4 border-t border-slate-200 text-xs text-slate-600">
-            <div className="flex justify-between items-end">
-              <div className="max-w-md">
-                <p className="font-bold text-navy-950 mb-0.5">Payment Instructions:</p>
-                <p>{finalPaymentInstructions}</p>
-              </div>
-              <div>
-                <DigitalApprovalBlock
-                  invoice={invoice}
-                  format={effectiveFormat}
-                  isDraftPreview={isDraftPreview}
-                />
-              </div>
-            </div>
-
-            <div className="text-center text-[10px] text-slate-400 pt-3 border-t border-slate-100 mt-3">
-              {entityFooter}
+            {/* Bottom Tagline & Page Numbering (Rendered on Every Page) */}
+            <div className="border-t border-slate-100 pt-2.5 mt-2 flex items-center justify-between text-[9px] text-slate-400">
+              <span className="truncate max-w-[450px]">{entityFooter}</span>
+              {typo.showPageNumbers && (
+                <span className="font-mono font-semibold text-slate-500 shrink-0">
+                  Page {page.pageNumber} of {page.totalPages}
+                </span>
+              )}
             </div>
           </div>
         </div>
-      )}
+      ))}
     </div>
   );
 }

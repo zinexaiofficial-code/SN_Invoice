@@ -438,8 +438,8 @@ export default function InvoiceDetailPage() {
           </div>
         </div>
 
-        {/* Hidden off-screen print DOM for Option B download */}
-        <div className="hidden">
+        {/* Off-screen print DOM for Option B download */}
+        <div className="fixed -left-[9999px] top-0 opacity-0 pointer-events-none">
           <div id="printable-invoice-element-print">
             <InvoiceTemplateRenderer
               invoice={{ ...invoice, templateKey }}

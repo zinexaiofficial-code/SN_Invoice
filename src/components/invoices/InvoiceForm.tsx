@@ -367,6 +367,7 @@ export function InvoiceForm({ initialInvoice }: InvoiceFormProps) {
       secondaryColor: entity?.secondaryColor,
       footerText: entity?.footerText,
       prefix: entity?.prefix || "SN",
+      pdfLayout: entity?.defaultPdfLayout,
     };
 
     return {
@@ -376,6 +377,7 @@ export function InvoiceForm({ initialInvoice }: InvoiceFormProps) {
       billingEntityId: selectedBillingEntityId,
       templateKey,
       signatureFormat: selectedSignatureFormat,
+      pdfLayout: initialInvoice?.pdfLayout || entity?.defaultPdfLayout,
       status: newStatus,
       invoiceDate,
       dueDate: dueDate || undefined,
@@ -1776,13 +1778,13 @@ export function InvoiceForm({ initialInvoice }: InvoiceFormProps) {
             </div>
           </div>
 
-          {/* Hidden containers for PDF rasterization */}
+          {/* Off-screen containers for high-DPI PDF rasterization */}
           {issuedInvoice && (
-            <div className="hidden">
-              <div id="printable-invoice-modal" className="w-[210mm] min-h-[297mm] p-10 bg-white">
+            <div className="fixed -left-[9999px] top-0 opacity-0 pointer-events-none">
+              <div id="printable-invoice-modal">
                 <InvoiceTemplateRenderer invoice={issuedInvoice} format="digital" printMode={true} />
               </div>
-              <div id="printable-invoice-modal-print" className="w-[210mm] min-h-[297mm] p-10 bg-white">
+              <div id="printable-invoice-modal-print">
                 <InvoiceTemplateRenderer invoice={issuedInvoice} format="print" printMode={true} />
               </div>
             </div>

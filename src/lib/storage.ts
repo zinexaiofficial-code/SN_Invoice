@@ -30,6 +30,7 @@ import {
 } from '@/types';
 import { generateVerificationToken, computeCanonicalInvoiceHash } from '@/lib/crypto';
 import { formatColomboDateTime, formatDate } from '@/lib/utils';
+import { RECOMMENDED_TYPOGRAPHY } from '@/lib/pdfTypography';
 
 // Default Seed Data based on official SN Advertising documents and Excel files
 export const INITIAL_BILLING_ENTITIES: BillingEntity[] = [
@@ -87,6 +88,7 @@ export const INITIAL_BILLING_ENTITIES: BillingEntity[] = [
     defaultPaymentTerms: '7 Days',
     defaultDueDays: 7,
     defaultInvoiceTemplate: 'standard',
+    defaultPdfLayout: RECOMMENDED_TYPOGRAPHY.balanced,
     status: 'active',
     isActive: true,
     createdAt: '2026-08-01T00:00:00Z',
@@ -148,6 +150,7 @@ export const INITIAL_BILLING_ENTITIES: BillingEntity[] = [
     defaultPaymentTerms: '14 Days',
     defaultDueDays: 14,
     defaultInvoiceTemplate: 'vat',
+    defaultPdfLayout: RECOMMENDED_TYPOGRAPHY.comfortable,
     status: 'active',
     isActive: true,
     createdAt: '2026-08-01T00:00:00Z',

@@ -34,7 +34,6 @@ export function DigitalApprovalBlock({
 }: DigitalApprovalBlockProps) {
   const billing: Partial<BillingSnapshot> = invoice?.billingSnapshot || {};
   const approval: Partial<InvoiceApproval> = invoice?.approval || {};
-  const isSettingsPreview = Boolean(previewSettings);
 
   const signatoryName =
     previewSettings?.signatoryName ??
@@ -88,37 +87,31 @@ export function DigitalApprovalBlock({
     invoice?.signatureFormat ||
     "digital";
 
-  // Name splitting for large typography on the left
-  const nameParts = (signatoryName || "Authorized Signatory").trim().split(/\s+/);
-  const firstName = nameParts[0] || "";
-  const lastName = nameParts.slice(1).join(" ");
-
   // =========================================================================
   // OPTION B: BLANK SIGNATURE / HARD COPY PRINT PDF (MANUAL SIGNATURE & STAMP)
   // =========================================================================
   if (activeFormat === "print" || activeFormat === "blank") {
     return (
       <div className="flex flex-col items-end text-right not-prose">
-        <div className="w-full max-w-[340px] border border-slate-900 bg-white text-left font-sans shadow-xs">
+        <div className="w-full max-w-[320px] border border-slate-300 rounded-lg bg-white text-left font-sans shadow-2xs overflow-hidden">
           {/* Blank Signing Area (Plenty of white space for manual signature & stamp) */}
-          <div className="h-20 p-2.5 flex flex-col justify-between relative bg-white select-none">
-            <span className="text-[9px] font-mono text-slate-300 uppercase tracking-widest">
-              Manual Signature
+          <div className="h-16 p-2.5 flex flex-col justify-between relative bg-white select-none">
+            <span className="text-[8.5px] font-mono text-slate-400 uppercase tracking-wider">
+              Authorized Signature &amp; Stamp
             </span>
-            <div className="flex items-center justify-between">
-              <span className="text-[8.5px] text-slate-300 font-mono">
-                Date: ____________________
-              </span>
-              <span className="text-[8.5px] text-slate-300 font-mono">
-                Official Stamp
-              </span>
+            <div className="flex items-center justify-between text-[8px] text-slate-400 font-mono">
+              <span>Date: ________________</span>
+              <span>Official Seal / Stamp</span>
             </div>
           </div>
 
           {/* Bottom Designation Row */}
-          <div className="border-t border-slate-900 py-1.5 px-3 text-center bg-white">
-            <span className="text-xs font-semibold text-slate-900 tracking-normal block">
+          <div className="border-t border-slate-200 py-1.5 px-3 bg-slate-50 text-center">
+            <span className="text-[11px] font-bold text-slate-800 tracking-normal block">
               {signatoryDesignation || "Authorized Signatory"}
+            </span>
+            <span className="text-[9.5px] text-slate-500 block leading-tight">
+              {entityName}
             </span>
           </div>
         </div>
@@ -127,7 +120,7 @@ export function DigitalApprovalBlock({
   }
 
   // =========================================================================
-  // OPTION A: DIGITAL SIGNATURE (VERIFIED ADOBE ACROBAT FORMAT)
+  // OPTION A: DIGITAL APPROVAL (PROFESSIONAL APPLICATION-LEVEL VERIFIED FORMAT)
   // =========================================================================
   const verificationToken = invoice?.verificationToken || "sn-v-sample-preview-ref";
   const verificationUrl = getVerificationUrl(verificationToken);
@@ -138,84 +131,78 @@ export function DigitalApprovalBlock({
     invoice?.createdAt ||
     new Date().toISOString();
 
+  const colomboTime = formatColomboDateTime(approvalDateRaw);
   const adobeDate = formatAdobeSignatureDate(approvalDateRaw);
+
+  const nameParts = (signatoryName || "Authorized Signatory").trim().split(/\s+/);
+  const firstName = nameParts[0] || "";
+  const lastName = nameParts.slice(1).join(" ");
 
   return (
     <div className="flex flex-col items-end text-right not-prose">
-      <div className="w-full max-w-[370px] border border-slate-900 bg-white text-left font-sans shadow-xs">
+      <div className="w-full max-w-[340px] border border-slate-300 rounded-lg bg-white text-left font-sans shadow-2xs overflow-hidden">
         {/* Main Signature Content Area */}
-        <div className="p-3 relative flex items-center justify-between gap-3 overflow-hidden bg-white">
-          {/* Left Column: Large Name (or Uploaded Artwork) */}
-          <div className="shrink-0 max-w-[130px] z-10">
+        <div className="p-2.5 relative flex items-center justify-between gap-2.5 overflow-hidden bg-white">
+          {/* Left Column: Signatory Artwork or Typography */}
+          <div className="shrink-0 max-w-[115px] z-10">
             {displaySignatureImage && signatureImageUrl ? (
-              <div className="w-28 h-10 relative mb-1">
+              <div className="w-24 h-9 relative mb-1">
                 <Image
                   src={signatureImageUrl}
                   alt={`${signatoryName} Signature`}
                   fill
                   className="object-contain object-left"
-                  sizes="112px"
+                  sizes="96px"
                 />
               </div>
             ) : null}
 
-            {/* Large Bold Signatory Name */}
-            <div className="font-sans font-bold text-slate-900 text-[18px] leading-[1.15] tracking-tight">
+            {/* Bold Signatory Name */}
+            <div className="font-sans font-extrabold text-navy-950 text-[15px] leading-[1.15] tracking-tight">
               <div>{firstName}</div>
               {lastName ? <div>{lastName}</div> : null}
             </div>
+            <div className="text-[9.5px] font-semibold text-slate-500 mt-0.5 leading-tight">
+              {signatoryDesignation}
+            </div>
           </div>
 
-          {/* Right Column: Adobe Watermark Ribbon + Signature Lines */}
-          <div className="relative flex-1 pl-1 z-10">
-            {/* Adobe Acrobat Stylized Loop Ribbon Watermark */}
-            <svg
-              viewBox="0 0 100 100"
-              className="absolute -right-2 top-1/2 -translate-y-1/2 w-20 h-20 pointer-events-none opacity-20 text-rose-600"
-              fill="none"
-              xmlns="http://www.w3.org/2000/svg"
-              aria-hidden="true"
-            >
-              <path
-                d="M52 14 C66 14, 78 28, 74 46 C70 62, 50 80, 32 94 C24 100, 18 102, 22 104 C28 106, 40 98, 56 82 C76 62, 94 38, 90 22 C86 8, 66 6, 50 16 C36 26, 30 48, 38 70 C46 86, 60 100, 76 106"
-                stroke="#e11d48"
-                strokeWidth="3.2"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              />
-              <circle cx="54" cy="34" r="8" stroke="#e11d48" strokeWidth="2" strokeDasharray="3 3" />
-            </svg>
-
-            {/* Standard PKCS#7 / Adobe Digital Signature Typography */}
-            <div className="space-y-0.5 text-[9.5px] leading-[1.3] text-slate-900">
-              <p className="font-normal">
-                Digitally signed by <span className="font-semibold">{signatoryName}</span>
+          {/* Right Column: Digital Approval Details + Verification Link */}
+          <div className="relative flex-1 pl-1 z-10 border-l border-slate-200">
+            <div className="space-y-0.5 text-[8.5px] leading-[1.25] text-slate-800">
+              <p className="font-semibold text-emerald-800 flex items-center space-x-1">
+                <span>✓</span>
+                <span>Digitally Approved via SN INVOICE</span>
               </p>
-              <p className="break-words text-slate-700">
-                <span className="font-semibold text-slate-900">DN: </span>
-                cn={signatoryName}, o={entityName}, ou=Invoice Billing, email={signatoryEmail}, c=LK
+              <p className="text-slate-600 truncate">
+                <span className="font-semibold text-slate-800">Org: </span>
+                {entityName}
               </p>
-              <p className="font-mono text-[9px] text-slate-800">
-                <span className="font-sans font-semibold text-slate-900">Date: </span>
-                {adobeDate}
+              <p className="text-slate-600">
+                <span className="font-semibold text-slate-800">Signatory: </span>
+                {signatoryName}
+              </p>
+              <p className="font-mono text-[8px] text-slate-600">
+                <span className="font-sans font-semibold text-slate-800">Date: </span>
+                {colomboTime.dateStr} {colomboTime.timeStr}
               </p>
 
-              {/* Online Verification Hyperlink & QR code */}
+              {/* Online Verification Hyperlink & Optional QR Code */}
               {verificationEnabled && (
-                <div className="pt-1 flex items-center justify-between gap-1">
+                <div className="pt-1 flex items-center justify-between gap-1 border-t border-slate-100 mt-1">
                   <a
                     href={verificationUrl}
                     target="_blank"
                     rel="noopener noreferrer"
                     data-verification-link="true"
-                    className="verification-hyperlink text-[8.5px] font-bold text-emerald-800 hover:text-emerald-950 underline decoration-emerald-600 decoration-1 underline-offset-1 inline-flex items-center space-x-1"
+                    className="verification-hyperlink text-[8px] font-bold text-emerald-800 hover:text-emerald-950 underline decoration-emerald-600 decoration-1 underline-offset-1 inline-flex items-center space-x-0.5"
                   >
-                    <span>Verify Document Authenticity ↗</span>
+                    <span>Verify Authenticity ↗</span>
                   </a>
 
                   {showQrCode && (
-                    <div className="bg-white p-0.5 rounded border border-slate-300 shrink-0 shadow-2xs">
-                      <QRCodeDisplay value={verificationUrl} size={32} />
+                    <div className="bg-white p-0.5 rounded border border-slate-200 shrink-0 shadow-2xs">
+                      <QRCodeDisplay value={verificationUrl} size={28} />
                     </div>
                   )}
                 </div>
@@ -225,9 +212,9 @@ export function DigitalApprovalBlock({
         </div>
 
         {/* Bottom Designation Row */}
-        <div className="border-t border-slate-900 py-1.5 px-3 text-center bg-white">
-          <span className="text-xs font-semibold text-slate-900 tracking-normal block">
-            {signatoryDesignation || "Authorized Signatory"}
+        <div className="border-t border-slate-200 py-1 px-2.5 bg-slate-50/70 text-center">
+          <span className="text-[9.5px] font-semibold text-slate-700 tracking-normal block">
+            {entityName} — Official Digital Authorization
           </span>
         </div>
       </div>

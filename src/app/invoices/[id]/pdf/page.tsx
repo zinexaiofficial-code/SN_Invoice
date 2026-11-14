@@ -2,14 +2,15 @@
 
 import React, { useEffect, useState } from "react";
 import { useParams, useSearchParams } from "next/navigation";
-import { Invoice, InvoiceTemplateKey, InvoicePdfFormat } from "@/types";
+import Link from "next/link";
+import { Invoice, InvoiceTemplateKey, InvoicePdfFormat, PdfTypographySettings } from "@/types";
 import { storage } from "@/lib/storage";
 import { downloadInvoicePdf } from "@/lib/pdf";
 import { getVerificationUrl } from "@/lib/crypto";
+import { resolveTypography } from "@/lib/pdfTypography";
 import { InvoiceTemplateRenderer } from "@/components/invoices/InvoiceTemplateRenderer";
-import { Button } from "@/components/ui/button";
-import { Printer, Download, ArrowLeft, ShieldCheck, CheckCircle2 } from "lucide-react";
-import Link from "next/link";
+import { PdfLayoutControls } from "@/components/invoices/PdfLayoutControls";
+import { ArrowLeft } from "lucide-react";
 
 export default function InvoicePrintPDFPage() {
   const params = useParams();
@@ -20,26 +21,49 @@ export default function InvoicePrintPDFPage() {
 
   const [invoice, setInvoice] = useState<Invoice | null>(null);
   const [format, setFormat] = useState<InvoicePdfFormat>(formatParam || "digital");
+  const [templateKey, setTemplateKey] = useState<InvoiceTemplateKey>(templateParam || "standard");
+  const [typography, setTypography] = useState<PdfTypographySettings>(() =>
+    resolveTypography()
+  );
+  const [zoomScale, setZoomScale] = useState<number>(1);
   const [isDownloading, setIsDownloading] = useState(false);
 
   useEffect(() => {
     const inv = storage.getInvoiceById(invoiceId);
     if (inv) {
+      setInvoice(inv);
       if (templateParam) {
-        setInvoice({ ...inv, templateKey: templateParam });
-      } else {
-        setInvoice(inv);
+        setTemplateKey(templateParam);
+      } else if (inv.templateKey) {
+        setTemplateKey(inv.templateKey);
       }
+
       if (formatParam) {
         setFormat(formatParam);
       } else if (inv.status === "draft") {
         setFormat("print");
       }
+
+      // Initial typography from invoice or billing entity
+      const initialTypo = resolveTypography(
+        inv.pdfLayout || inv.billingSnapshot?.pdfLayout,
+        inv.items,
+        inv.vatApplicable,
+        Boolean(inv.specialNotes)
+      );
+      setTypography(initialTypo);
     }
   }, [invoiceId, templateParam, formatParam]);
 
   if (!invoice) {
-    return <div className="p-8 text-center text-slate-500">Loading invoice PDF...</div>;
+    return (
+      <div className="min-h-screen flex items-center justify-center p-8 text-slate-500 font-sans">
+        <div className="text-center space-y-2">
+          <div className="w-8 h-8 border-3 border-slate-900 border-t-transparent rounded-full animate-spin mx-auto"></div>
+          <p className="text-xs font-semibold">Loading A4 Invoice PDF Document...</p>
+        </div>
+      </div>
+    );
   }
 
   const handlePrint = () => {
@@ -51,8 +75,8 @@ export default function InvoicePrintPDFPage() {
     try {
       const filename =
         format === "digital"
-          ? `${invoice.invoiceNumber}-Digital.pdf`
-          : `${invoice.invoiceNumber}-Print.pdf`;
+          ? `${invoice.billingSnapshot?.prefix || "SN"}-${invoice.invoiceNumber}-Digital.pdf`
+          : `${invoice.billingSnapshot?.prefix || "SN"}-${invoice.invoiceNumber}-Print.pdf`;
 
       const verificationUrl =
         format === "digital"
@@ -65,8 +89,8 @@ export default function InvoicePrintPDFPage() {
         verificationUrl,
       });
     } catch (err) {
-      console.error(err);
-      alert("Failed to export PDF file. You can use Print / Save as PDF instead.");
+      console.error("PDF download failed:", err);
+      alert("Failed to export PDF file. You can use browser Print -> Save as PDF instead.");
     } finally {
       setIsDownloading(false);
     }
@@ -74,87 +98,75 @@ export default function InvoicePrintPDFPage() {
 
   return (
     <div className="min-h-screen bg-slate-100 print:bg-white p-4 md:p-8 font-sans">
-      {/* Top Floating Action Bar (Hidden when printed) */}
-      <div className="max-w-[210mm] mx-auto mb-6 flex flex-col sm:flex-row items-center justify-between gap-3 print:hidden bg-white p-3 rounded-2xl shadow-sm border border-slate-200">
+      {/* Back Link */}
+      <div className="max-w-[210mm] mx-auto mb-3 print:hidden">
         <Link
           href={`/invoices/${invoice.id}`}
-          className="inline-flex items-center space-x-1.5 text-xs text-slate-600 hover:text-navy-950 font-bold"
+          className="inline-flex items-center space-x-1.5 text-xs text-slate-600 hover:text-slate-900 font-bold py-1 px-2 rounded hover:bg-white transition-colors"
         >
           <ArrowLeft className="w-4 h-4" />
           <span>Back to Invoice #{invoice.invoiceNumber}</span>
         </Link>
-
-        {/* Format Selector Toggle */}
-        <div className="flex items-center bg-slate-100 p-1 rounded-xl border border-slate-200 text-xs font-bold">
-          <button
-            type="button"
-            onClick={() => setFormat("digital")}
-            className={`px-3 py-1.5 rounded-lg flex items-center space-x-1.5 transition-all ${
-              format === "digital"
-                ? "bg-navy-950 text-white shadow-xs"
-                : "text-slate-600 hover:text-navy-950"
-            }`}
-          >
-            <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" />
-            <span>Digital Signature (Adobe)</span>
-          </button>
-
-          <button
-            type="button"
-            onClick={() => setFormat("print")}
-            className={`px-3 py-1.5 rounded-lg flex items-center space-x-1.5 transition-all ${
-              format === "print" || format === "blank"
-                ? "bg-navy-950 text-white shadow-xs"
-                : "text-slate-600 hover:text-navy-950"
-            }`}
-          >
-            <Printer className="w-3.5 h-3.5" />
-            <span>Blank Signature (Hard Copy)</span>
-          </button>
-        </div>
-
-        {/* Actions */}
-        <div className="flex items-center space-x-2">
-          <Button
-            onClick={handleDownload}
-            disabled={isDownloading || (format === "digital" && invoice.status === "draft")}
-            className="bg-navy-950 text-white hover:bg-navy-900 text-xs font-bold flex items-center space-x-1.5 shadow-sm"
-          >
-            <Download className="w-3.5 h-3.5 text-emerald-400" />
-            <span>{isDownloading ? "Exporting..." : `Download ${format === "digital" ? "Digital" : "Print"} PDF`}</span>
-          </Button>
-
-          <Button
-            variant="outline"
-            onClick={handlePrint}
-            className="text-xs font-bold flex items-center space-x-1.5"
-          >
-            <Printer className="w-3.5 h-3.5 text-slate-700" />
-            <span>Print View</span>
-          </Button>
-        </div>
       </div>
+
+      {/* Interactive PDF Layout Settings & Action Controls */}
+      <PdfLayoutControls
+        format={format}
+        onFormatChange={setFormat}
+        templateKey={templateKey}
+        onTemplateChange={setTemplateKey}
+        typography={typography}
+        onTypographyChange={setTypography}
+        zoomScale={zoomScale}
+        onZoomChange={setZoomScale}
+        onDownload={handleDownload}
+        onPrint={handlePrint}
+        isDownloading={isDownloading}
+        downloadDisabled={format === "digital" && invoice.status === "draft"}
+      />
 
       {/* A4 Printable Document Container */}
       <div className="flex justify-center print:m-0 print:p-0">
         <InvoiceTemplateRenderer
-          invoice={invoice}
+          invoice={{ ...invoice, templateKey }}
           format={format}
           printMode={true}
+          typographySettings={typography}
+          zoomScale={zoomScale}
         />
       </div>
 
-      {/* Print Specific CSS */}
+      {/* Strict ISO A4 Print Stylesheet */}
       <style jsx global>{`
         @media print {
           body {
             background: white !important;
             margin: 0 !important;
             padding: 0 !important;
+            -webkit-print-color-adjust: exact !important;
+            print-color-adjust: exact !important;
           }
           @page {
             size: A4 portrait;
-            margin: 10mm 10mm 10mm 10mm;
+            margin: 0;
+          }
+          .a4-page-sheet {
+            page-break-after: always !important;
+            break-after: page !important;
+            box-shadow: none !important;
+            margin: 0 !important;
+            border: none !important;
+            border-radius: 0 !important;
+            width: 210mm !important;
+            height: 297mm !important;
+            min-height: 297mm !important;
+            max-height: 297mm !important;
+            transform: none !important;
+          }
+          .print\\:hidden,
+          header,
+          nav {
+            display: none !important;
           }
         }
       `}</style>

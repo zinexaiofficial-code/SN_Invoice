@@ -2,8 +2,9 @@
 
 import React, { useState, useEffect } from "react";
 import Image from "next/image";
-import { BillingEntity, InvoiceTemplateKey, InvoicePdfFormat } from "@/types";
+import { BillingEntity, InvoiceTemplateKey, InvoicePdfFormat, LayoutDensity, FontSizePreset } from "@/types";
 import { storage } from "@/lib/storage";
+import { RECOMMENDED_TYPOGRAPHY } from "@/lib/pdfTypography";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -78,6 +79,8 @@ export function EntityModal({ isOpen, onClose, entityToEdit, onSaved }: EntityMo
   const [defaultPaymentTerms, setDefaultPaymentTerms] = useState("Immediate");
   const [defaultDueDays, setDefaultDueDays] = useState<number>(7);
   const [defaultInvoiceTemplate, setDefaultInvoiceTemplate] = useState<InvoiceTemplateKey>("standard");
+  const [defaultPdfDensity, setDefaultPdfDensity] = useState<LayoutDensity>("balanced");
+  const [defaultPdfMode, setDefaultPdfMode] = useState<FontSizePreset>("smart");
   const [signatoryName, setSignatoryName] = useState("");
   const [signatoryDesignation, setSignatoryDesignation] = useState("");
   const [invoiceNotes, setInvoiceNotes] = useState("");
@@ -130,6 +133,8 @@ export function EntityModal({ isOpen, onClose, entityToEdit, onSaved }: EntityMo
       setDefaultPaymentTerms(entityToEdit.defaultPaymentTerms || "Immediate");
       setDefaultDueDays(entityToEdit.defaultDueDays || 7);
       setDefaultInvoiceTemplate(entityToEdit.defaultInvoiceTemplate || (entityToEdit.isVatRegistered ? "vat" : "standard"));
+      setDefaultPdfDensity(entityToEdit.defaultPdfLayout?.density || (entityToEdit.prefix === "HRP" ? "comfortable" : "balanced"));
+      setDefaultPdfMode(entityToEdit.defaultPdfLayout?.mode || "smart");
       setSignatoryName(entityToEdit.signatoryName || (entityToEdit.prefix === "SN" ? "Shafil Surantha" : "Authorized Officer"));
       setSignatoryDesignation(entityToEdit.signatoryDesignation || (entityToEdit.prefix === "SN" ? "Authorized Signatory" : "Director of Operations"));
       setSignatoryEmail(entityToEdit.signatoryEmail || entityToEdit.email || (entityToEdit.prefix === "SN" ? "snadvertising@hotmail.com" : "info@haripara.lk"));
@@ -305,6 +310,11 @@ export function EntityModal({ isOpen, onClose, entityToEdit, onSaved }: EntityMo
       defaultPaymentTerms,
       defaultDueDays: Number(defaultDueDays) || 7,
       defaultInvoiceTemplate,
+      defaultPdfLayout: {
+        ...RECOMMENDED_TYPOGRAPHY[defaultPdfDensity],
+        mode: defaultPdfMode,
+        density: defaultPdfDensity,
+      },
       signatoryName: signatoryName.trim() || "Authorized Signatory",
       signatoryDesignation: signatoryDesignation.trim() || `For ${displayName.trim() || trimmedLegal}`,
       signatoryEmail: signatoryEmail.trim() || email.trim() || undefined,
@@ -777,6 +787,39 @@ export function EntityModal({ isOpen, onClose, entityToEdit, onSaved }: EntityMo
                     <option value="sponsorship">Sponsorship Invoice (Radio/Media)</option>
                     <option value="custom">Custom Commercial Invoice</option>
                   </select>
+                </div>
+              </div>
+
+              {/* Default A4 PDF Layout & Spacing Configuration */}
+              <div className="p-3.5 bg-slate-50 border border-slate-200 rounded-xl space-y-3">
+                <span className="text-xs font-bold text-slate-900 block">Default A4 PDF Layout Settings</span>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div className="space-y-1.5">
+                    <Label className="text-xs font-semibold text-slate-700">Default Layout Density</Label>
+                    <select
+                      value={defaultPdfDensity}
+                      onChange={(e) => setDefaultPdfDensity(e.target.value as LayoutDensity)}
+                      className="w-full h-9 rounded-lg border border-slate-300 bg-white px-3 text-xs font-semibold"
+                    >
+                      <option value="comfortable">Comfortable (Generous spacing &amp; 10.5-11pt text)</option>
+                      <option value="balanced">Balanced (Standard corporate &amp; 10pt text)</option>
+                      <option value="compact">Compact (Tighter padding for dense advertising line items)</option>
+                    </select>
+                    <span className="text-[10px] text-slate-400">Controls row spacing and typography density for this entity</span>
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <Label className="text-xs font-semibold text-slate-700">Font Sizing Engine</Label>
+                    <select
+                      value={defaultPdfMode}
+                      onChange={(e) => setDefaultPdfMode(e.target.value as FontSizePreset)}
+                      className="w-full h-9 rounded-lg border border-slate-300 bg-white px-3 text-xs font-semibold"
+                    >
+                      <option value="smart">Smart Auto Fit (Automatically adapts without shrinking below 9pt)</option>
+                      <option value="manual">Manual Font Sizes (Follows entity configured scale)</option>
+                    </select>
+                    <span className="text-[10px] text-slate-400">Prevents text distortion and maintains A4 readability</span>
+                  </div>
                 </div>
               </div>
 

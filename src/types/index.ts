@@ -82,6 +82,22 @@ export interface VerificationResult {
   reissueDetails?: string;
 }
 
+export type FontSizePreset = 'smart' | 'manual';
+export type LayoutDensity = 'comfortable' | 'balanced' | 'compact';
+
+export interface PdfTypographySettings {
+  mode: FontSizePreset; // 'smart' | 'manual'
+  density: LayoutDensity; // 'comfortable' | 'balanced' | 'compact'
+  titleSizePt: number; // 14–22 pt (default 18)
+  headerSizePt: number; // 11–18 pt (default 13)
+  sectionHeadingPt: number; // 10–12 pt (default 10.5)
+  tableHeaderPt: number; // 8–12 pt (default 9.5)
+  bodySizePt: number; // 8–13 pt (default 10)
+  descriptionSizePt: number; // 8–12 pt (default 9)
+  footerSizePt: number; // 8–11 pt (default 9)
+  showPageNumbers?: boolean; // default true
+}
+
 export interface BillingEntity {
   id: string;
   name: string; // Legal registered business name
@@ -140,6 +156,7 @@ export interface BillingEntity {
   showQrCode?: boolean;
   signatureImageUrl?: string;
   signatureSettings?: EntitySignatureSettings;
+  defaultPdfLayout?: PdfTypographySettings;
 
   status: 'active' | 'archived';
   isActive: boolean;
@@ -340,6 +357,7 @@ export interface BillingSnapshot {
   secondaryColor?: string;
   footerText?: string;
   prefix?: string;
+  pdfLayout?: PdfTypographySettings;
 }
 
 export interface Invoice {
@@ -405,6 +423,7 @@ export interface Invoice {
   verificationToken?: string;
   verificationStatus?: 'valid' | 'voided' | 'superseded' | 'revoked';
   canonicalHash?: string;
+  pdfLayout?: PdfTypographySettings;
 
   pdfUrl?: string;
   createdBy?: string;
