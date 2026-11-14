@@ -119,7 +119,7 @@ export async function initializeDatabase(): Promise<boolean> {
     await client.query(`
       CREATE TABLE IF NOT EXISTS clients (
         id TEXT PRIMARY KEY,
-        client_code TEXT UNIQUE,
+        client_code TEXT,
         company_name TEXT NOT NULL,
         contact_person TEXT,
         email TEXT,
@@ -137,6 +137,7 @@ export async function initializeDatabase(): Promise<boolean> {
         created_at TIMESTAMPTZ DEFAULT NOW(),
         updated_at TIMESTAMPTZ DEFAULT NOW()
       );
+      ALTER TABLE clients DROP CONSTRAINT IF EXISTS clients_client_code_key;
     `);
 
     // 3. Services

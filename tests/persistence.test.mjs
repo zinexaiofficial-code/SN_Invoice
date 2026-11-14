@@ -93,7 +93,7 @@ async function runTests() {
     const testClient = {
       id: testClientId,
       name: `Ceylon Horizon Motors (Pvt) Ltd`,
-      code: `CHM-001`,
+      code: `CHM-${Date.now().toString().slice(-4)}`,
       address: `45 Kandy Road, Kadawatha`,
       contactPerson: `Nimal Perera`,
       mobile: `+94 77 123 4567`,
