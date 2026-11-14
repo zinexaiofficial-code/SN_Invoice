@@ -17,3 +17,4 @@ COMMENT ON COLUMN public.invoices.service_period_start IS 'Service period start 
 COMMENT ON COLUMN public.invoices.service_period_end IS 'Service period end date';
 COMMENT ON COLUMN public.invoices.show_vat_separately IS 'When TRUE (MODE A): show VAT as separate line. When FALSE (MODE B): Total (Including VAT) without separate line';
 COMMENT ON COLUMN public.invoices.taxable_base IS 'Taxable base subtotal on which VAT was computed';
+

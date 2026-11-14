@@ -2,12 +2,15 @@
 
 import React from "react";
 import Image from "next/image";
-import { Invoice } from "@/types";
+import { Invoice, InvoiceItem, InvoicePdfFormat } from "@/types";
 import { formatLKR, formatDate, numberToWordsLKR, formatServicePeriod } from "@/lib/utils";
+import { DigitalApprovalBlock } from "@/components/invoices/DigitalApprovalBlock";
 
 interface InvoiceTemplateRendererProps {
   invoice: Invoice;
   printMode?: boolean;
+  format?: InvoicePdfFormat;
+  isDraftPreview?: boolean;
 }
 
 function EntityLogoOrBadge({
@@ -53,7 +56,70 @@ function EntityLogoOrBadge({
   );
 }
 
-export function InvoiceTemplateRenderer({ invoice, printMode = false }: InvoiceTemplateRendererProps) {
+function ItemServiceCell({
+  item,
+  mediaRefDisplay = "separate"
+}: {
+  item: InvoiceItem;
+  mediaRefDisplay?: "separate" | "inline";
+}) {
+  const hasMediaChannel = Boolean(item.mediaChannel && item.mediaChannel.trim());
+  const hasRefNumber = Boolean(item.referenceNumber && item.referenceNumber.trim());
+  const hasCategory = Boolean(item.category && item.category !== "Other Services");
+
+  return (
+    <div>
+      {/* Title Line: Service Name + Media Channel */}
+      <div className="font-bold text-navy-950 text-sm flex flex-wrap items-center gap-1.5">
+        <span>{item.serviceName}</span>
+        {hasMediaChannel && (
+          <span className="text-emerald-800 font-bold bg-emerald-50 border border-emerald-200/90 px-1.5 py-0.5 rounded text-[11px] inline-flex items-center space-x-1">
+            <span>—</span>
+            <span>{item.mediaChannel}</span>
+          </span>
+        )}
+      </div>
+
+      {/* Media Reference Line (RO Number, Booking Ref, Spot ID) */}
+      {hasRefNumber && (
+        <div className="mt-1 flex flex-wrap items-center gap-1.5">
+          <span className="inline-flex items-center space-x-1 font-mono text-[11px] font-bold text-slate-800 bg-slate-100 border border-slate-300 px-2 py-0.5 rounded">
+            <span className="text-slate-500 uppercase">{item.referenceType || "RO No"}:</span>
+            <span className="text-navy-950">{item.referenceNumber}</span>
+          </span>
+          {hasCategory && (
+            <span className="text-[10px] font-semibold text-slate-500 uppercase tracking-wide">
+              ({item.category})
+            </span>
+          )}
+        </div>
+      )}
+
+      {/* If category present but no ref number */}
+      {!hasRefNumber && hasCategory && (
+        <div className="mt-0.5">
+          <span className="text-[10px] font-semibold text-slate-500 uppercase tracking-wide">
+            ({item.category})
+          </span>
+        </div>
+      )}
+
+      {/* Work Description / Campaign Details */}
+      {item.description && (
+        <div className="text-xs text-slate-600 whitespace-pre-line mt-1 leading-relaxed">
+          {item.description}
+        </div>
+      )}
+    </div>
+  );
+}
+
+export function InvoiceTemplateRenderer({
+  invoice,
+  printMode = false,
+  format = "digital",
+  isDraftPreview = false,
+}: InvoiceTemplateRendererProps) {
   const {
     invoiceNumber,
     invoiceDate,
@@ -85,22 +151,22 @@ export function InvoiceTemplateRenderer({ invoice, printMode = false }: InvoiceT
   const entityFooter = billingSnapshot?.footerText || `Thank you for partnering with ${entityName} — Sri Lanka`;
   const signatoryName = billingSnapshot?.signatoryName || "Authorized Signatory";
   const signatoryTitle = billingSnapshot?.signatoryDesignation || `For ${entityName}`;
+  const effectiveFormat: InvoicePdfFormat = format || invoice?.signatureFormat || "digital";
 
   // Default payment instruction fallback if entity didn't set one
-  const defaultBankText = billingSnapshot?.bankName 
-    ? `Bank transfers to ${billingSnapshot?.accountName || entityName}, A/C: ${billingSnapshot?.accountNumber || ''}, ${billingSnapshot?.bankName} – ${billingSnapshot?.branch || ''}.` 
+  const defaultBankText = billingSnapshot?.bankName
+    ? `Bank transfers to ${billingSnapshot?.accountName || entityName}, A/C: ${billingSnapshot?.accountNumber || ''}, ${billingSnapshot?.bankName} – ${billingSnapshot?.branch || ''}.`
     : '';
-  const finalPaymentInstructions = paymentInstructions || billingSnapshot?.paymentInstructions || 
+  const finalPaymentInstructions = paymentInstructions || billingSnapshot?.paymentInstructions ||
     `Cheques should be drawn in favour of ${billingSnapshot?.chequePayee || entityName} and crossed "ACCOUNT PAYEE" only. ${defaultBankText}`;
 
   return (
     <div
       id="printable-invoice"
-      className={`bg-white text-slate-900 mx-auto select-text font-sans ${
-        printMode
+      className={`bg-white text-slate-900 mx-auto select-text font-sans ${printMode
           ? "w-[210mm] min-h-[297mm] p-10 print:p-8 print:m-0"
           : "w-full max-w-4xl p-6 md:p-10 shadow-lg rounded-xl border border-slate-200"
-      }`}
+        }`}
       style={{ boxSizing: "border-box" }}
     >
       {/* ===================== TEMPLATE 1: STANDARD ADVERTISING (EXCEL EXACT) ===================== */}
@@ -255,8 +321,7 @@ export function InvoiceTemplateRenderer({ invoice, printMode = false }: InvoiceT
                         {item.servicePeriod || formatDate(invoiceDate)}
                       </td>
                       <td className="py-3 px-4 border-r border-slate-200 align-top">
-                        <div className="font-bold text-navy-950">{item.serviceName}</div>
-                        <div className="text-xs text-slate-600 whitespace-pre-line mt-0.5">{item.description}</div>
+                        <ItemServiceCell item={item} mediaRefDisplay={invoice.mediaRefDisplay} />
                       </td>
                       <td className="py-3 px-3 text-xs text-center border-r border-slate-200 align-top font-mono">
                         {item.quantity}
@@ -326,23 +391,12 @@ export function InvoiceTemplateRenderer({ invoice, printMode = false }: InvoiceT
                 </p>
               </div>
 
-              <div className="text-right flex flex-col items-end">
-                {billingSnapshot?.signatureUrl ? (
-                  <div className="w-36 h-14 relative mb-1">
-                    <Image
-                      src={billingSnapshot.signatureUrl}
-                      alt="Authorized Signature"
-                      fill
-                      className="object-contain"
-                    />
-                  </div>
-                ) : (
-                  <div className="w-44 border-b border-slate-400 pb-1 mb-1 text-center">
-                    <span className="font-script text-lg text-navy-900 italic font-semibold">Authorized</span>
-                  </div>
-                )}
-                <p className="font-bold text-navy-950 text-xs uppercase tracking-wider">{signatoryName}</p>
-                <p className="text-[10px] text-slate-500">{signatoryTitle}</p>
+              <div>
+                <DigitalApprovalBlock
+                  invoice={invoice}
+                  format={effectiveFormat}
+                  isDraftPreview={isDraftPreview}
+                />
               </div>
             </div>
 
@@ -409,7 +463,7 @@ export function InvoiceTemplateRenderer({ invoice, printMode = false }: InvoiceT
                 <p className="text-[11px] font-bold uppercase text-slate-500 mb-1">CUSTOMER / ADVERTISER DETAILS</p>
                 <p className="font-extrabold text-base text-navy-950 uppercase">{clientSnapshot?.name}</p>
                 <p className="text-slate-700 text-xs whitespace-pre-line mt-1">{clientSnapshot?.address}</p>
-                
+
                 <div className="mt-3 p-2 bg-amber-50/80 border border-amber-300 rounded">
                   <span className="text-[10px] uppercase font-bold text-amber-900 block">CLIENT VAT REGISTRATION NO:</span>
                   <span className="text-xs font-mono font-extrabold text-amber-950">
@@ -478,8 +532,7 @@ export function InvoiceTemplateRenderer({ invoice, printMode = false }: InvoiceT
                         {item.servicePeriod || formatDate(invoiceDate)}
                       </td>
                       <td className="py-3 px-4 border-r border-slate-200 align-top">
-                        <div className="font-bold text-navy-950">{item.serviceName}</div>
-                        <div className="text-xs text-slate-600 whitespace-pre-line mt-0.5">{item.description}</div>
+                        <ItemServiceCell item={item} mediaRefDisplay={invoice.mediaRefDisplay} />
                       </td>
                       <td className="py-3 px-3 text-xs text-center border-r border-slate-200 align-top font-mono">
                         {item.quantity}
@@ -537,23 +590,12 @@ export function InvoiceTemplateRenderer({ invoice, printMode = false }: InvoiceT
                 </p>
               </div>
 
-              <div className="text-right flex flex-col items-end">
-                {billingSnapshot?.signatureUrl ? (
-                  <div className="w-36 h-14 relative mb-1">
-                    <Image
-                      src={billingSnapshot.signatureUrl}
-                      alt="Authorized Signature"
-                      fill
-                      className="object-contain"
-                    />
-                  </div>
-                ) : (
-                  <div className="w-44 border-b border-slate-400 pb-1 mb-1 text-center">
-                    <span className="font-script text-lg text-navy-900 italic font-semibold">Authorized</span>
-                  </div>
-                )}
-                <p className="font-bold text-navy-950 text-xs uppercase tracking-wider">{signatoryName}</p>
-                <p className="text-[10px] text-slate-500">{signatoryTitle}</p>
+              <div>
+                <DigitalApprovalBlock
+                  invoice={invoice}
+                  format={effectiveFormat}
+                  isDraftPreview={isDraftPreview}
+                />
               </div>
             </div>
 
@@ -673,8 +715,7 @@ export function InvoiceTemplateRenderer({ invoice, printMode = false }: InvoiceT
                         {item.servicePeriod || invoice.servicePeriodText || formatDate(invoiceDate)}
                       </td>
                       <td className="py-3 px-4 border-r border-slate-200 align-top">
-                        <div className="font-bold text-navy-950 uppercase">{item.serviceName}</div>
-                        <div className="text-xs text-slate-600 whitespace-pre-line mt-0.5 font-medium">{item.description}</div>
+                        <ItemServiceCell item={item} mediaRefDisplay={invoice.mediaRefDisplay} />
                       </td>
                       <td className="py-3 px-3 text-xs text-center border-r border-slate-200 align-top font-mono">
                         {item.quantity}
@@ -727,23 +768,12 @@ export function InvoiceTemplateRenderer({ invoice, printMode = false }: InvoiceT
                 </p>
               </div>
 
-              <div className="text-right flex flex-col items-end">
-                {billingSnapshot?.signatureUrl ? (
-                  <div className="w-36 h-14 relative mb-1">
-                    <Image
-                      src={billingSnapshot.signatureUrl}
-                      alt="Authorized Signature"
-                      fill
-                      className="object-contain"
-                    />
-                  </div>
-                ) : (
-                  <div className="w-44 border-b border-slate-400 pb-1 mb-1 text-center">
-                    <span className="font-script text-lg text-navy-900 italic font-semibold">Authorized</span>
-                  </div>
-                )}
-                <p className="font-bold text-navy-950 text-xs uppercase tracking-wider">{signatoryName}</p>
-                <p className="text-[10px] text-slate-500">{signatoryTitle}</p>
+              <div>
+                <DigitalApprovalBlock
+                  invoice={invoice}
+                  format={effectiveFormat}
+                  isDraftPreview={isDraftPreview}
+                />
               </div>
             </div>
 
@@ -851,8 +881,7 @@ export function InvoiceTemplateRenderer({ invoice, printMode = false }: InvoiceT
                     <tr key={item.id || idx}>
                       <td className="py-3 px-3 text-xs text-center text-slate-400 font-mono">{idx + 1}</td>
                       <td className="py-3 px-3">
-                        <div className="font-bold text-navy-950">{item.serviceName}</div>
-                        <div className="text-xs text-slate-500 mt-0.5">{item.description}</div>
+                        <ItemServiceCell item={item} mediaRefDisplay={invoice.mediaRefDisplay} />
                       </td>
                       <td className="py-3 px-3 text-xs font-mono text-slate-600">{item.servicePeriod || '-'}</td>
                       <td className="py-3 px-3 text-xs text-center font-mono">{item.quantity}</td>
@@ -902,23 +931,12 @@ export function InvoiceTemplateRenderer({ invoice, printMode = false }: InvoiceT
                 <p className="font-bold text-navy-950 mb-0.5">Payment Instructions:</p>
                 <p>{finalPaymentInstructions}</p>
               </div>
-              <div className="text-right">
-                {billingSnapshot?.signatureUrl ? (
-                  <div className="w-36 h-12 relative mb-1 ml-auto">
-                    <Image
-                      src={billingSnapshot.signatureUrl}
-                      alt="Authorized Signature"
-                      fill
-                      className="object-contain"
-                    />
-                  </div>
-                ) : (
-                  <div className="w-40 border-b border-slate-400 pb-1 mb-1 text-center font-script text-base text-navy-950">
-                    Authorized Sign
-                  </div>
-                )}
-                <p className="font-bold text-navy-950 uppercase text-[10px]">{signatoryName}</p>
-                <p className="text-[9px] text-slate-500">{signatoryTitle}</p>
+              <div>
+                <DigitalApprovalBlock
+                  invoice={invoice}
+                  format={effectiveFormat}
+                  isDraftPreview={isDraftPreview}
+                />
               </div>
             </div>
 

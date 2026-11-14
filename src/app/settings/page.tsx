@@ -29,7 +29,8 @@ import {
   ExternalLink,
   CreditCard,
   Mail,
-  Phone
+  Phone,
+  ShieldCheck
 } from "lucide-react";
 
 export default function SettingsPage() {
@@ -267,6 +268,18 @@ export default function SettingsPage() {
                         <p className="font-mono text-slate-700">
                           Account: {ent.accountNumber || "—"} ({ent.accountName || ent.name})
                         </p>
+                      </div>
+
+                      {/* Authorized Digital Approval Info */}
+                      <div className="p-2.5 bg-emerald-50/50 rounded-xl border border-emerald-100 flex items-center justify-between text-[11px]">
+                        <span className="font-semibold text-emerald-900 flex items-center space-x-1.5">
+                          <ShieldCheck className="w-3.5 h-3.5 text-emerald-600" />
+                          <span>Digital Signatory:</span>
+                        </span>
+                        <span className="font-bold text-navy-950 truncate max-w-[200px]">
+                          {ent.signatoryName || "Shafil Surantha"}
+                          <span className="font-normal text-slate-500 ml-1">({ent.signatoryDesignation || "Authorized Signatory"})</span>
+                        </span>
                       </div>
 
                       {/* Footer Actions */}

@@ -18,6 +18,70 @@ export interface EntityBankAccount {
   isDefault: boolean;
 }
 
+export interface EntitySignatureSettings {
+  id?: string;
+  entityId: string;
+  signatoryName: string;
+  signatoryDesignation: string;
+  signatoryEmail?: string;
+  signatureImageUrl?: string;
+  signatureEnabled: boolean;
+  displaySignatureImage: boolean;
+  verificationEnabled: boolean;
+  showQrCode: boolean;
+  updatedAt?: string;
+}
+
+export interface InvoiceApproval {
+  id: string;
+  invoiceId: string;
+  entityId: string;
+  approvedByUserId?: string;
+  approvedByUserName?: string;
+  signatoryNameSnapshot: string;
+  signatoryDesignationSnapshot: string;
+  signatoryEmailSnapshot?: string;
+  approvalTimestamp: string;
+  approvalTimezone: string;
+  invoiceVersion: number;
+  status: 'approved' | 'voided' | 'superseded';
+  approvalAction: string;
+  createdAt: string;
+}
+
+export interface InvoiceVerification {
+  id: string;
+  invoiceId: string;
+  verificationToken: string;
+  verificationTokenHash: string;
+  verificationStatus: 'valid' | 'voided' | 'superseded' | 'revoked';
+  issuedSnapshotHash: string;
+  createdAt: string;
+  revokedAt?: string;
+}
+
+export type InvoicePdfFormat = 'digital' | 'print' | 'blank';
+
+export interface VerificationResult {
+  success: boolean;
+  status: 'valid' | 'voided' | 'superseded' | 'invalid';
+  invoiceNumber?: string;
+  issuingCompany?: string;
+  issuingLegalName?: string;
+  signatoryName?: string;
+  signatoryDesignation?: string;
+  signatoryEmail?: string;
+  invoiceIssueDate?: string;
+  approvalDate?: string;
+  approvalTime?: string;
+  approvalTimestamp?: string;
+  verificationToken?: string;
+  canonicalHash?: string;
+  hashMatch?: boolean;
+  message: string;
+  reissueDetails?: string;
+}
+
 export interface BillingEntity {
   id: string;
   name: string; // Legal registered business name
@@ -69,6 +133,13 @@ export interface BillingEntity {
   invoiceNotes?: string;
   signatoryName?: string;
   signatoryDesignation?: string;
+  signatoryEmail?: string;
+  signatureEnabled?: boolean;
+  displaySignatureImage?: boolean;
+  verificationEnabled?: boolean;
+  showQrCode?: boolean;
+  signatureImageUrl?: string;
+  signatureSettings?: EntitySignatureSettings;
 
   status: 'active' | 'archived';
   isActive: boolean;
@@ -98,9 +169,52 @@ export interface Client {
   updatedAt: string;
 }
 
+export type ServiceCategory =
+  | 'Radio / FM Advertising'
+  | 'Television Advertising'
+  | 'Digital Advertising'
+  | 'Sponsorship'
+  | 'Media Production'
+  | 'Other Services';
+
+export const SERVICE_CATEGORIES: ServiceCategory[] = [
+  'Radio / FM Advertising',
+  'Television Advertising',
+  'Digital Advertising',
+  'Sponsorship',
+  'Media Production',
+  'Other Services',
+];
+
+export type AdvertisingReferenceType =
+  | 'RO Number'
+  | 'Booking Reference'
+  | 'Spot ID'
+  | 'Campaign Reference'
+  | 'Other / Custom';
+
+export const REFERENCE_TYPES: AdvertisingReferenceType[] = [
+  'RO Number',
+  'Booking Reference',
+  'Spot ID',
+  'Campaign Reference',
+  'Other / Custom',
+];
+
+export interface MediaChannel {
+  id: string;
+  name: string;
+  type?: 'radio' | 'tv' | 'digital' | 'other';
+  isCustom?: boolean;
+  createdAt?: string;
+}
+
 export interface Service {
   id: string;
   name: string;
+  category?: ServiceCategory;
+  defaultMediaChannel?: string;
+  defaultReferenceType?: AdvertisingReferenceType;
   defaultDescription?: string;
   defaultPrice: number;
   vatApplicable: boolean;
@@ -141,6 +255,10 @@ export interface InvoiceItem {
   invoiceId?: string;
   serviceId?: string;
   serviceName: string;
+  category?: ServiceCategory;
+  mediaChannel?: string;
+  referenceType?: AdvertisingReferenceType;
+  referenceNumber?: string;
   description: string;
   servicePeriod?: string;
   quantity: number;
@@ -210,8 +328,14 @@ export interface BillingSnapshot {
   paymentInstructions?: string;
   logoUrl?: string;
   signatureUrl?: string;
+  signatureImageUrl?: string;
   signatoryName?: string;
   signatoryDesignation?: string;
+  signatoryEmail?: string;
+  signatureEnabled?: boolean;
+  displaySignatureImage?: boolean;
+  verificationEnabled?: boolean;
+  showQrCode?: boolean;
   primaryColor?: string;
   secondaryColor?: string;
   footerText?: string;
@@ -226,7 +350,7 @@ export interface Invoice {
   templateId?: string;
   templateKey?: InvoiceTemplateKey;
   status: InvoiceStatus;
-  
+
   // Dates & Optional Service Period
   invoiceDate: string; // YYYY-MM-DD
   dueDate?: string; // YYYY-MM-DD
@@ -237,12 +361,12 @@ export interface Invoice {
   servicePeriodStart?: string;
   servicePeriodEnd?: string;
   servicePeriodText?: string;
-  
+
   // References
   product?: string;
   regNo?: string;
   yourRef?: string;
-  
+
   // Financials & VAT Presentation
   subtotal: number;
   vatApplicable: boolean;
@@ -251,28 +375,37 @@ export interface Invoice {
   taxableBase?: number;
   showVatSeparately?: boolean; // default: true (MODE A). If false: MODE B (Total Including VAT without separate line)
   grandTotal: number;
-  
+
   // Advance & Notes
   advancePercentage: number;
   advanceAmount: number;
   specialNotes?: string;
   paymentInstructions?: string;
-  
+
   // Statuses
   sentStatus: SentStatus;
   paymentStatus: PaymentStatus;
   totalPaid: number;
   outstandingBalance: number;
-  
+
   // Immutable snapshots
   clientSnapshot: ClientSnapshot;
   billingSnapshot: BillingSnapshot;
-  
+
   // Relations
   items: InvoiceItem[];
+  mediaRefDisplay?: 'separate' | 'inline';
   payments: Payment[];
   shareHistory: InvoiceShareRecord[];
-  
+
+  // Digital Approval & Verification
+  signatureFormat?: InvoicePdfFormat;
+  approval?: InvoiceApproval;
+  verification?: InvoiceVerification;
+  verificationToken?: string;
+  verificationStatus?: 'valid' | 'voided' | 'superseded' | 'revoked';
+  canonicalHash?: string;
+
   pdfUrl?: string;
   createdBy?: string;
   createdAt: string;
@@ -325,32 +458,32 @@ export interface DashboardKPIs {
 
 export type ChequeType = 'incoming' | 'outgoing';
 
-export type IncomingChequeStatus = 
-  | 'received' 
-  | 'pending_deposit' 
-  | 'deposited' 
-  | 'cleared' 
-  | 'returned' 
-  | 'cancelled' 
+export type IncomingChequeStatus =
+  | 'received'
+  | 'pending_deposit'
+  | 'deposited'
+  | 'cleared'
+  | 'returned'
+  | 'cancelled'
   | 'replaced';
 
-export type OutgoingChequeStatus = 
-  | 'prepared' 
-  | 'issued' 
-  | 'pending_presentation' 
-  | 'presented' 
-  | 'cleared' 
-  | 'returned' 
+export type OutgoingChequeStatus =
+  | 'prepared'
+  | 'issued'
+  | 'pending_presentation'
+  | 'presented'
+  | 'cleared'
+  | 'returned'
   | 'cancelled';
 
 export type ChequeStatus = IncomingChequeStatus | OutgoingChequeStatus;
 
-export type ChequeAlertState = 
-  | 'upcoming' 
-  | 'due_today' 
-  | 'overdue' 
-  | 'action_required' 
-  | 'cleared' 
+export type ChequeAlertState =
+  | 'upcoming'
+  | 'due_today'
+  | 'overdue'
+  | 'action_required'
+  | 'cleared'
   | 'normal';
 
 export interface ChequeInvoiceAllocation {
@@ -388,14 +521,14 @@ export interface ChequeReminder {
   id: string;
   chequeId: string;
   reminderDate: string; // YYYY-MM-DD
-  reminderType: 
-    | 'due_7_days' 
-    | 'due_3_days' 
-    | 'due_1_day' 
-    | 'due_today' 
-    | 'overdue' 
-    | 'deposit_followup' 
-    | 'returned_action';
+  reminderType:
+  | 'due_7_days'
+  | 'due_3_days'
+  | 'due_1_day'
+  | 'due_today'
+  | 'overdue'
+  | 'deposit_followup'
+  | 'returned_action';
   title: string;
   message: string;
   priority: 'low' | 'medium' | 'high' | 'urgent';
@@ -417,7 +550,7 @@ export interface Cheque {
   receivedOrIssuedDate: string; // YYYY-MM-DD date handed over/received
   expectedActionDate: string; // expected deposit date (incoming) or expected presentation date (outgoing)
   actualClearanceDate?: string;
-  
+
   // Banking & Party Details
   drawerBank: string; // e.g. Commercial Bank, Seylan Bank, HNB
   branch?: string;
@@ -426,7 +559,7 @@ export interface Cheque {
   payerOrPayeeName: string; // Client name or supplier name
   clientId?: string; // Linked client if incoming
   supplierName?: string; // Supplier/Vendor if outgoing
-  
+
   // Billing Entity
   billingEntityId: string;
   billingEntityName?: string;
@@ -435,27 +568,27 @@ export interface Cheque {
   // Status & Alerts
   status: ChequeStatus;
   alertState?: ChequeAlertState;
-  
+
   // Purpose & References
   purposeOfPayment?: string;
   billReference?: string;
   notes?: string;
-  
+
   // Attachments (Front & Back cheque images)
   imageFrontUrl?: string;
   imageBackUrl?: string;
   attachments: ChequeAttachment[];
-  
+
   // Relations
   invoiceAllocations: ChequeInvoiceAllocation[];
   statusHistory: ChequeStatusHistory[];
   reminders: ChequeReminder[];
-  
+
   // Reminder Configuration
   isReminderEnabled: boolean;
   reminderStartDate?: string;
   customReminderDays?: number[]; // e.g. [7, 3, 1, 0]
-  
+
   // Returned Cheque Specifics
   followUpDate?: string;
   returnReason?: string;

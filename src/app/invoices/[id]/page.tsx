@@ -4,9 +4,12 @@ import React, { useState, useEffect } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { AppLayout } from "@/components/layout/AppLayout";
-import { Invoice, InvoiceTemplateKey, Cheque } from "@/types";
+import { Invoice, InvoiceTemplateKey, Cheque, InvoicePdfFormat } from "@/types";
 import { storage } from "@/lib/storage";
 import { formatLKR, formatDate, formatDateTime } from "@/lib/utils";
+import { downloadInvoicePdf } from "@/lib/pdf";
+import { getVerificationUrl } from "@/lib/crypto";
+import { VerificationModal } from "@/components/invoices/VerificationModal";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -29,7 +32,12 @@ import {
   FileText,
   Building,
   CreditCard,
-  Plus
+  Plus,
+  ShieldCheck,
+  Download,
+  ExternalLink,
+  Check,
+  FileCheck
 } from "lucide-react";
 
 export default function InvoiceDetailPage() {
@@ -39,9 +47,13 @@ export default function InvoiceDetailPage() {
 
   const [invoice, setInvoice] = useState<Invoice | null>(null);
   const [templateKey, setTemplateKey] = useState<InvoiceTemplateKey>("standard");
+  const [selectedFormat, setSelectedFormat] = useState<InvoicePdfFormat>("digital");
   const [isShareModalOpen, setIsShareModalOpen] = useState(false);
   const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
   const [isChequeModalOpen, setIsChequeModalOpen] = useState(false);
+  const [isVerificationModalOpen, setIsVerificationModalOpen] = useState(false);
+  const [isDownloading, setIsDownloading] = useState(false);
+  const [copiedLink, setCopiedLink] = useState(false);
   const [cheques, setCheques] = useState<Cheque[]>([]);
   const [userRole, setUserRole] = useState<'admin' | 'staff'>('admin');
 
@@ -102,8 +114,58 @@ export default function InvoiceDetailPage() {
     }
   };
 
-  const handlePrint = () => {
-    window.open(`/invoices/${invoice.id}/pdf?template=${templateKey}`, "_blank");
+  const handlePrint = (formatToPrint?: InvoicePdfFormat) => {
+    const f = formatToPrint || selectedFormat;
+    window.open(`/invoices/${invoice.id}/pdf?format=${f}&template=${templateKey}`, "_blank");
+  };
+
+  const handleDownloadDigitalPdf = async () => {
+    if (!invoice) return;
+    if (invoice.status === "draft") {
+      alert("Digitally Approved PDFs can only be downloaded once an invoice has been officially issued.");
+      return;
+    }
+    setIsDownloading(true);
+    try {
+      await downloadInvoicePdf({
+        elementId: "printable-invoice-element",
+        filename: `${invoice.invoiceNumber}-Digital.pdf`,
+        verificationUrl: getVerificationUrl(invoice.verificationToken || invoice.id),
+      });
+    } catch (err) {
+      console.error(err);
+      alert("Failed to export PDF. Opening print preview instead.");
+      window.open(`/invoices/${invoice.id}/pdf?format=digital&template=${templateKey}`, "_blank");
+    } finally {
+      setIsDownloading(false);
+    }
+  };
+
+  const handleDownloadPrintPdf = async () => {
+    if (!invoice) return;
+    setIsDownloading(true);
+    try {
+      await downloadInvoicePdf({
+        elementId: "printable-invoice-element-print",
+        filename: `${invoice.invoiceNumber}-Print.pdf`,
+      });
+    } catch (err) {
+      console.error(err);
+      alert("Failed to export PDF. Opening print preview instead.");
+      window.open(`/invoices/${invoice.id}/pdf?format=print&template=${templateKey}`, "_blank");
+    } finally {
+      setIsDownloading(false);
+    }
+  };
+
+  const handleCopyLink = () => {
+    if (!invoice) return;
+    const url = getVerificationUrl(invoice.verificationToken || invoice.id);
+    if (navigator.clipboard) {
+      navigator.clipboard.writeText(url);
+      setCopiedLink(true);
+      setTimeout(() => setCopiedLink(false), 3000);
+    }
   };
 
   return (
@@ -163,11 +225,55 @@ export default function InvoiceDetailPage() {
             <Button
               variant="outline"
               size="sm"
-              onClick={handlePrint}
+              onClick={() => setIsVerificationModalOpen(true)}
+              className="flex items-center space-x-1.5 text-emerald-800 border-emerald-300 bg-emerald-50/50 hover:bg-emerald-100 font-bold"
+            >
+              <ShieldCheck className="w-4 h-4 text-emerald-600" />
+              <span>Verify Authenticity</span>
+            </Button>
+
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleDownloadDigitalPdf}
+              disabled={invoice.status === "draft" || isDownloading}
+              title={invoice.status === "draft" ? "Available only once invoice is officially issued" : "Download Digital Signature PDF"}
+              className="flex items-center space-x-1.5 bg-navy-950 text-white hover:bg-navy-900 border-navy-950 font-bold"
+            >
+              <Download className="w-4 h-4 text-emerald-400" />
+              <span>Download Digital PDF</span>
+            </Button>
+
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleDownloadPrintPdf}
+              disabled={isDownloading}
+              className="flex items-center space-x-1.5 text-slate-800 hover:bg-slate-100 font-semibold"
+            >
+              <Download className="w-4 h-4 text-slate-600" />
+              <span>Download Blank / Hard Copy PDF</span>
+            </Button>
+
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => handlePrint()}
               className="flex items-center space-x-1.5"
             >
               <Printer className="w-4 h-4 text-slate-700" />
-              <span>Print / Download PDF</span>
+              <span>Print</span>
+            </Button>
+
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleCopyLink}
+              className="flex items-center space-x-1.5 text-slate-600 hover:bg-slate-100"
+              title="Copy public verification link"
+            >
+              {copiedLink ? <Check className="w-4 h-4 text-emerald-600" /> : <ExternalLink className="w-4 h-4" />}
+              <span>{copiedLink ? "Link Copied!" : "Copy Verification Link"}</span>
             </Button>
 
             <Button
@@ -177,7 +283,7 @@ export default function InvoiceDetailPage() {
               className="flex items-center space-x-1.5 text-emerald-700 border-emerald-300 hover:bg-emerald-50"
             >
               <Share2 className="w-4 h-4" />
-              <span>Share Invoice</span>
+              <span>Share</span>
             </Button>
 
             <Button
@@ -267,10 +373,88 @@ export default function InvoiceDetailPage() {
           </Card>
         </div>
 
+        {/* Format Selector Bar for Live Invoice Display */}
+        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 bg-white p-3.5 rounded-xl border border-slate-200 shadow-2xs">
+          <div className="flex items-center space-x-2">
+            <span className="text-xs font-bold text-slate-600">Select Format:</span>
+            <div className="flex items-center bg-slate-100 p-1 rounded-lg border border-slate-200 text-xs font-bold">
+              <button
+                type="button"
+                onClick={() => setSelectedFormat("digital")}
+                className={`px-3 py-1.5 rounded-md flex items-center space-x-1.5 transition-all ${
+                  selectedFormat === "digital"
+                    ? "bg-navy-950 text-white shadow-xs"
+                    : "text-slate-600 hover:text-navy-950"
+                }`}
+              >
+                <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" />
+                <span>Option A: Digital Signature (Adobe)</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setSelectedFormat("print")}
+                className={`px-3 py-1.5 rounded-md flex items-center space-x-1.5 transition-all ${
+                  selectedFormat === "print"
+                    ? "bg-navy-950 text-white shadow-xs"
+                    : "text-slate-600 hover:text-navy-950"
+                }`}
+              >
+                <Printer className="w-3.5 h-3.5" />
+                <span>Option B: Blank Signature (Hard Copy)</span>
+              </button>
+            </div>
+          </div>
+
+          <div className="flex items-center space-x-2">
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => handlePrint(selectedFormat)}
+              className="text-xs font-bold"
+            >
+              <Printer className="w-3.5 h-3.5 mr-1" />
+              <span>Print {selectedFormat === "digital" ? "Digital" : "Print"} View</span>
+            </Button>
+            <Button
+              size="sm"
+              disabled={isDownloading || (selectedFormat === "digital" && invoice.status === "draft")}
+              onClick={selectedFormat === "digital" ? handleDownloadDigitalPdf : handleDownloadPrintPdf}
+              className="bg-navy-950 hover:bg-navy-900 text-white text-xs font-bold shadow-sm"
+            >
+              <Download className="w-3.5 h-3.5 mr-1.5" />
+              <span>{isDownloading ? "Exporting..." : "Download Selected PDF"}</span>
+            </Button>
+          </div>
+        </div>
+
         {/* Invoice Preview */}
         <div className="bg-slate-200/60 p-4 md:p-8 rounded-2xl flex justify-center overflow-x-auto shadow-inner">
-          <InvoiceTemplateRenderer invoice={{ ...invoice, templateKey }} />
+          <div id="printable-invoice-element">
+            <InvoiceTemplateRenderer
+              invoice={{ ...invoice, templateKey }}
+              format={selectedFormat}
+            />
+          </div>
         </div>
+
+        {/* Hidden off-screen print DOM for Option B download */}
+        <div className="hidden">
+          <div id="printable-invoice-element-print">
+            <InvoiceTemplateRenderer
+              invoice={{ ...invoice, templateKey }}
+              format="print"
+              printMode={true}
+            />
+          </div>
+        </div>
+
+        {/* Verification Modal */}
+        <VerificationModal
+          isOpen={isVerificationModalOpen}
+          onClose={() => setIsVerificationModalOpen(false)}
+          invoice={invoice}
+        />
 
         {/* Bottom Details: Payments & Sent History Timeline */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">

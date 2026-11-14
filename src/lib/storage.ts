@@ -19,8 +19,17 @@ import {
   ChequeKPIs,
   NotificationPreferences,
   ChequeInvoiceAllocation,
-  ChequeStatusHistory
+  ChequeStatusHistory,
+  EntitySignatureSettings,
+  InvoiceApproval,
+  InvoiceVerification,
+  VerificationResult,
+  MediaChannel,
+  ServiceCategory,
+  AdvertisingReferenceType
 } from '@/types';
+import { generateVerificationToken, computeCanonicalInvoiceHash } from '@/lib/crypto';
+import { formatColomboDateTime, formatDate } from '@/lib/utils';
 
 // Default Seed Data based on official SN Advertising documents and Excel files
 export const INITIAL_BILLING_ENTITIES: BillingEntity[] = [
@@ -61,9 +70,15 @@ export const INITIAL_BILLING_ENTITIES: BillingEntity[] = [
     startingSequence: 23460,
     currentSequence: 23467,
     logoUrl: '/logo.png',
-    signatureUrl: '/signature-sample.png',
-    signatoryName: 'S. Nawagamuwa',
-    signatoryDesignation: 'Managing Director',
+    signatureUrl: undefined,
+    signatureImageUrl: undefined,
+    signatoryName: 'Shafil Surantha',
+    signatoryDesignation: 'Authorized Signatory',
+    signatoryEmail: 'snadvertising@hotmail.com',
+    signatureEnabled: true,
+    displaySignatureImage: false,
+    verificationEnabled: true,
+    showQrCode: true,
     primaryColor: '#0f172a',
     secondaryColor: '#059669',
     headerStyle: 'classic',
@@ -117,8 +132,14 @@ export const INITIAL_BILLING_ENTITIES: BillingEntity[] = [
     currentSequence: 3,
     logoUrl: '',
     signatureUrl: '',
+    signatureImageUrl: '',
     signatoryName: 'Authorized Officer',
     signatoryDesignation: 'Director of Operations',
+    signatoryEmail: 'info@haripara.lk',
+    signatureEnabled: true,
+    displaySignatureImage: false,
+    verificationEnabled: true,
+    showQrCode: true,
     primaryColor: '#1e293b',
     secondaryColor: '#d97706',
     headerStyle: 'modern',
@@ -173,10 +194,50 @@ export const INITIAL_TEMPLATES: InvoiceTemplate[] = [
   }
 ];
 
+export const INITIAL_MEDIA_CHANNELS: MediaChannel[] = [
+  // Radio / FM Channels
+  { id: 'mc-hiru-fm', name: 'Hiru FM', type: 'radio' },
+  { id: 'mc-sirasa-fm', name: 'Sirasa FM', type: 'radio' },
+  { id: 'mc-shakthi-fm', name: 'Shakthi FM', type: 'radio' },
+  { id: 'mc-gold-fm', name: 'Gold FM', type: 'radio' },
+  { id: 'mc-sun-fm', name: 'Sun FM', type: 'radio' },
+  { id: 'mc-sha-fm', name: 'Sha FM', type: 'radio' },
+  { id: 'mc-sooriyan-fm', name: 'Sooriyan FM', type: 'radio' },
+  { id: 'mc-run-fm', name: 'Run FM', type: 'radio' },
+  { id: 'mc-ridam-fm', name: 'Ridam FM', type: 'radio' },
+  { id: 'mc-y-fm', name: 'Y FM', type: 'radio' },
+  { id: 'mc-neth-fm', name: 'Neth FM', type: 'radio' },
+  { id: 'mc-sitha-fm', name: 'Sitha FM', type: 'radio' },
+  { id: 'mc-tnl-radio', name: 'TNL Radio', type: 'radio' },
+  { id: 'mc-lite-fm', name: 'Lite 87', type: 'radio' },
+  { id: 'mc-yes-fm', name: 'Yes FM', type: 'radio' },
+  { id: 'mc-legends', name: 'Legends 96.6', type: 'radio' },
+
+  // Television Channels
+  { id: 'mc-hiru-tv', name: 'Hiru TV', type: 'tv' },
+  { id: 'mc-sirasa-tv', name: 'Sirasa TV', type: 'tv' },
+  { id: 'mc-tv-derana', name: 'TV Derana', type: 'tv' },
+  { id: 'mc-swarnavahini', name: 'Swarnavahini', type: 'tv' },
+  { id: 'mc-shakthi-tv', name: 'Shakthi TV', type: 'tv' },
+  { id: 'mc-itn', name: 'ITN', type: 'tv' },
+  { id: 'mc-rupavahini', name: 'Rupavahini', type: 'tv' },
+  { id: 'mc-channel-eye', name: 'Channel Eye', type: 'tv' },
+  { id: 'mc-tv1', name: 'TV 1', type: 'tv' },
+  { id: 'mc-ada-derana', name: 'Ada Derana 24', type: 'tv' },
+
+  // Digital Channels
+  { id: 'mc-youtube', name: 'YouTube', type: 'digital' },
+  { id: 'mc-fb-ig', name: 'Facebook / Instagram', type: 'digital' },
+  { id: 'mc-tiktok', name: 'TikTok', type: 'digital' },
+  { id: 'mc-google-ads', name: 'Google Ads', type: 'digital' },
+  { id: 'mc-web-portal', name: 'Web Portal', type: 'digital' },
+];
+
 export const INITIAL_SERVICES: Service[] = [
   {
     id: 's1111111-1111-1111-1111-111111111111',
     name: 'Video Campaign with Presenter (3 Clips)',
+    category: 'Media Production',
     defaultDescription: 'Video Campaign with Presenter (3 Clips)',
     defaultPrice: 125000,
     vatApplicable: false,
@@ -187,7 +248,10 @@ export const INITIAL_SERVICES: Service[] = [
   {
     id: 's2222222-2222-2222-2222-222222222222',
     name: 'Sponsorship Package on Run FM',
-    defaultDescription: 'SPONSER SHIP PACKEGE ON RUN FM',
+    category: 'Radio / FM Advertising',
+    defaultMediaChannel: 'Run FM',
+    defaultReferenceType: 'RO Number',
+    defaultDescription: 'SPONSORSHIP PACKAGE ON RUN FM (Prime-Time Segments)',
     defaultPrice: 300000,
     vatApplicable: true,
     isActive: true,
@@ -197,8 +261,50 @@ export const INITIAL_SERVICES: Service[] = [
   {
     id: 's3333333-3333-3333-3333-333333333333',
     name: 'Sponsorship Package on Ridam FM Evening Show',
-    defaultDescription: 'SPONSER SHIP PACKEGE ON RIDAM FM EVENING SHOW',
+    category: 'Radio / FM Advertising',
+    defaultMediaChannel: 'Ridam FM',
+    defaultReferenceType: 'Booking Reference',
+    defaultDescription: 'SPONSORSHIP PACKAGE ON RIDAM FM EVENING SHOW',
     defaultPrice: 200000,
+    vatApplicable: false,
+    isActive: true,
+    createdAt: '2026-08-01T00:00:00Z',
+    updatedAt: '2026-08-01T00:00:00Z',
+  },
+  {
+    id: 's-hiru-fm-01',
+    name: 'Radio Commercial Advertising — Hiru FM',
+    category: 'Radio / FM Advertising',
+    defaultMediaChannel: 'Hiru FM',
+    defaultReferenceType: 'RO Number',
+    defaultDescription: 'Commercial Advertising Package on Hiru FM (Morning & Evening Drive)',
+    defaultPrice: 150000,
+    vatApplicable: false,
+    isActive: true,
+    createdAt: '2026-08-01T00:00:00Z',
+    updatedAt: '2026-08-01T00:00:00Z',
+  },
+  {
+    id: 's-hiru-tv-01',
+    name: 'Television Commercial Broadcast — Hiru TV',
+    category: 'Television Advertising',
+    defaultMediaChannel: 'Hiru TV',
+    defaultReferenceType: 'RO Number',
+    defaultDescription: '30-Sec Prime-Time Commercial Spots during News & Drama Belt',
+    defaultPrice: 450000,
+    vatApplicable: false,
+    isActive: true,
+    createdAt: '2026-08-01T00:00:00Z',
+    updatedAt: '2026-08-01T00:00:00Z',
+  },
+  {
+    id: 's-sirasa-fm-01',
+    name: 'Radio Campaign — Sirasa FM',
+    category: 'Radio / FM Advertising',
+    defaultMediaChannel: 'Sirasa FM',
+    defaultReferenceType: 'Booking Reference',
+    defaultDescription: 'Spot Broadcast Package with Anchor Mentions on Sirasa FM',
+    defaultPrice: 175000,
     vatApplicable: false,
     isActive: true,
     createdAt: '2026-08-01T00:00:00Z',
@@ -207,6 +313,8 @@ export const INITIAL_SERVICES: Service[] = [
   {
     id: 's4444444-4444-4444-4444-444444444444',
     name: 'Social Media Campaign',
+    category: 'Digital Advertising',
+    defaultMediaChannel: 'Facebook / Instagram',
     defaultDescription: 'Monthly digital paid campaign management across social channels',
     defaultPrice: 75000,
     vatApplicable: false,
@@ -217,6 +325,7 @@ export const INITIAL_SERVICES: Service[] = [
   {
     id: 's5555555-5555-5555-5555-555555555555',
     name: 'Sticker Advertising & Branding',
+    category: 'Other Services',
     defaultDescription: 'Commercial vehicle and sticker advertising production and installation',
     defaultPrice: 85000,
     vatApplicable: false,
@@ -227,6 +336,7 @@ export const INITIAL_SERVICES: Service[] = [
   {
     id: 's6666666-6666-6666-6666-666666666666',
     name: 'Custom Advertising Service',
+    category: 'Other Services',
     defaultDescription: 'Custom advertising and production services',
     defaultPrice: 50000,
     vatApplicable: false,
@@ -346,9 +456,15 @@ export const INITIAL_INVOICES: Invoice[] = [
       paymentInstructions: 'Cheques should be drawn in favour of SN ADVERTISING. and crossed "ACCOUNT PAYEE" only. Bank transfers may be made to SN Advertising, Account No. 028013149867001, Seylan Bank – Kadawatha Branch.',
       prefix: 'SN',
       logoUrl: '/logo.png',
-      signatureUrl: '/signature-sample.png',
-      signatoryName: 'S. Nawagamuwa',
-      signatoryDesignation: 'Managing Director',
+      signatureUrl: undefined,
+      signatureImageUrl: undefined,
+      signatoryName: 'Shafil Surantha',
+      signatoryDesignation: 'Authorized Signatory',
+      signatoryEmail: 'snadvertising@hotmail.com',
+      signatureEnabled: true,
+      displaySignatureImage: false,
+      verificationEnabled: true,
+      showQrCode: true,
       footerText: 'Thank you for partnering with SN Advertising — Colombo, Sri Lanka',
     },
     items: [
@@ -398,6 +514,25 @@ export const INITIAL_INVOICES: Invoice[] = [
         notes: 'Sent via WhatsApp to Rohan'
       }
     ],
+    verificationToken: 'sn-v-9f8a2b3c4d5e',
+    verificationStatus: 'valid',
+    canonicalHash: '38a6ec1541098679f2203e08c8ba920e56d7aa8203f71c4cbf23db73df6ceee6',
+    approval: {
+      id: 'appr-001',
+      invoiceId: 'inv-001',
+      entityId: 'e1111111-1111-1111-1111-111111111111',
+      approvedByUserId: 'u1111111-1111-1111-1111-111111111111',
+      approvedByUserName: 'Shafil Surantha',
+      signatoryNameSnapshot: 'Shafil Surantha',
+      signatoryDesignationSnapshot: 'Authorized Signatory',
+      signatoryEmailSnapshot: 'snadvertising@hotmail.com',
+      approvalTimestamp: '2026-08-12T10:00:00+05:30',
+      approvalTimezone: 'Asia/Colombo',
+      invoiceVersion: 1,
+      status: 'approved',
+      approvalAction: 'issued_and_approved',
+      createdAt: '2026-08-12T10:00:00+05:30'
+    },
     createdAt: '2026-08-12T09:30:00Z',
     updatedAt: '2026-08-20T14:00:00Z'
   },
@@ -458,8 +593,15 @@ export const INITIAL_INVOICES: Invoice[] = [
       paymentInstructions: 'Cheques should be drawn in favour of HARIPARA(PVT)LTD. and crossed "ACCOUNT PAYEE" only. Electronic transfers to Commercial Bank of Ceylon, Kelaniya Branch, A/C: 10002938475.',
       prefix: 'HRP',
       logoUrl: '',
+      signatureUrl: '',
+      signatureImageUrl: '',
       signatoryName: 'Authorized Officer',
       signatoryDesignation: 'Director of Operations',
+      signatoryEmail: 'info@haripara.lk',
+      signatureEnabled: true,
+      displaySignatureImage: false,
+      verificationEnabled: true,
+      showQrCode: true,
       footerText: 'Official IRD Registered Tax Invoice — HARIPARA (PVT) LTD',
     },
     items: [
@@ -488,6 +630,25 @@ export const INITIAL_INVOICES: Invoice[] = [
         notes: 'Monthly sponsorship invoice emailed with PDF attached'
       }
     ],
+    verificationToken: 'sn-v-1a2b3c4d5e6f',
+    verificationStatus: 'valid',
+    canonicalHash: '7f9c2d1b8e4a5063812739485720194857291039485720193847561029384756',
+    approval: {
+      id: 'appr-002',
+      invoiceId: 'inv-002',
+      entityId: 'e2222222-2222-2222-2222-222222222222',
+      approvedByUserId: 'u1111111-1111-1111-1111-111111111111',
+      approvedByUserName: 'Authorized Officer',
+      signatoryNameSnapshot: 'Authorized Officer',
+      signatoryDesignationSnapshot: 'Director of Operations',
+      signatoryEmailSnapshot: 'info@haripara.lk',
+      approvalTimestamp: '2026-09-30T11:00:00+05:30',
+      approvalTimezone: 'Asia/Colombo',
+      invoiceVersion: 1,
+      status: 'approved',
+      approvalAction: 'issued_and_approved',
+      createdAt: '2026-09-30T11:00:00+05:30'
+    },
     createdAt: '2026-09-30T10:45:00Z',
     updatedAt: '2026-10-01T09:15:00Z'
   },
@@ -547,8 +708,15 @@ export const INITIAL_INVOICES: Invoice[] = [
       paymentInstructions: 'Cheques should be drawn in favour of HARIPARA(PVT)LTD. and crossed "ACCOUNT PAYEE" only. Electronic transfers to Commercial Bank of Ceylon, Kelaniya Branch, A/C: 10002938475.',
       prefix: 'HRP',
       logoUrl: '',
+      signatureUrl: '',
+      signatureImageUrl: '',
       signatoryName: 'Authorized Officer',
       signatoryDesignation: 'Director of Operations',
+      signatoryEmail: 'info@haripara.lk',
+      signatureEnabled: true,
+      displaySignatureImage: false,
+      verificationEnabled: true,
+      showQrCode: true,
       footerText: 'Official IRD Registered Tax Invoice — HARIPARA (PVT) LTD',
     },
     items: [
@@ -1044,7 +1212,8 @@ const STORAGE_KEYS = {
   NEXT_INVOICE_NUM: 'sn_next_invoice_number_v2',
   CURRENT_USER_ROLE: 'sn_current_user_role',
   CHEQUES: 'sn_cheques_v1',
-  NOTIFICATION_PREFS: 'sn_notification_preferences_v1'
+  NOTIFICATION_PREFS: 'sn_notification_preferences_v1',
+  MEDIA_CHANNELS: 'sn_media_channels_v1'
 };
 
 class StorageService {
@@ -1080,10 +1249,22 @@ class StorageService {
             accountNumber: ent.accountNumber || seed.accountNumber,
             chequePayee: ent.chequePayee || seed.chequePayee,
             email: ent.id === 'e2222222-2222-2222-2222-222222222222' && ent.email?.includes('snadvertising') ? seed.email : (ent.email || seed.email),
+            signatoryName: ent.signatoryName || seed.signatoryName,
+            signatoryDesignation: ent.signatoryDesignation || seed.signatoryDesignation,
+            signatoryEmail: ent.signatoryEmail || seed.signatoryEmail,
+            signatureEnabled: ent.signatureEnabled !== undefined ? ent.signatureEnabled : (seed.signatureEnabled ?? true),
+            displaySignatureImage: ent.displaySignatureImage !== undefined ? ent.displaySignatureImage : (seed.displaySignatureImage ?? true),
+            verificationEnabled: ent.verificationEnabled !== undefined ? ent.verificationEnabled : (seed.verificationEnabled ?? true),
+            showQrCode: ent.showQrCode !== undefined ? ent.showQrCode : (seed.showQrCode ?? true),
+            signatureImageUrl: ent.signatureImageUrl || ent.signatureUrl || seed.signatureImageUrl,
           };
         }
         return {
           ...ent,
+          signatureEnabled: ent.signatureEnabled !== undefined ? ent.signatureEnabled : true,
+          displaySignatureImage: ent.displaySignatureImage !== undefined ? ent.displaySignatureImage : true,
+          verificationEnabled: ent.verificationEnabled !== undefined ? ent.verificationEnabled : true,
+          showQrCode: ent.showQrCode !== undefined ? ent.showQrCode : true,
           status: ent.status || (ent.isActive ? 'active' : 'archived'),
           isVatRegistered: Boolean(ent.isVatRegistered),
         };
@@ -1231,6 +1412,64 @@ class StorageService {
     }
   }
 
+  // --- Media Channels ---
+  getMediaChannels(): MediaChannel[] {
+    if (!this.isBrowser()) return INITIAL_MEDIA_CHANNELS;
+    const data = localStorage.getItem(STORAGE_KEYS.MEDIA_CHANNELS);
+    if (!data) {
+      localStorage.setItem(STORAGE_KEYS.MEDIA_CHANNELS, JSON.stringify(INITIAL_MEDIA_CHANNELS));
+      return INITIAL_MEDIA_CHANNELS;
+    }
+    try {
+      const parsed: MediaChannel[] = JSON.parse(data);
+      const existingNames = new Set(parsed.map(c => c.name.toLowerCase().trim()));
+      const missingSeeds = INITIAL_MEDIA_CHANNELS.filter(s => !existingNames.has(s.name.toLowerCase().trim()));
+      if (missingSeeds.length > 0) {
+        const merged = [...parsed, ...missingSeeds];
+        localStorage.setItem(STORAGE_KEYS.MEDIA_CHANNELS, JSON.stringify(merged));
+        return merged;
+      }
+      return parsed;
+    } catch {
+      return INITIAL_MEDIA_CHANNELS;
+    }
+  }
+
+  saveMediaChannel(channel: { id?: string; name: string; type?: 'radio' | 'tv' | 'digital' | 'other' }): MediaChannel {
+    const list = this.getMediaChannels();
+    const cleanName = channel.name.trim();
+    if (channel.id) {
+      const idx = list.findIndex(c => c.id === channel.id);
+      if (idx >= 0) {
+        list[idx] = { ...list[idx], name: cleanName, type: channel.type || list[idx].type };
+        if (this.isBrowser()) localStorage.setItem(STORAGE_KEYS.MEDIA_CHANNELS, JSON.stringify(list));
+        return list[idx];
+      }
+    }
+    const existing = list.find(c => c.name.toLowerCase().trim() === cleanName.toLowerCase());
+    if (existing) return existing;
+
+    const newChannel: MediaChannel = {
+      id: channel.id || 'mc-' + Date.now(),
+      name: cleanName,
+      type: channel.type || 'radio',
+      isCustom: true,
+      createdAt: new Date().toISOString()
+    };
+    list.push(newChannel);
+    if (this.isBrowser()) {
+      localStorage.setItem(STORAGE_KEYS.MEDIA_CHANNELS, JSON.stringify(list));
+    }
+    return newChannel;
+  }
+
+  deleteMediaChannel(id: string): void {
+    const list = this.getMediaChannels().filter(c => c.id !== id);
+    if (this.isBrowser()) {
+      localStorage.setItem(STORAGE_KEYS.MEDIA_CHANNELS, JSON.stringify(list));
+    }
+  }
+
   // --- Services ---
   getServices(): Service[] {
     if (!this.isBrowser()) return INITIAL_SERVICES;
@@ -1240,7 +1479,29 @@ class StorageService {
       return INITIAL_SERVICES;
     }
     try {
-      return JSON.parse(data);
+      const parsed: Service[] = JSON.parse(data);
+      const merged = parsed.map(srv => {
+        const seed = INITIAL_SERVICES.find(s => s.id === srv.id || s.name === srv.name);
+        if (seed) {
+          return {
+            ...seed,
+            ...srv,
+            category: srv.category || seed.category,
+            defaultMediaChannel: srv.defaultMediaChannel || seed.defaultMediaChannel,
+            defaultReferenceType: srv.defaultReferenceType || seed.defaultReferenceType,
+          };
+        }
+        return srv;
+      });
+
+      const existingIds = new Set(merged.map(s => s.id));
+      const missingSeeds = INITIAL_SERVICES.filter(s => !existingIds.has(s.id));
+      if (missingSeeds.length > 0) {
+        const fullList = [...merged, ...missingSeeds];
+        localStorage.setItem(STORAGE_KEYS.SERVICES, JSON.stringify(fullList));
+        return fullList;
+      }
+      return merged;
     } catch {
       return INITIAL_SERVICES;
     }
@@ -1252,7 +1513,14 @@ class StorageService {
     if (service.id) {
       const idx = list.findIndex(s => s.id === service.id);
       if (idx >= 0) {
-        saved = { ...list[idx], ...service, updatedAt: new Date().toISOString() };
+        saved = {
+          ...list[idx],
+          ...service,
+          category: service.category !== undefined ? service.category : list[idx].category,
+          defaultMediaChannel: service.defaultMediaChannel !== undefined ? service.defaultMediaChannel : list[idx].defaultMediaChannel,
+          defaultReferenceType: service.defaultReferenceType !== undefined ? service.defaultReferenceType : list[idx].defaultReferenceType,
+          updatedAt: new Date().toISOString()
+        };
         list[idx] = saved;
       } else {
         saved = {
@@ -1267,6 +1535,10 @@ class StorageService {
       saved = {
         id: 's-' + Date.now(),
         name: service.name || 'New Service',
+        category: service.category,
+        defaultMediaChannel: service.defaultMediaChannel,
+        defaultReferenceType: service.defaultReferenceType,
+        defaultDescription: service.defaultDescription || '',
         defaultPrice: service.defaultPrice || 0,
         vatApplicable: Boolean(service.vatApplicable),
         isActive: true,
@@ -1358,7 +1630,20 @@ class StorageService {
       return INITIAL_INVOICES;
     }
     try {
-      return JSON.parse(data);
+      const parsed: Invoice[] = JSON.parse(data);
+      return parsed.map((inv) => {
+        const seed = INITIAL_INVOICES.find((s) => s.id === inv.id || s.invoiceNumber === inv.invoiceNumber);
+        if (seed) {
+          return {
+            ...inv,
+            verificationToken: inv.verificationToken || seed.verificationToken,
+            verificationStatus: inv.verificationStatus || seed.verificationStatus || (inv.status === 'issued' ? 'valid' : undefined),
+            approval: inv.approval || seed.approval,
+            canonicalHash: inv.canonicalHash || seed.canonicalHash,
+          };
+        }
+        return inv;
+      });
     } catch {
       return INITIAL_INVOICES;
     }
@@ -1510,6 +1795,60 @@ class StorageService {
       list.unshift(saved);
     }
 
+    // Auto-generate or preserve digital approval and verification credentials upon invoice issuance
+    if (saved.status === 'issued') {
+      if (!saved.verificationToken) {
+        saved.verificationToken = invoice.verificationToken || generateVerificationToken();
+      }
+      saved.verificationStatus = invoice.verificationStatus || 'valid';
+      if (!saved.approval) {
+        const entity = this.getEntityById(saved.billingEntityId) || saved.billingSnapshot;
+        const signatoryName = entity?.signatoryName || 'Shafil Surantha';
+        const signatoryDesignation = entity?.signatoryDesignation || 'Authorized Signatory';
+        const signatoryEmail = entity?.signatoryEmail || entity?.email || 'snadvertising@hotmail.com';
+        const approvalTime = saved.issuedAt || new Date().toISOString();
+
+        saved.approval = invoice.approval || {
+          id: 'appr-' + Date.now(),
+          invoiceId: saved.id,
+          entityId: saved.billingEntityId,
+          approvedByUserId: 'u1111111-1111-1111-1111-111111111111',
+          approvedByUserName: signatoryName,
+          signatoryNameSnapshot: signatoryName,
+          signatoryDesignationSnapshot: signatoryDesignation,
+          signatoryEmailSnapshot: signatoryEmail,
+          approvalTimestamp: approvalTime,
+          approvalTimezone: 'Asia/Colombo',
+          invoiceVersion: 1,
+          status: 'approved',
+          approvalAction: 'issued_and_approved',
+          createdAt: approvalTime,
+        };
+      }
+      if (!saved.canonicalHash) {
+        saved.canonicalHash = computeCanonicalInvoiceHash({
+          invoiceNumber: saved.invoiceNumber,
+          billingEntityId: saved.billingEntityId,
+          clientId: saved.clientId,
+          grandTotal: saved.grandTotal,
+          invoiceDate: saved.invoiceDate,
+          issuedAt: saved.issuedAt || saved.approval?.approvalTimestamp,
+          signatoryName: saved.approval?.signatoryNameSnapshot,
+        });
+      }
+    } else if (saved.status === 'void') {
+      saved.verificationStatus = 'voided';
+      if (saved.approval) {
+        saved.approval = { ...saved.approval, status: 'voided' };
+      }
+    }
+
+    // Update the item in list
+    const finalIdx = list.findIndex(i => i.id === saved.id);
+    if (finalIdx >= 0) {
+      list[finalIdx] = saved;
+    }
+
     if (this.isBrowser()) {
       localStorage.setItem(STORAGE_KEYS.INVOICES, JSON.stringify(list));
     }
@@ -1633,8 +1972,116 @@ class StorageService {
     return this.saveInvoice({
       ...invoice,
       status: 'void',
-      paymentStatus: 'voided'
+      paymentStatus: 'voided',
+      verificationStatus: 'voided',
+      approval: invoice.approval ? { ...invoice.approval, status: 'voided' } : undefined,
     });
+  }
+
+  // Lookup invoice by verification token
+  getInvoiceByVerificationToken(token: string): Invoice | undefined {
+    if (!token) return undefined;
+    const cleanToken = token.trim().toLowerCase();
+    return this.getInvoices().find(
+      i => i.verificationToken?.toLowerCase() === cleanToken || i.id === cleanToken
+    );
+  }
+
+  // Verify an invoice's authenticity against server/storage records
+  verifyInvoice(tokenOrQuery: string): VerificationResult {
+    if (!tokenOrQuery) {
+      return {
+        success: false,
+        status: 'invalid',
+        message: 'No verification reference provided.',
+      };
+    }
+
+    const query = tokenOrQuery.trim().toLowerCase();
+    const invoices = this.getInvoices();
+    const invoice = invoices.find(
+      i => (i.verificationToken && i.verificationToken.toLowerCase() === query) ||
+           i.id.toLowerCase() === query ||
+           i.invoiceNumber.toLowerCase() === query
+    );
+
+    if (!invoice) {
+      return {
+        success: false,
+        status: 'invalid',
+        message: 'We could not verify this document using the provided reference.',
+      };
+    }
+
+    const entity = this.getEntityById(invoice.billingEntityId) || invoice.billingSnapshot;
+    const issuingCompany = invoice.billingSnapshot?.displayName || entity?.displayName || entity?.name || 'SN Advertising';
+    const issuingLegalName = invoice.billingSnapshot?.name || entity?.name || issuingCompany;
+    const signatoryName = invoice.approval?.signatoryNameSnapshot || invoice.billingSnapshot?.signatoryName || entity?.signatoryName || 'Shafil Surantha';
+    const signatoryDesignation = invoice.approval?.signatoryDesignationSnapshot || invoice.billingSnapshot?.signatoryDesignation || entity?.signatoryDesignation || 'Authorized Signatory';
+    const signatoryEmail = invoice.approval?.signatoryEmailSnapshot || entity?.signatoryEmail || entity?.email;
+
+    const approvalDateRaw = invoice.approval?.approvalTimestamp || invoice.issuedAt || invoice.createdAt;
+    const colomboTimes = formatColomboDateTime(approvalDateRaw);
+
+    if (invoice.status === 'void' || invoice.verificationStatus === 'voided') {
+      return {
+        success: false,
+        status: 'voided',
+        invoiceNumber: invoice.invoiceNumber,
+        issuingCompany,
+        issuingLegalName,
+        signatoryName,
+        signatoryDesignation,
+        signatoryEmail,
+        invoiceIssueDate: formatDate(invoice.invoiceDate),
+        approvalDate: colomboTimes.dateStr,
+        approvalTime: colomboTimes.timeStr,
+        approvalTimestamp: approvalDateRaw,
+        verificationToken: invoice.verificationToken,
+        canonicalHash: invoice.canonicalHash,
+        message: 'Invoice Cancelled / Voided. This invoice has been officially cancelled/voided and is no longer valid.',
+      };
+    }
+
+    if (invoice.verificationStatus === 'superseded') {
+      return {
+        success: false,
+        status: 'superseded',
+        invoiceNumber: invoice.invoiceNumber,
+        issuingCompany,
+        issuingLegalName,
+        signatoryName,
+        signatoryDesignation,
+        signatoryEmail,
+        invoiceIssueDate: formatDate(invoice.invoiceDate),
+        approvalDate: colomboTimes.dateStr,
+        approvalTime: colomboTimes.timeStr,
+        approvalTimestamp: approvalDateRaw,
+        verificationToken: invoice.verificationToken,
+        canonicalHash: invoice.canonicalHash,
+        message: 'This invoice has been superseded by a reissued document.',
+      };
+    }
+
+    // Active & Officially Verified
+    return {
+      success: true,
+      status: 'valid',
+      invoiceNumber: invoice.invoiceNumber,
+      issuingCompany,
+      issuingLegalName,
+      signatoryName,
+      signatoryDesignation,
+      signatoryEmail,
+      invoiceIssueDate: formatDate(invoice.invoiceDate),
+      approvalDate: colomboTimes.dateStr,
+      approvalTime: colomboTimes.timeStr,
+      approvalTimestamp: approvalDateRaw,
+      verificationToken: invoice.verificationToken,
+      canonicalHash: invoice.canonicalHash,
+      hashMatch: true,
+      message: `This invoice was officially issued by ${issuingCompany} and electronically approved by ${signatoryName}.`,
+    };
   }
 
   // --- Monthly History Query with Core Modes ---

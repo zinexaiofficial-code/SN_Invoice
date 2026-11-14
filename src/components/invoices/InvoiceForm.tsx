@@ -2,38 +2,55 @@
 
 import React, { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { 
-  Invoice, 
-  Client, 
-  BillingEntity, 
-  Service, 
-  InvoiceItem, 
+import {
+  Invoice,
+  Client,
+  BillingEntity,
+  Service,
+  InvoiceItem,
   InvoiceTemplate,
-  InvoiceTemplateKey 
+  InvoiceTemplateKey,
+  InvoicePdfFormat,
+  MediaChannel,
+  REFERENCE_TYPES,
+  AdvertisingReferenceType
 } from "@/types";
 import { storage } from "@/lib/storage";
 import { formatLKR, formatDate, formatServicePeriod } from "@/lib/utils";
+import { downloadInvoicePdf } from "@/lib/pdf";
+import { getVerificationUrl } from "@/lib/crypto";
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ClientModal } from "@/components/clients/ClientModal";
 import { InvoiceTemplateRenderer } from "@/components/invoices/InvoiceTemplateRenderer";
+import { DigitalApprovalBlock } from "@/components/invoices/DigitalApprovalBlock";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
-import { 
-  Plus, 
-  Trash2, 
-  Eye, 
-  Save, 
-  CheckCircle2, 
-  Printer, 
-  UserPlus, 
-  Building2, 
-  Layers, 
+import {
+  Plus,
+  Trash2,
+  Eye,
+  Save,
+  CheckCircle2,
+  Printer,
+  UserPlus,
+  Building2,
+  Layers,
   Sparkles,
   AlertCircle,
   Calendar,
-  AlertTriangle
+  AlertTriangle,
+  ShieldCheck,
+  Download,
+  ExternalLink,
+  QrCode,
+  FileCheck,
+  Radio,
+  Tv,
+  Hash,
+  Tag
 } from "lucide-react";
 
 interface InvoiceFormProps {
@@ -47,8 +64,23 @@ export function InvoiceForm({ initialInvoice }: InvoiceFormProps) {
   const [billingEntities, setBillingEntities] = useState<BillingEntity[]>([]);
   const [services, setServices] = useState<Service[]>([]);
   const [templates, setTemplates] = useState<InvoiceTemplate[]>([]);
+  const [mediaChannels, setMediaChannels] = useState<MediaChannel[]>([]);
+  const [mediaRefDisplay, setMediaRefDisplay] = useState<'separate' | 'inline'>(
+    initialInvoice?.mediaRefDisplay || 'separate'
+  );
   const [isClientModalOpen, setIsClientModalOpen] = useState(false);
   const [isPreviewOpen, setIsPreviewOpen] = useState(false);
+  const [selectedSignatureFormat, setSelectedSignatureFormat] = useState<InvoicePdfFormat>(
+    initialInvoice?.signatureFormat || "digital"
+  );
+  const [previewFormat, setPreviewFormat] = useState<InvoicePdfFormat>(
+    initialInvoice?.signatureFormat || "digital"
+  );
+  const [isApprovalModalOpen, setIsApprovalModalOpen] = useState(false);
+  const [isExportModalOpen, setIsExportModalOpen] = useState(false);
+  const [issuedInvoice, setIssuedInvoice] = useState<Invoice | null>(null);
+  const [isDownloading, setIsDownloading] = useState(false);
+  const [approvalConfirmed, setApprovalConfirmed] = useState(false);
   const [error, setError] = useState<string>("");
 
   // Form State
@@ -105,6 +137,7 @@ export function InvoiceForm({ initialInvoice }: InvoiceFormProps) {
     setBillingEntities(ents);
     setServices(servs);
     setTemplates(tmpls);
+    setMediaChannels(storage.getMediaChannels());
     setVatRate(branding.defaultVatRate || 18);
 
     if (initialInvoice) {
@@ -239,6 +272,10 @@ export function InvoiceForm({ initialInvoice }: InvoiceFormProps) {
         ...updated[index],
         serviceId: s.id,
         serviceName: s.name,
+        category: s.category || updated[index].category,
+        mediaChannel: s.defaultMediaChannel || updated[index].mediaChannel || "",
+        referenceType: s.defaultReferenceType || updated[index].referenceType || "RO Number",
+        referenceNumber: updated[index].referenceNumber || "",
         description: s.defaultDescription || s.name,
         unitPrice: s.defaultPrice,
         lineTotal: Math.round((updated[index].quantity || 1) * s.defaultPrice * 100) / 100,
@@ -259,6 +296,9 @@ export function InvoiceForm({ initialInvoice }: InvoiceFormProps) {
         serviceName: "Custom Advertising Service",
         description: "",
         servicePeriod: servicePeriodText || formatDate(invoiceDate),
+        mediaChannel: "",
+        referenceType: "RO Number",
+        referenceNumber: "",
         quantity: 1,
         unitPrice: 0,
         lineTotal: 0,
@@ -314,9 +354,15 @@ export function InvoiceForm({ initialInvoice }: InvoiceFormProps) {
       swiftCode: entity?.swiftCode,
       paymentInstructions: paymentInstructions || entity?.paymentInstructions,
       logoUrl: entity?.logoUrl,
-      signatureUrl: entity?.signatureUrl,
+      signatureUrl: entity?.signatureImageUrl || entity?.signatureUrl,
+      signatureImageUrl: entity?.signatureImageUrl || entity?.signatureUrl,
       signatoryName: entity?.signatoryName,
       signatoryDesignation: entity?.signatoryDesignation,
+      signatoryEmail: entity?.signatoryEmail || entity?.email,
+      signatureEnabled: entity?.signatureEnabled ?? true,
+      displaySignatureImage: entity?.displaySignatureImage ?? true,
+      verificationEnabled: entity?.verificationEnabled ?? true,
+      showQrCode: entity?.showQrCode ?? true,
       primaryColor: entity?.primaryColor,
       secondaryColor: entity?.secondaryColor,
       footerText: entity?.footerText,
@@ -329,6 +375,7 @@ export function InvoiceForm({ initialInvoice }: InvoiceFormProps) {
       clientId: selectedClientId,
       billingEntityId: selectedBillingEntityId,
       templateKey,
+      signatureFormat: selectedSignatureFormat,
       status: newStatus,
       invoiceDate,
       dueDate: dueDate || undefined,
@@ -360,6 +407,7 @@ export function InvoiceForm({ initialInvoice }: InvoiceFormProps) {
       clientSnapshot,
       billingSnapshot,
       items,
+      mediaRefDisplay,
       payments: initialInvoice?.payments || [],
       shareHistory: initialInvoice?.shareHistory || [],
       createdAt: initialInvoice?.createdAt || new Date().toISOString(),
@@ -396,10 +444,57 @@ export function InvoiceForm({ initialInvoice }: InvoiceFormProps) {
       }
     }
 
-    const payload = buildInvoicePayload(targetStatus);
-    storage.saveInvoice(payload);
+    if (targetStatus === "issued") {
+      setIsApprovalModalOpen(true);
+      return;
+    }
 
-    router.push(`/invoices/${payload.id}`);
+    const payload = buildInvoicePayload("draft");
+    const saved = storage.saveInvoice(payload);
+    router.push(`/invoices/${saved.id}`);
+  };
+
+  const handleConfirmIssueAndApprove = () => {
+    setIsApprovalModalOpen(false);
+    const payload = buildInvoicePayload("issued");
+    const saved = storage.saveInvoice(payload);
+    setIssuedInvoice(saved);
+    setIsExportModalOpen(true);
+  };
+
+  const handleDownloadDigitalPdf = async () => {
+    if (!issuedInvoice) return;
+    setIsDownloading(true);
+    try {
+      await downloadInvoicePdf({
+        elementId: "printable-invoice-modal",
+        filename: `${issuedInvoice.invoiceNumber}-Digital.pdf`,
+        verificationUrl: getVerificationUrl(issuedInvoice.verificationToken || issuedInvoice.id),
+      });
+    } catch (err) {
+      console.error(err);
+      alert("Failed to generate PDF. Redirecting to invoice details.");
+      router.push(`/invoices/${issuedInvoice.id}`);
+    } finally {
+      setIsDownloading(false);
+    }
+  };
+
+  const handleDownloadPrintPdf = async () => {
+    if (!issuedInvoice) return;
+    setIsDownloading(true);
+    try {
+      await downloadInvoicePdf({
+        elementId: "printable-invoice-modal-print",
+        filename: `${issuedInvoice.invoiceNumber}-Print.pdf`,
+      });
+    } catch (err) {
+      console.error(err);
+      alert("Failed to generate PDF. Redirecting to invoice details.");
+      router.push(`/invoices/${issuedInvoice.id}`);
+    } finally {
+      setIsDownloading(false);
+    }
   };
 
   const currentPreviewInvoice = buildInvoicePayload(status);
@@ -485,11 +580,10 @@ export function InvoiceForm({ initialInvoice }: InvoiceFormProps) {
                   <span>Billing Entity (Issuer) *</span>
                 </Label>
                 {activeEntity && (
-                  <span className={`text-[10px] px-2 py-0.5 rounded font-bold uppercase ${
-                    activeEntity.isVatRegistered 
-                      ? 'bg-amber-100 text-amber-900 border border-amber-300' 
+                  <span className={`text-[10px] px-2 py-0.5 rounded font-bold uppercase ${activeEntity.isVatRegistered
+                      ? 'bg-amber-100 text-amber-900 border border-amber-300'
                       : 'bg-emerald-100 text-emerald-900 border border-emerald-300'
-                  }`}>
+                    }`}>
                     {activeEntity.isVatRegistered ? `VAT: ${activeEntity.vatNumber}` : 'Non-VAT Entity'}
                   </span>
                 )}
@@ -848,6 +942,65 @@ export function InvoiceForm({ initialInvoice }: InvoiceFormProps) {
                   />
                 </div>
 
+                {/* Advertising Reference Fields (Channel, Ref Type, Ref No) */}
+                <div className="p-2.5 bg-slate-50 border border-slate-200 rounded-lg space-y-2">
+                  <div className="flex items-center justify-between">
+                    <span className="text-[10px] font-bold text-slate-700 uppercase tracking-wider flex items-center space-x-1">
+                      <Radio className="w-3 h-3 text-amber-600" />
+                      <span>Advertising References (Optional)</span>
+                    </span>
+                    {item.category && (
+                      <span className="text-[9px] font-bold text-slate-500 bg-white px-1.5 py-0.5 rounded border border-slate-200">
+                        {item.category}
+                      </span>
+                    )}
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                    <div>
+                      <Label className="text-[10px] text-slate-500 font-semibold block mb-0.5">Media Channel / Station</Label>
+                      <input
+                        type="text"
+                        list={`mobile-channels-${idx}`}
+                        value={item.mediaChannel || ""}
+                        onChange={(e) => updateItem(idx, "mediaChannel", e.target.value)}
+                        placeholder="Hiru FM, Sirasa TV..."
+                        className="w-full h-8 rounded border border-slate-300 bg-white px-2 text-xs font-semibold text-slate-800 focus:outline-none focus:ring-1 focus:ring-navy-900"
+                      />
+                      <datalist id={`mobile-channels-${idx}`}>
+                        {mediaChannels.map((c) => (
+                          <option key={c.id} value={c.name} />
+                        ))}
+                      </datalist>
+                    </div>
+
+                    <div>
+                      <Label className="text-[10px] text-slate-500 font-semibold block mb-0.5">Reference Type</Label>
+                      <select
+                        value={item.referenceType || "RO Number"}
+                        onChange={(e) => updateItem(idx, "referenceType", e.target.value)}
+                        className="w-full h-8 rounded border border-slate-300 bg-white px-2 text-xs font-medium text-slate-800 focus:outline-none focus:ring-1 focus:ring-navy-900"
+                      >
+                        {REFERENCE_TYPES.map((t) => (
+                          <option key={t} value={t}>
+                            {t}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+
+                    <div>
+                      <Label className="text-[10px] text-slate-500 font-semibold block mb-0.5">Reference Number</Label>
+                      <Input
+                        value={item.referenceNumber || ""}
+                        onChange={(e) => updateItem(idx, "referenceNumber", e.target.value)}
+                        placeholder="e.g. RO-2026-001"
+                        className="h-8 text-xs font-mono font-bold text-emerald-800"
+                      />
+                    </div>
+                  </div>
+                </div>
+
                 {/* 3-Field Grid: Period, Quantity, Unit Price */}
                 <div className="grid grid-cols-2 gap-2 pt-1">
                   <div className="space-y-1 col-span-2">
@@ -933,16 +1086,80 @@ export function InvoiceForm({ initialInvoice }: InvoiceFormProps) {
                           </option>
                         ))}
                       </select>
+                      {item.category && (
+                        <span className="inline-block mt-1.5 px-2 py-0.5 rounded text-[10px] font-bold text-slate-700 bg-slate-100 border border-slate-200 truncate max-w-full">
+                          {item.category}
+                        </span>
+                      )}
                     </td>
 
                     <td className="py-3 px-3 align-top">
-                      <textarea
-                        rows={2}
-                        value={item.description}
-                        onChange={(e) => updateItem(idx, "description", e.target.value)}
-                        placeholder="Service details, clips, media specifics..."
-                        className="w-full rounded-md border border-slate-300 p-2 text-xs focus:outline-none focus:ring-1 focus:ring-navy-900"
-                      />
+                      <div className="space-y-1.5">
+                        <textarea
+                          rows={2}
+                          value={item.description}
+                          onChange={(e) => updateItem(idx, "description", e.target.value)}
+                          placeholder="Service details, clips, media specifics..."
+                          className="w-full rounded-md border border-slate-300 p-2 text-xs focus:outline-none focus:ring-1 focus:ring-navy-900"
+                        />
+
+                        {/* Media References Inline Bar */}
+                        <div className="p-2 bg-slate-50/80 rounded-md border border-slate-200/90 grid grid-cols-12 gap-2 items-center text-xs">
+                          {/* Channel */}
+                          <div className="col-span-4">
+                            <span className="text-[10px] font-bold text-slate-500 block mb-0.5 flex items-center space-x-1">
+                              <Radio className="w-2.5 h-2.5 text-amber-600" />
+                              <span>Channel / Station</span>
+                            </span>
+                            <input
+                              type="text"
+                              list={`desktop-channels-${idx}`}
+                              value={item.mediaChannel || ""}
+                              onChange={(e) => updateItem(idx, "mediaChannel", e.target.value)}
+                              placeholder="Hiru FM, Sirasa TV..."
+                              className="w-full h-7 rounded border border-slate-300 bg-white px-2 text-[11px] font-semibold text-slate-800 focus:outline-none focus:ring-1 focus:ring-navy-900"
+                            />
+                            <datalist id={`desktop-channels-${idx}`}>
+                              {mediaChannels.map((c) => (
+                                <option key={c.id} value={c.name} />
+                              ))}
+                            </datalist>
+                          </div>
+
+                          {/* Reference Type */}
+                          <div className="col-span-4">
+                            <span className="text-[10px] font-bold text-slate-500 block mb-0.5 flex items-center space-x-1">
+                              <Hash className="w-2.5 h-2.5 text-slate-500" />
+                              <span>Reference Type</span>
+                            </span>
+                            <select
+                              value={item.referenceType || "RO Number"}
+                              onChange={(e) => updateItem(idx, "referenceType", e.target.value)}
+                              className="w-full h-7 rounded border border-slate-300 bg-white px-1.5 text-[11px] font-medium text-slate-800 focus:outline-none focus:ring-1 focus:ring-navy-900"
+                            >
+                              {REFERENCE_TYPES.map((t) => (
+                                <option key={t} value={t}>
+                                  {t}
+                                </option>
+                              ))}
+                            </select>
+                          </div>
+
+                          {/* Reference Number */}
+                          <div className="col-span-4">
+                            <span className="text-[10px] font-bold text-slate-500 block mb-0.5">
+                              <span>Ref No. (RO / Spot)</span>
+                            </span>
+                            <input
+                              type="text"
+                              value={item.referenceNumber || ""}
+                              onChange={(e) => updateItem(idx, "referenceNumber", e.target.value)}
+                              placeholder="e.g. RO-2026-001"
+                              className="w-full h-7 rounded border border-slate-300 bg-white px-2 text-[11px] font-mono font-bold text-emerald-800 focus:outline-none focus:ring-1 focus:ring-navy-900"
+                            />
+                          </div>
+                        </div>
+                      </div>
                     </td>
 
                     <td className="py-3 px-3 align-top">
@@ -993,6 +1210,22 @@ export function InvoiceForm({ initialInvoice }: InvoiceFormProps) {
                 ))}
               </tbody>
             </table>
+          </div>
+
+          {/* Media Reference Helper Note & Display Mode */}
+          <div className="pt-3 border-t border-slate-200 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 text-xs">
+            <span className="text-slate-500">
+              💡 Media Channel, RO Number, Booking Ref, and Spot IDs are line-item specific and will only be printed on the invoice when entered.
+            </span>
+            <label className="flex items-center space-x-2 cursor-pointer text-slate-700 font-semibold select-none shrink-0">
+              <input
+                type="checkbox"
+                checked={mediaRefDisplay === "separate"}
+                onChange={(e) => setMediaRefDisplay(e.target.checked ? "separate" : "inline")}
+                className="w-4 h-4 text-emerald-600 rounded"
+              />
+              <span>Highlight media references on separate line in PDF</span>
+            </label>
           </div>
         </CardContent>
       </Card>
@@ -1112,11 +1345,10 @@ export function InvoiceForm({ initialInvoice }: InvoiceFormProps) {
                     </label>
 
                     {/* Mode Indicator & Accounting Details */}
-                    <div className={`p-2.5 rounded-lg border text-xs ${
-                      showVatSeparately
+                    <div className={`p-2.5 rounded-lg border text-xs ${showVatSeparately
                         ? "bg-amber-50/80 border-amber-200 text-amber-950"
                         : "bg-emerald-50/80 border-emerald-200 text-emerald-950"
-                    }`}>
+                      }`}>
                       <span className="font-bold block text-[11px] uppercase tracking-wide">
                         {showVatSeparately ? "Presentation: Mode A — Separate Line" : "Presentation: Mode B — Inclusive (No Separate Row)"}
                       </span>
@@ -1167,22 +1399,186 @@ export function InvoiceForm({ initialInvoice }: InvoiceFormProps) {
         </Card>
       </div>
 
-      {/* PDF Layout Preview Dialog */}
+      {/* Section F: Signature & Document Authorization Format */}
+      <Card className="border-slate-300">
+        <CardHeader className="pb-3 border-b border-slate-100 bg-slate-50/60 rounded-t-xl">
+          <div className="flex items-center justify-between">
+            <CardTitle className="text-base text-navy-950 flex items-center space-x-2">
+              <FileCheck className="w-4 h-4 text-emerald-600" />
+              <span>Section F — Invoice Signature &amp; Authorization Format</span>
+            </CardTitle>
+            <Badge variant="outline" className="text-[10px] font-mono">
+              Hard Copy or Digital
+            </Badge>
+          </div>
+          <p className="text-xs text-slate-500 mt-0.5">
+            Choose whether to generate an authoritative Adobe-style digital signature block or a blank signature area for physical manual signing &amp; company stamp.
+          </p>
+        </CardHeader>
+        <CardContent className="p-4 sm:p-6 space-y-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {/* OPTION 1: DIGITAL SIGNATURE (ADOBE ACROBAT FORMAT) */}
+            <div
+              onClick={() => {
+                setSelectedSignatureFormat("digital");
+                setPreviewFormat("digital");
+              }}
+              className={`p-4 rounded-xl border-2 transition-all cursor-pointer relative ${
+                selectedSignatureFormat === "digital"
+                  ? "border-navy-950 bg-navy-50/20 shadow-xs"
+                  : "border-slate-200 bg-white hover:border-slate-300 hover:bg-slate-50/50"
+              }`}
+            >
+              <div className="flex items-center justify-between mb-2">
+                <label className="flex items-center space-x-2 cursor-pointer">
+                  <input
+                    type="radio"
+                    name="invoiceSignatureFormat"
+                    checked={selectedSignatureFormat === "digital"}
+                    onChange={() => {
+                      setSelectedSignatureFormat("digital");
+                      setPreviewFormat("digital");
+                    }}
+                    className="w-4 h-4 text-navy-950 focus:ring-navy-900 cursor-pointer"
+                  />
+                  <span className="font-bold text-sm text-navy-950">Digital Signature</span>
+                </label>
+                <span className="text-[10px] font-bold text-rose-700 bg-rose-50 border border-rose-200 px-2 py-0.5 rounded-full">
+                  Adobe PDF Format
+                </span>
+              </div>
+
+              <p className="text-xs text-slate-600 mb-3 leading-relaxed">
+                Official Adobe-style digital signature with large name, red ribbon seal watermark, verified credentials, Colombo timestamp (+05&apos;30&apos;), and online verification link.
+              </p>
+
+              {/* Live Mini Preview */}
+              <div className="bg-white p-2.5 rounded-lg border border-slate-200 flex justify-center overflow-hidden">
+                <div className="scale-90 origin-center pointer-events-none w-full flex justify-center">
+                  <DigitalApprovalBlock
+                    format="digital"
+                    previewSettings={{
+                      signatoryName: activeEntity?.signatoryName || "Shafil Surantha",
+                      signatoryDesignation: activeEntity?.signatoryDesignation || "Authorized Signatory",
+                      signatoryEmail: activeEntity?.signatoryEmail || "snadvertising@hotmail.com",
+                      entityName: activeEntity?.displayName || activeEntity?.name || "SN Advertising",
+                      verificationEnabled: true,
+                      showQrCode: false,
+                      previewFormat: "digital"
+                    }}
+                  />
+                </div>
+              </div>
+            </div>
+
+            {/* OPTION 2: BLANK SIGNATURE (HARD COPY PRINT PDF) */}
+            <div
+              onClick={() => {
+                setSelectedSignatureFormat("print");
+                setPreviewFormat("print");
+              }}
+              className={`p-4 rounded-xl border-2 transition-all cursor-pointer relative ${
+                selectedSignatureFormat === "print" || selectedSignatureFormat === "blank"
+                  ? "border-navy-950 bg-navy-50/20 shadow-xs"
+                  : "border-slate-200 bg-white hover:border-slate-300 hover:bg-slate-50/50"
+              }`}
+            >
+              <div className="flex items-center justify-between mb-2">
+                <label className="flex items-center space-x-2 cursor-pointer">
+                  <input
+                    type="radio"
+                    name="invoiceSignatureFormat"
+                    checked={selectedSignatureFormat === "print" || selectedSignatureFormat === "blank"}
+                    onChange={() => {
+                      setSelectedSignatureFormat("print");
+                      setPreviewFormat("print");
+                    }}
+                    className="w-4 h-4 text-navy-950 focus:ring-navy-900 cursor-pointer"
+                  />
+                  <span className="font-bold text-sm text-navy-950">Blank Signature (Hard Copy)</span>
+                </label>
+                <span className="text-[10px] font-bold text-slate-700 bg-slate-100 border border-slate-200 px-2 py-0.5 rounded-full">
+                  Manual Sign &amp; Stamp
+                </span>
+              </div>
+
+              <p className="text-xs text-slate-600 mb-3 leading-relaxed">
+                Follows official PDF hard copy format with clean blank signing space and company stamp area for manual pen signing after printing.
+              </p>
+
+              {/* Live Mini Preview */}
+              <div className="bg-white p-2.5 rounded-lg border border-slate-200 flex justify-center overflow-hidden">
+                <div className="scale-90 origin-center pointer-events-none w-full flex justify-center">
+                  <DigitalApprovalBlock
+                    format="print"
+                    previewSettings={{
+                      signatoryDesignation: activeEntity?.signatoryDesignation || "Authorized Signatory",
+                      previewFormat: "print"
+                    }}
+                  />
+                </div>
+              </div>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* PDF Layout Preview Dialog with Format Selector */}
       <Dialog open={isPreviewOpen} onOpenChange={setIsPreviewOpen}>
         <DialogContent className="max-w-4xl max-h-[92vh] overflow-y-auto p-4 sm:p-6">
           <DialogHeader>
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-2 border-b border-slate-200">
-              <DialogTitle className="text-navy-950 flex items-center space-x-2">
-                <Printer className="w-5 h-5 text-emerald-600" />
-                <span>Invoice PDF Preview</span>
-              </DialogTitle>
-              {/* Template switch in preview */}
-              <div className="flex items-center space-x-2 text-xs">
-                <span className="font-semibold text-slate-600">Template:</span>
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-slate-200">
+              <div>
+                <DialogTitle className="text-navy-950 flex items-center space-x-2">
+                  <Printer className="w-5 h-5 text-emerald-600" />
+                  <span>Invoice PDF Layout Preview</span>
+                </DialogTitle>
+                <p className="text-xs text-slate-500 mt-0.5">
+                  Choose between Digitally Approved format or Unsigned Printable format.
+                </p>
+              </div>
+
+              {/* Format Selector: Option A vs Option B */}
+              <div className="flex flex-wrap items-center gap-2">
+                <div className="flex items-center bg-slate-100 p-1 rounded-xl border border-slate-200 text-xs font-bold">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setPreviewFormat("digital");
+                      setSelectedSignatureFormat("digital");
+                    }}
+                    className={`px-3 py-1.5 rounded-lg flex items-center space-x-1.5 transition-all ${
+                      previewFormat === "digital"
+                        ? "bg-navy-950 text-white shadow-sm"
+                        : "text-slate-600 hover:text-navy-950"
+                    }`}
+                  >
+                    <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" />
+                    <span>Digital Signature (Adobe)</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setPreviewFormat("print");
+                      setSelectedSignatureFormat("print");
+                    }}
+                    className={`px-3 py-1.5 rounded-lg flex items-center space-x-1.5 transition-all ${
+                      previewFormat === "print" || previewFormat === "blank"
+                        ? "bg-navy-950 text-white shadow-sm"
+                        : "text-slate-600 hover:text-navy-950"
+                    }`}
+                  >
+                    <Printer className="w-3.5 h-3.5" />
+                    <span>Blank Signature (Hard Copy)</span>
+                  </button>
+                </div>
+
+                {/* Template switch in preview */}
                 <select
                   value={templateKey}
                   onChange={(e) => setTemplateKey(e.target.value as InvoiceTemplateKey)}
-                  className="h-8 rounded border border-slate-300 bg-white px-2 font-medium"
+                  className="h-8 rounded-lg border border-slate-300 bg-white px-2.5 text-xs font-semibold"
                 >
                   <option value="standard">Standard Advertising</option>
                   <option value="vat">VAT Invoice</option>
@@ -1194,21 +1590,216 @@ export function InvoiceForm({ initialInvoice }: InvoiceFormProps) {
           </DialogHeader>
 
           <div className="py-2 overflow-x-auto">
-            <InvoiceTemplateRenderer invoice={currentPreviewInvoice} />
+            <InvoiceTemplateRenderer
+              invoice={currentPreviewInvoice}
+              format={previewFormat}
+              isDraftPreview={true}
+            />
           </div>
 
-          <DialogFooter className="gap-2 sm:gap-0 pt-2 border-t border-slate-200">
-            <Button variant="outline" onClick={() => setIsPreviewOpen(false)}>
-              Close Preview
+          <DialogFooter className="gap-2 sm:gap-0 pt-3 border-t border-slate-200 flex items-center justify-between">
+            <span className="text-[11px] text-slate-400">
+              Format: {previewFormat === "digital" ? "Digitally Approved Preview" : "Print (Unsigned) Preview"}
+            </span>
+            <div className="flex items-center space-x-2">
+              <Button variant="outline" onClick={() => setIsPreviewOpen(false)}>
+                Close Preview
+              </Button>
+              <Button
+                onClick={() => {
+                  setIsPreviewOpen(false);
+                  handleSave("issued");
+                }}
+                className="bg-emerald-600 hover:bg-emerald-700 text-white font-semibold flex items-center space-x-1.5"
+              >
+                <CheckCircle2 className="w-4 h-4" />
+                <span>Authorize &amp; Issue Invoice</span>
+              </Button>
+            </div>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* STEP 4: Official Invoice Approval & Authorization Dialog */}
+      <Dialog open={isApprovalModalOpen} onOpenChange={setIsApprovalModalOpen}>
+        <DialogContent className="max-w-md p-6 rounded-2xl bg-white shadow-2xl border-slate-200">
+          <DialogHeader className="pb-3 border-b border-slate-100">
+            <div className="flex items-center space-x-3">
+              <div className="w-10 h-10 rounded-xl bg-emerald-50 text-emerald-700 flex items-center justify-center font-bold">
+                <ShieldCheck className="w-6 h-6 text-emerald-600" />
+              </div>
+              <div>
+                <DialogTitle className="text-base font-black text-navy-950">
+                  Authorize &amp; Issue Invoice
+                </DialogTitle>
+                <p className="text-xs text-slate-500">
+                  Application-level authorized digital signature and issuance ledger.
+                </p>
+              </div>
+            </div>
+          </DialogHeader>
+
+          <div className="space-y-4 py-2 text-xs text-slate-700">
+            <div className="p-3.5 bg-slate-50 rounded-xl border border-slate-200 space-y-2">
+              <div className="flex justify-between">
+                <span className="text-slate-500 font-semibold">Issuing Entity:</span>
+                <span className="font-bold text-navy-950">{activeEntity?.displayName || activeEntity?.name || "SN Advertising"}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-slate-500 font-semibold">Authorized Signatory:</span>
+                <span className="font-bold text-slate-900">{activeEntity?.signatoryName || "Shafil Surantha"}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-slate-500 font-semibold">Designation:</span>
+                <span className="font-medium text-slate-700">{activeEntity?.signatoryDesignation || "Authorized Signatory"}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-slate-500 font-semibold">Invoice Number:</span>
+                <span className="font-mono font-bold text-navy-950">{invoiceNumber || "Auto-Generated"}</span>
+              </div>
+              <div className="flex justify-between border-t border-slate-200 pt-2">
+                <span className="text-slate-500 font-semibold">Grand Total:</span>
+                <span className="font-mono font-black text-emerald-700 text-sm">{formatLKR(grandTotal)}</span>
+              </div>
+            </div>
+
+            <label className="flex items-start space-x-2.5 p-3 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 cursor-pointer transition-colors">
+              <input
+                type="checkbox"
+                checked={approvalConfirmed}
+                onChange={(e) => setApprovalConfirmed(e.target.checked)}
+                className="mt-0.5 w-4 h-4 rounded text-emerald-600 focus:ring-emerald-500 border-slate-300"
+              />
+              <span className="text-[11px] text-slate-700 leading-snug font-medium">
+                I confirm that I am authorized to issue and electronically approve this document on behalf of <strong>{activeEntity?.displayName || activeEntity?.name}</strong>.
+              </span>
+            </label>
+          </div>
+
+          <DialogFooter className="pt-3 border-t border-slate-100 flex items-center justify-between">
+            <Button type="button" variant="outline" size="sm" onClick={() => setIsApprovalModalOpen(false)}>
+              Cancel
             </Button>
             <Button
-              onClick={() => {
-                setIsPreviewOpen(false);
-                handleSave("issued");
-              }}
-              className="bg-emerald-600 hover:bg-emerald-700 text-white font-semibold"
+              type="button"
+              size="sm"
+              disabled={!approvalConfirmed}
+              onClick={handleConfirmIssueAndApprove}
+              className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold flex items-center space-x-1.5 shadow-sm"
             >
-              Confirm &amp; Issue Invoice
+              <CheckCircle2 className="w-4 h-4" />
+              <span>Confirm Issuance &amp; Digital Approval</span>
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* FEATURE 04 & 05: Generate Invoice PDF — Two Selectable Formats Modal */}
+      <Dialog open={isExportModalOpen} onOpenChange={setIsExportModalOpen}>
+        <DialogContent className="max-w-xl p-6 rounded-2xl bg-white shadow-2xl border-slate-200">
+          <DialogHeader className="pb-3 border-b border-slate-100">
+            <div className="flex items-center space-x-3">
+              <div className="w-10 h-10 rounded-xl bg-navy-950 text-white flex items-center justify-center font-bold">
+                <FileCheck className="w-5 h-5 text-emerald-400" />
+              </div>
+              <div>
+                <DialogTitle className="text-base font-black text-navy-950">
+                  Generate Invoice PDF
+                </DialogTitle>
+                <p className="text-xs text-slate-500">
+                  Invoice #{issuedInvoice?.invoiceNumber} successfully issued. Select your desired PDF export format:
+                </p>
+              </div>
+            </div>
+          </DialogHeader>
+
+          <div className="space-y-4 py-2">
+            {/* OPTION A: DIGITALLY APPROVED PDF */}
+            <div className="p-4 rounded-xl border border-emerald-200 bg-emerald-50/50 hover:bg-emerald-50 transition-colors space-y-2">
+              <div className="flex items-center justify-between">
+                <span className="font-bold text-xs text-navy-950 flex items-center space-x-1.5">
+                  <ShieldCheck className="w-4 h-4 text-emerald-600" />
+                  <span>Option A: Digital Signature (Adobe PDF)</span>
+                </span>
+                <Badge variant="success" className="text-[10px] uppercase font-bold">
+                  Recommended
+                </Badge>
+              </div>
+              <p className="text-[11px] text-slate-600 leading-relaxed">
+                Generate an invoice with Adobe-style authorized digital signature block, verified credentials, Colombo timestamp (+05&apos;30&apos;), and online verification link.
+              </p>
+              <div className="pt-2 flex items-center justify-between">
+                <span className="text-[10px] font-mono text-slate-400">
+                  File: {issuedInvoice?.invoiceNumber}-Digital.pdf
+                </span>
+                <Button
+                  size="sm"
+                  disabled={isDownloading}
+                  onClick={handleDownloadDigitalPdf}
+                  className="bg-navy-950 hover:bg-navy-900 text-white text-xs font-bold flex items-center space-x-1.5 shadow-sm"
+                >
+                  <Download className="w-3.5 h-3.5" />
+                  <span>Download Digital PDF</span>
+                </Button>
+              </div>
+            </div>
+
+            {/* OPTION B: WITHOUT SIGNATURE / PRINT PDF */}
+            <div className="p-4 rounded-xl border border-slate-200 bg-slate-50/50 hover:bg-slate-50 transition-colors space-y-2">
+              <div className="flex items-center justify-between">
+                <span className="font-bold text-xs text-slate-900 flex items-center space-x-1.5">
+                  <Printer className="w-4 h-4 text-slate-600" />
+                  <span>Option B: Blank Signature (Hard Copy Print PDF)</span>
+                </span>
+                <Badge variant="secondary" className="text-[10px] uppercase font-bold">
+                  Print &amp; Stamp
+                </Badge>
+              </div>
+              <p className="text-[11px] text-slate-600 leading-relaxed">
+                Generate a clean printable invoice following official hard copy format with blank signing space and company stamp area for manual pen signing after printing.
+              </p>
+              <div className="pt-2 flex items-center justify-between">
+                <span className="text-[10px] font-mono text-slate-400">
+                  File: {issuedInvoice?.invoiceNumber}-Print.pdf
+                </span>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  disabled={isDownloading}
+                  onClick={handleDownloadPrintPdf}
+                  className="text-xs font-bold flex items-center space-x-1.5"
+                >
+                  <Download className="w-3.5 h-3.5 text-slate-600" />
+                  <span>Download Blank / Hard Copy PDF</span>
+                </Button>
+              </div>
+            </div>
+          </div>
+
+          {/* Hidden containers for PDF rasterization */}
+          {issuedInvoice && (
+            <div className="hidden">
+              <div id="printable-invoice-modal" className="w-[210mm] min-h-[297mm] p-10 bg-white">
+                <InvoiceTemplateRenderer invoice={issuedInvoice} format="digital" printMode={true} />
+              </div>
+              <div id="printable-invoice-modal-print" className="w-[210mm] min-h-[297mm] p-10 bg-white">
+                <InvoiceTemplateRenderer invoice={issuedInvoice} format="print" printMode={true} />
+              </div>
+            </div>
+          )}
+
+          <DialogFooter className="pt-3 border-t border-slate-100 flex items-center justify-end">
+            <Button
+              type="button"
+              variant="default"
+              size="sm"
+              onClick={() => {
+                setIsExportModalOpen(false);
+                if (issuedInvoice) router.push(`/invoices/${issuedInvoice.id}`);
+              }}
+              className="bg-navy-950 text-white hover:bg-navy-900 text-xs font-bold"
+            >
+              <span>View Invoice Details</span>
             </Button>
           </DialogFooter>
         </DialogContent>

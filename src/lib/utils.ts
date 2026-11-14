@@ -145,3 +145,86 @@ export function numberToWordsLKR(amount: number): string {
   return words + ' Only';
 }
 
+/**
+ * Format timestamp in Asia/Colombo timezone.
+ * Returns dateStr: "14 November 2026", timeStr: "10:30 AM (Asia/Colombo)", fullStr: "14 November 2026 at 10:30 AM (Asia/Colombo)"
+ */
+export function formatColomboDateTime(dateInput: string | Date | null | undefined) {
+  if (!dateInput) {
+    return {
+      dateStr: "-",
+      timeStr: "- (Asia/Colombo)",
+      fullStr: "-",
+    };
+  }
+  try {
+    const d = typeof dateInput === "string" ? new Date(dateInput) : dateInput;
+    if (isNaN(d.getTime())) {
+      return {
+        dateStr: String(dateInput),
+        timeStr: "- (Asia/Colombo)",
+        fullStr: String(dateInput),
+      };
+    }
+
+    const dateStr = new Intl.DateTimeFormat("en-GB", {
+      timeZone: "Asia/Colombo",
+      day: "numeric",
+      month: "long",
+      year: "numeric",
+    }).format(d);
+
+    const timeRaw = new Intl.DateTimeFormat("en-US", {
+      timeZone: "Asia/Colombo",
+      hour: "numeric",
+      minute: "2-digit",
+      hour12: true,
+    }).format(d);
+
+    const timeStr = `${timeRaw} (Asia/Colombo)`;
+    const fullStr = `${dateStr} at ${timeStr}`;
+
+    return { dateStr, timeStr, fullStr };
+  } catch {
+    return {
+      dateStr: String(dateInput),
+      timeStr: "- (Asia/Colombo)",
+      fullStr: String(dateInput),
+    };
+  }
+}
+
+/**
+ * Format datetime in standard Adobe Acrobat PDF digital signature format:
+ * Example: "2026.11.14 10:30:15 +05'30'" (Asia/Colombo timezone)
+ */
+export function formatAdobeSignatureDate(dateInput: string | Date | null | undefined): string {
+  const d = dateInput
+    ? typeof dateInput === "string"
+      ? new Date(dateInput)
+      : dateInput
+    : new Date();
+
+  if (isNaN(d.getTime())) return "2026.11.14 10:30:00 +05'30'";
+
+  try {
+    const parts = new Intl.DateTimeFormat("en-CA", {
+      timeZone: "Asia/Colombo",
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+      hour: "2-digit",
+      minute: "2-digit",
+      second: "2-digit",
+      hour12: false,
+    }).formatToParts(d);
+
+    const get = (type: string) => parts.find((p) => p.type === type)?.value || "00";
+    return `${get("year")}.${get("month")}.${get("day")} ${get("hour")}:${get("minute")}:${get("second")} +05'30'`;
+  } catch {
+    return "2026.11.14 10:30:00 +05'30'";
+  }
+}
+
+
+

@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from "react";
 import Image from "next/image";
-import { BillingEntity, InvoiceTemplateKey } from "@/types";
+import { BillingEntity, InvoiceTemplateKey, InvoicePdfFormat } from "@/types";
 import { storage } from "@/lib/storage";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -18,8 +18,14 @@ import {
   Trash2, 
   CheckCircle2, 
   AlertCircle,
-  X
+  X,
+  ShieldCheck,
+  QrCode,
+  ExternalLink,
+  Eye,
+  RefreshCw
 } from "lucide-react";
+import { DigitalApprovalBlock } from "@/components/invoices/DigitalApprovalBlock";
 
 interface EntityModalProps {
   isOpen: boolean;
@@ -29,7 +35,7 @@ interface EntityModalProps {
 }
 
 export function EntityModal({ isOpen, onClose, entityToEdit, onSaved }: EntityModalProps) {
-  const [activeTab, setActiveTab] = useState<"identity" | "branding" | "banking" | "invoice">("identity");
+  const [activeTab, setActiveTab] = useState<"identity" | "branding" | "banking" | "invoice" | "signature">("identity");
   const [error, setError] = useState<string>("");
 
   // Form State - Business Identity
@@ -76,6 +82,15 @@ export function EntityModal({ isOpen, onClose, entityToEdit, onSaved }: EntityMo
   const [signatoryDesignation, setSignatoryDesignation] = useState("");
   const [invoiceNotes, setInvoiceNotes] = useState("");
 
+  // Digital Signature & Online Verification State
+  const [signatureEnabled, setSignatureEnabled] = useState(true);
+  const [signatoryEmail, setSignatoryEmail] = useState("");
+  const [signatureImageUrl, setSignatureImageUrl] = useState("");
+  const [displaySignatureImage, setDisplaySignatureImage] = useState(true);
+  const [verificationEnabled, setVerificationEnabled] = useState(true);
+  const [showQrCode, setShowQrCode] = useState(true);
+  const [settingsPreviewFormat, setSettingsPreviewFormat] = useState<InvoicePdfFormat>("digital");
+
   useEffect(() => {
     if (entityToEdit) {
       setLegalName(entityToEdit.name || "");
@@ -96,6 +111,7 @@ export function EntityModal({ isOpen, onClose, entityToEdit, onSaved }: EntityMo
 
       setLogoUrl(entityToEdit.logoUrl || "");
       setSignatureUrl(entityToEdit.signatureUrl || "");
+      setSignatureImageUrl(entityToEdit.signatureImageUrl || entityToEdit.signatureUrl || "");
       setPrimaryColor(entityToEdit.primaryColor || "#0f172a");
       setSecondaryColor(entityToEdit.secondaryColor || "#059669");
       setHeaderStyle(entityToEdit.headerStyle || "classic");
@@ -114,8 +130,13 @@ export function EntityModal({ isOpen, onClose, entityToEdit, onSaved }: EntityMo
       setDefaultPaymentTerms(entityToEdit.defaultPaymentTerms || "Immediate");
       setDefaultDueDays(entityToEdit.defaultDueDays || 7);
       setDefaultInvoiceTemplate(entityToEdit.defaultInvoiceTemplate || (entityToEdit.isVatRegistered ? "vat" : "standard"));
-      setSignatoryName(entityToEdit.signatoryName || "");
-      setSignatoryDesignation(entityToEdit.signatoryDesignation || "");
+      setSignatoryName(entityToEdit.signatoryName || (entityToEdit.prefix === "SN" ? "Shafil Surantha" : "Authorized Officer"));
+      setSignatoryDesignation(entityToEdit.signatoryDesignation || (entityToEdit.prefix === "SN" ? "Authorized Signatory" : "Director of Operations"));
+      setSignatoryEmail(entityToEdit.signatoryEmail || entityToEdit.email || (entityToEdit.prefix === "SN" ? "snadvertising@hotmail.com" : "info@haripara.lk"));
+      setSignatureEnabled(entityToEdit.signatureEnabled ?? true);
+      setDisplaySignatureImage(entityToEdit.displaySignatureImage ?? (entityToEdit.prefix === "SN" ? true : false));
+      setVerificationEnabled(entityToEdit.verificationEnabled ?? true);
+      setShowQrCode(entityToEdit.showQrCode ?? true);
       setInvoiceNotes(entityToEdit.invoiceNotes || "");
     } else {
       // Reset defaults for new entity
@@ -137,6 +158,14 @@ export function EntityModal({ isOpen, onClose, entityToEdit, onSaved }: EntityMo
 
       setLogoUrl("");
       setSignatureUrl("");
+      setSignatureImageUrl("");
+      setSignatureEnabled(true);
+      setSignatoryName("Shafil Surantha");
+      setSignatoryDesignation("Authorized Signatory");
+      setSignatoryEmail("");
+      setDisplaySignatureImage(true);
+      setVerificationEnabled(true);
+      setShowQrCode(true);
       setPrimaryColor("#0f172a");
       setSecondaryColor("#059669");
       setHeaderStyle("classic");
@@ -201,7 +230,9 @@ export function EntityModal({ isOpen, onClose, entityToEdit, onSaved }: EntityMo
 
     const reader = new FileReader();
     reader.onload = (event) => {
-      setSignatureUrl(event.target?.result as string);
+      const dataUrl = event.target?.result as string;
+      setSignatureUrl(dataUrl);
+      setSignatureImageUrl(dataUrl);
       setError("");
     };
     reader.readAsDataURL(file);
@@ -256,7 +287,6 @@ export function EntityModal({ isOpen, onClose, entityToEdit, onSaved }: EntityMo
       website: website.trim(),
 
       logoUrl: logoUrl.trim() || undefined,
-      signatureUrl: signatureUrl.trim() || undefined,
       primaryColor,
       secondaryColor,
       headerStyle,
@@ -277,6 +307,13 @@ export function EntityModal({ isOpen, onClose, entityToEdit, onSaved }: EntityMo
       defaultInvoiceTemplate,
       signatoryName: signatoryName.trim() || "Authorized Signatory",
       signatoryDesignation: signatoryDesignation.trim() || `For ${displayName.trim() || trimmedLegal}`,
+      signatoryEmail: signatoryEmail.trim() || email.trim() || undefined,
+      signatureEnabled,
+      displaySignatureImage,
+      verificationEnabled,
+      showQrCode,
+      signatureImageUrl: signatureImageUrl.trim() || signatureUrl.trim() || undefined,
+      signatureUrl: signatureImageUrl.trim() || signatureUrl.trim() || undefined,
       invoiceNotes: invoiceNotes.trim(),
       status: entityToEdit?.status || "active",
       isActive: entityToEdit?.isActive !== false,
@@ -308,12 +345,13 @@ export function EntityModal({ isOpen, onClose, entityToEdit, onSaved }: EntityMo
           </div>
 
           {/* Navigation Tabs */}
-          <div className="flex space-x-1 pt-4 border-t border-slate-200/80 mt-3">
+          <div className="flex flex-wrap gap-1 pt-4 border-t border-slate-200/80 mt-3">
             {[
               { id: "identity", label: "Business Identity", icon: Building2 },
               { id: "branding", label: "Branding & Assets", icon: Palette },
               { id: "banking", label: "Banking & Accounts", icon: Landmark },
               { id: "invoice", label: "Invoice Config", icon: FileText },
+              { id: "signature", label: "Digital Signature & Verification", icon: ShieldCheck },
             ].map((tab) => {
               const Icon = tab.icon;
               const isCurrent = activeTab === tab.id;
@@ -770,6 +808,257 @@ export function EntityModal({ isOpen, onClose, entityToEdit, onSaved }: EntityMo
                   placeholder="e.g. 75% Advance Payment to Proceed with Production"
                   className="w-full rounded-lg border border-slate-300 p-2 text-xs"
                 />
+              </div>
+
+              {/* Digital Signature & Verification Quick Summary Card */}
+              <div className="p-4 bg-slate-50 border border-slate-200 rounded-xl space-y-3">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center space-x-2">
+                    <ShieldCheck className="w-4 h-4 text-emerald-600" />
+                    <span className="text-xs font-bold text-navy-950">Digital Signature &amp; Verification</span>
+                  </div>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    onClick={() => setActiveTab("signature")}
+                    className="text-xs font-semibold text-navy-900 border-navy-200 hover:bg-navy-50"
+                  >
+                    Open Full Signature Settings
+                  </Button>
+                </div>
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs">
+                  <div className="p-2 bg-white rounded-lg border border-slate-200">
+                    <span className="text-[10px] text-slate-400 block font-semibold">Signatory</span>
+                    <span className="font-bold text-navy-950 truncate block">{signatoryName || "Not set"}</span>
+                  </div>
+                  <div className="p-2 bg-white rounded-lg border border-slate-200">
+                    <span className="text-[10px] text-slate-400 block font-semibold">Designation</span>
+                    <span className="font-semibold text-slate-700 truncate block">{signatoryDesignation || "Not set"}</span>
+                  </div>
+                  <div className="p-2 bg-white rounded-lg border border-slate-200">
+                    <span className="text-[10px] text-slate-400 block font-semibold">Signature Image</span>
+                    <span className="font-bold text-slate-700">{signatureImageUrl ? (displaySignatureImage ? "Active & Visible" : "Uploaded (Hidden)") : "None"}</span>
+                  </div>
+                  <div className="p-2 bg-white rounded-lg border border-slate-200">
+                    <span className="text-[10px] text-slate-400 block font-semibold">Verification QR</span>
+                    <span className="font-bold text-emerald-700">{showQrCode ? "Enabled" : "Disabled"}</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* TAB 5: Digital Signature & Verification */}
+          {activeTab === "signature" && (
+            <div className="space-y-6 animate-in fade-in">
+              <div className="p-3.5 bg-emerald-50/70 border border-emerald-200 rounded-xl text-xs text-emerald-950 leading-relaxed flex items-start space-x-2.5">
+                <ShieldCheck className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
+                <div>
+                  <strong>Entity-Specific Digital Authorization:</strong> Invoices issued under <strong>{displayName || legalName || "this entity"}</strong> will carry an authoritative digital approval block with verified signatory credentials, timestamp, and a public verification link.
+                </div>
+              </div>
+
+              {/* Toggles Bar */}
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 p-4 bg-slate-50 border border-slate-200 rounded-xl">
+                <label className="flex items-center space-x-2.5 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={signatureEnabled}
+                    onChange={(e) => setSignatureEnabled(e.target.checked)}
+                    className="w-4 h-4 rounded text-navy-950 focus:ring-navy-900 border-slate-300"
+                  />
+                  <span className="text-xs font-bold text-navy-950">Enable Digital Signature</span>
+                </label>
+
+                <label className="flex items-center space-x-2.5 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={verificationEnabled}
+                    onChange={(e) => setVerificationEnabled(e.target.checked)}
+                    className="w-4 h-4 rounded text-navy-950 focus:ring-navy-900 border-slate-300"
+                  />
+                  <span className="text-xs font-bold text-navy-950">Enable Online Verification</span>
+                </label>
+
+                <label className="flex items-center space-x-2.5 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={showQrCode}
+                    onChange={(e) => setShowQrCode(e.target.checked)}
+                    className="w-4 h-4 rounded text-navy-950 focus:ring-navy-900 border-slate-300"
+                  />
+                  <span className="text-xs font-bold text-navy-950">Show QR Code on Invoice</span>
+                </label>
+              </div>
+
+              {/* Form Fields & Preview Split */}
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-start">
+                {/* Left Column: Form Fields */}
+                <div className="space-y-4">
+                  <div className="space-y-1.5">
+                    <Label className="text-xs font-bold text-slate-800">Authorized Signatory Full Name *</Label>
+                    <Input
+                      value={signatoryName}
+                      onChange={(e) => setSignatoryName(e.target.value)}
+                      placeholder="e.g. Shafil Surantha"
+                      className="font-bold text-navy-950"
+                      required
+                    />
+                    <span className="text-[10px] text-slate-400">Official representative authorized to approve invoices for this entity.</span>
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <Label className="text-xs font-bold text-slate-800">Authorized Signatory Designation *</Label>
+                    <Input
+                      value={signatoryDesignation}
+                      onChange={(e) => setSignatoryDesignation(e.target.value)}
+                      placeholder="e.g. Authorized Signatory or Managing Director"
+                      className="font-semibold text-slate-800"
+                      required
+                    />
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <Label className="text-xs font-bold text-slate-800">Authorized Signatory Email</Label>
+                    <Input
+                      type="email"
+                      value={signatoryEmail}
+                      onChange={(e) => setSignatoryEmail(e.target.value)}
+                      placeholder="e.g. shafil@snadvertising.lk or snadvertising@hotmail.com"
+                    />
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <Label className="text-xs font-bold text-slate-800">Organization Name (Entity)</Label>
+                    <Input
+                      value={displayName || legalName || "SN Advertising"}
+                      readOnly
+                      disabled
+                      className="bg-slate-100 font-semibold text-slate-600 cursor-not-allowed"
+                    />
+                    <span className="text-[10px] text-slate-400">Automatically loaded from entity legal &amp; display profile.</span>
+                  </div>
+
+                  {/* Signature Image Artwork */}
+                  <div className="p-4 bg-slate-50 border border-slate-200 rounded-xl space-y-3">
+                    <div className="flex items-center justify-between">
+                      <Label className="text-xs font-bold text-navy-950 block">Upload Signature Image (Optional)</Label>
+                      <label className="flex items-center space-x-2 text-xs font-semibold text-slate-700 cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={displaySignatureImage}
+                          onChange={(e) => setDisplaySignatureImage(e.target.checked)}
+                          className="w-3.5 h-3.5 rounded text-navy-950 focus:ring-navy-900 border-slate-300"
+                        />
+                        <span>Display Signature Image</span>
+                      </label>
+                    </div>
+
+                    <div className="flex flex-col sm:flex-row items-center gap-4">
+                      <div className="w-36 h-16 rounded-xl border border-dashed border-slate-300 bg-white relative flex items-center justify-center overflow-hidden shrink-0">
+                        {signatureImageUrl ? (
+                          <Image
+                            src={signatureImageUrl}
+                            alt="Signature Image Preview"
+                            fill
+                            className="object-contain p-1"
+                          />
+                        ) : (
+                          <span className="text-[10px] text-slate-400 font-medium italic">No artwork</span>
+                        )}
+                      </div>
+
+                      <div className="space-y-2 text-xs flex-1">
+                        <p className="text-slate-600 leading-snug text-[11px]">
+                          Upload a transparent PNG, JPG, or WebP scan. When disabled or omitted, the invoice uses clean digital approval typography without handwritten fabrication.
+                        </p>
+                        <div className="flex items-center space-x-2">
+                          <label className="cursor-pointer bg-white border border-slate-300 hover:bg-slate-100 text-slate-800 px-3 py-1.5 rounded-lg text-xs font-bold flex items-center space-x-1.5 shadow-sm">
+                            <Upload className="w-3.5 h-3.5 text-navy-900" />
+                            <span>{signatureImageUrl ? "Replace Image" : "Upload Image"}</span>
+                            <input
+                              type="file"
+                              accept="image/png,image/jpeg,image/webp"
+                              onChange={handleSignatureUpload}
+                              className="hidden"
+                            />
+                          </label>
+                          {signatureImageUrl && (
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="sm"
+                              onClick={() => {
+                                setSignatureImageUrl("");
+                                setSignatureUrl("");
+                              }}
+                              className="text-rose-600 hover:text-rose-700 h-8 text-xs font-bold"
+                            >
+                              <Trash2 className="w-3.5 h-3.5 mr-1" />
+                              <span>Remove</span>
+                            </Button>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Right Column: Live Interactive Appearance Preview */}
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-bold text-navy-950 flex items-center space-x-1.5">
+                      <Eye className="w-3.5 h-3.5 text-emerald-600" />
+                      <span>Signature Appearance Preview</span>
+                    </span>
+                    <div className="flex items-center space-x-1 bg-slate-200/80 p-0.5 rounded-lg text-[10px] font-bold">
+                      <button
+                        type="button"
+                        onClick={() => setSettingsPreviewFormat("digital")}
+                        className={`px-2 py-1 rounded transition-all ${
+                          settingsPreviewFormat === "digital"
+                            ? "bg-navy-950 text-white shadow-xs"
+                            : "text-slate-600 hover:text-navy-950"
+                        }`}
+                      >
+                        Digital (Adobe)
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setSettingsPreviewFormat("print")}
+                        className={`px-2 py-1 rounded transition-all ${
+                          settingsPreviewFormat === "print"
+                            ? "bg-navy-950 text-white shadow-xs"
+                            : "text-slate-600 hover:text-navy-950"
+                        }`}
+                      >
+                        Blank Hard Copy
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="p-4 bg-slate-100/80 rounded-2xl border border-slate-200 flex justify-center">
+                    <DigitalApprovalBlock
+                      format={settingsPreviewFormat}
+                      previewSettings={{
+                        signatureEnabled,
+                        signatoryName: signatoryName || "Shafil Surantha",
+                        signatoryDesignation: signatoryDesignation || "Authorized Signatory",
+                        signatoryEmail: signatoryEmail || email || "snadvertising@hotmail.com",
+                        signatureImageUrl,
+                        displaySignatureImage,
+                        verificationEnabled,
+                        showQrCode,
+                        entityName: displayName || legalName || "SN Advertising",
+                        previewFormat: settingsPreviewFormat,
+                      }}
+                    />
+                  </div>
+                  <p className="text-[11px] text-slate-400 text-center leading-relaxed">
+                    Previewing {settingsPreviewFormat === "digital" ? "Adobe-style Digital Signature" : "Blank Hard Copy Print Signature"} for <strong>{displayName || legalName || "this entity"}</strong>.
+                  </p>
+                </div>
               </div>
             </div>
           )}
