@@ -65,14 +65,20 @@ export async function downloadInvoicePdf({
     const prevTransform = sheetEl.style.transform;
     sheetEl.style.transform = "none";
 
-    // High quality canvas rendering with exact A4 sheet proportions
+    // Measure full scroll dimensions so bottom elements are never truncated
+    const fullWidth = sheetEl.offsetWidth || 794;
+    const fullHeight = sheetEl.scrollHeight || sheetEl.offsetHeight || 1123;
+
+    // High quality canvas rendering with dynamic full height capture
     const canvas = await html2canvas(sheetEl, {
       scale: 2.5, // 240 DPI crisp quality
       useCORS: true,
       logging: false,
       backgroundColor: "#ffffff",
-      windowWidth: 794, // 210mm in standard 96 DPI CSS pixels
-      windowHeight: 1123, // 297mm in standard 96 DPI CSS pixels
+      width: fullWidth,
+      height: fullHeight,
+      windowWidth: Math.max(fullWidth, 794),
+      windowHeight: Math.max(fullHeight, 1123),
       scrollX: 0,
       scrollY: 0,
     });
@@ -81,7 +87,19 @@ export async function downloadInvoicePdf({
     sheetEl.style.transform = prevTransform;
 
     const imgData = canvas.toDataURL("image/jpeg", 0.98);
-    pdf.addImage(imgData, "JPEG", 0, 0, pdfWidth, pdfHeight, undefined, "FAST");
+    const canvasRatio = canvas.height / canvas.width;
+    const a4Ratio = pdfHeight / pdfWidth; // 297 / 210 = 1.4142857
+
+    if (canvasRatio <= a4Ratio + 0.005) {
+      // Content fits naturally within A4 page height
+      pdf.addImage(imgData, "JPEG", 0, 0, pdfWidth, pdfHeight, undefined, "FAST");
+    } else {
+      // Content is slightly taller than standard A4: scale proportionally so the bottom footer is NEVER cut off!
+      const renderHeight = pdfHeight;
+      const renderWidth = pdfHeight / canvasRatio;
+      const offsetX = (pdfWidth - renderWidth) / 2;
+      pdf.addImage(imgData, "JPEG", offsetX, 0, renderWidth, renderHeight, undefined, "FAST");
+    }
 
     // Clickable PDF verification hyperlink annotation
     if (verificationUrl) {

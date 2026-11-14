@@ -170,7 +170,7 @@ export function DigitalApprovalBlock({
           {/* Right Column: Digital Approval Details + Verification Link */}
           <div className="relative flex-1 pl-1 z-10 border-l border-slate-200">
             <div className="space-y-0.5 text-[8.5px] leading-[1.25] text-slate-800">
-              <p className="font-semibold text-emerald-800 flex items-center space-x-1">
+              <p className="font-semibold text-slate-800 flex items-center space-x-1">
                 <span>✓</span>
                 <span>Digitally Approved via SN INVOICE</span>
               </p>
@@ -195,7 +195,7 @@ export function DigitalApprovalBlock({
                     target="_blank"
                     rel="noopener noreferrer"
                     data-verification-link="true"
-                    className="verification-hyperlink text-[8px] font-bold text-emerald-800 hover:text-emerald-950 underline decoration-emerald-600 decoration-1 underline-offset-1 inline-flex items-center space-x-0.5"
+                    className="verification-hyperlink text-[8px] font-bold text-slate-700 hover:text-slate-950 underline decoration-slate-400 decoration-1 underline-offset-1 inline-flex items-center space-x-0.5"
                   >
                     <span>Verify Authenticity ↗</span>
                   </a>

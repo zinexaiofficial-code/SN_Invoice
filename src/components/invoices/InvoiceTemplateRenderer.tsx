@@ -78,7 +78,8 @@ function EntityLogoOrBadge({
 }
 
 /**
- * Service line item cell with secondary advertising metadata tags.
+ * Clean corporate service line item cell.
+ * No extraneous colored badges or duplicate channel tags.
  */
 function ItemServiceCell({
   item,
@@ -87,47 +88,27 @@ function ItemServiceCell({
   item: InvoiceItem;
   descriptionSizePt?: number;
 }) {
-  const hasMediaChannel = Boolean(item.mediaChannel && item.mediaChannel.trim());
   const hasRefNumber = Boolean(item.referenceNumber && item.referenceNumber.trim());
-  const hasCategory = Boolean(item.category && item.category !== "Other Services");
+  const isDescDuplicate =
+    Boolean(item.description && item.description.trim().toLowerCase() === item.serviceName.trim().toLowerCase());
 
   return (
     <div className="space-y-0.5 leading-snug">
-      {/* Title Line: Service Name + Media Channel */}
-      <div className="font-bold text-slate-900 flex flex-wrap items-center gap-1.5">
-        <span>{item.serviceName}</span>
-        {hasMediaChannel && (
-          <span className="text-emerald-800 font-semibold bg-emerald-50 border border-emerald-200 px-1.5 py-0.2 rounded text-[9.5px] inline-flex items-center space-x-1">
-            <span>—</span>
-            <span>{item.mediaChannel}</span>
-          </span>
-        )}
+      {/* Title Line: Service Name */}
+      <div className="font-bold text-slate-900 leading-snug">
+        {item.serviceName}
       </div>
 
-      {/* Media Reference Line (RO Number, Booking Ref, Spot ID) */}
+      {/* Optional Advertising Reference Line (RO Number, Booking Ref, Spot ID) */}
       {hasRefNumber && (
-        <div className="flex flex-wrap items-center gap-1.5 pt-0.5">
-          <span className="inline-flex items-center space-x-1 font-mono text-[9px] font-semibold text-slate-700 bg-slate-100 border border-slate-200 px-1.5 py-0.2 rounded">
-            <span className="text-slate-500 uppercase">{item.referenceType || "RO No"}:</span>
-            <span className="text-slate-900 font-bold">{item.referenceNumber}</span>
-          </span>
-          {hasCategory && (
-            <span className="text-[8.5px] font-medium text-slate-500 uppercase tracking-wide">
-              ({item.category})
-            </span>
-          )}
+        <div className="text-[8.5px] font-mono text-slate-500 pt-0.5">
+          <span className="font-semibold text-slate-700">{item.referenceType || "RO No"}:</span>{" "}
+          <span className="font-bold text-slate-900">{item.referenceNumber}</span>
         </div>
       )}
 
-      {/* Category without Ref */}
-      {!hasRefNumber && hasCategory && (
-        <div className="text-[8.5px] font-medium text-slate-500 uppercase tracking-wide">
-          ({item.category})
-        </div>
-      )}
-
-      {/* Work Description */}
-      {item.description && (
+      {/* Work Description - only show when distinct from service name */}
+      {item.description && !isDescDuplicate && (
         <div
           className="text-slate-600 whitespace-pre-line pt-0.5 leading-relaxed"
           style={{ fontSize: `${descriptionSizePt}pt` }}
@@ -272,7 +253,7 @@ export function InvoiceTemplateRenderer({
           style={{
             width: "210mm",
             minHeight: "297mm",
-            padding: "9mm 12mm 8mm 12mm",
+            padding: "8mm 12mm 10mm 12mm",
             boxSizing: "border-box",
             backgroundColor: "#FFFFFF",
           }}
@@ -327,7 +308,7 @@ export function InvoiceTemplateRenderer({
                     <div className="text-[8.5px] text-slate-500 space-x-1.5 font-mono">
                       {billingSnapshot?.brn && <span>BRN: {billingSnapshot.brn}</span>}
                       {billingSnapshot?.vatNumber && (
-                        <span className="font-semibold text-emerald-800">
+                        <span className="font-semibold text-slate-700">
                           • VAT: {billingSnapshot.vatNumber}
                         </span>
                       )}
@@ -403,7 +384,7 @@ export function InvoiceTemplateRenderer({
                         </div>
                       )}
                       {includeServicePeriod && servicePeriodStart && servicePeriodEnd && (
-                        <div className="text-[9px] text-emerald-800 font-mono font-semibold pt-0.5">
+                        <div className="text-[9px] text-slate-700 font-mono font-semibold pt-0.5">
                           Period: {formatServicePeriod(servicePeriodStart, servicePeriodEnd)}
                         </div>
                       )}
@@ -557,7 +538,7 @@ export function InvoiceTemplateRenderer({
                   {/* Payment tracking balance if partial payment exists */}
                   {invoice.totalPaid > 0 && (
                     <div className="pt-0.5 border-t border-slate-100 text-[9.5px] space-y-0.5">
-                      <div className="flex justify-between text-emerald-800">
+                      <div className="flex justify-between text-slate-700">
                         <span>Paid:</span>
                         <span className="font-mono font-bold">{formatLKR(invoice.totalPaid)}</span>
                       </div>
