@@ -46,6 +46,13 @@ export async function downloadInvoicePdf({
     await document.fonts.ready;
   }
 
+  // Save previous scroll position and scroll to top so html2canvas coordinate mapping is exact
+  const prevScrollX = typeof window !== "undefined" ? (window.scrollX || window.pageXOffset || 0) : 0;
+  const prevScrollY = typeof window !== "undefined" ? (window.scrollY || window.pageYOffset || 0) : 0;
+  if (typeof window !== "undefined") {
+    window.scrollTo(0, 0);
+  }
+
   // Normalize transforms on container and all descendants so UI zoom scales never alter exported PDF
   const transformedElements: { el: HTMLElement; prevTransform: string }[] = [];
   if (container.style.transform && container.style.transform !== "none") {
@@ -87,6 +94,10 @@ export async function downloadInvoicePdf({
       const targetWidthPx = 794;
       const targetHeightPx = 1123;
 
+      // Temporarily allow visible overflow during rasterization so no subpixel letters are clipped
+      const prevOverflow = sheetEl.style.overflow;
+      sheetEl.style.overflow = "visible";
+
       // High-resolution rendering at scale 3 (288 DPI print-grade quality)
       const canvas = await html2canvas(sheetEl, {
         scale: 3,
@@ -101,10 +112,12 @@ export async function downloadInvoicePdf({
         scrollY: 0,
       });
 
+      sheetEl.style.overflow = prevOverflow;
+
       const imgData = canvas.toDataURL("image/jpeg", 0.98);
 
       // Add image to PDF covering exact 210 x 297 mm
-      // Because internal padding is 14mm bottom, all content is safely inside printable boundaries!
+      // Because internal padding is 16mm bottom, all content is safely inside printable boundaries!
       pdf.addImage(imgData, "JPEG", 0, 0, pdfWidth, pdfHeight, undefined, "FAST");
 
       // Clickable PDF verification hyperlink annotation
@@ -131,6 +144,10 @@ export async function downloadInvoicePdf({
       }
     }
   } finally {
+    // Restore window scroll
+    if (typeof window !== "undefined") {
+      window.scrollTo(prevScrollX, prevScrollY);
+    }
     // Always restore original transforms
     transformedElements.forEach(({ el, prevTransform }) => {
       el.style.transform = prevTransform;

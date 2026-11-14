@@ -260,7 +260,7 @@ export function InvoiceTemplateRenderer({
             height: "297mm",
             minHeight: "297mm",
             maxHeight: "297mm",
-            padding: "10mm 14mm 14mm 14mm",
+            padding: "8mm 14mm 16mm 14mm",
             boxSizing: "border-box",
             backgroundColor: "#FFFFFF",
             overflow: "hidden",
@@ -469,7 +469,7 @@ export function InvoiceTemplateRenderer({
 
             {/* ----------------- TOTALS & FINANCIAL SUMMARY (LAST PAGE ONLY) ----------------- */}
             {page.isLastPage && (
-              <div className="mt-2.5 pt-1 flex items-start justify-between gap-5">
+              <div className="mt-2 pt-1 flex items-start justify-between gap-5">
                 {/* Left: Words, Special Notes, Custom Clause */}
                 <div className="flex-1 space-y-1 text-slate-600 max-w-sm">
                   {blocks.showAmountInWords !== false && (
@@ -562,10 +562,10 @@ export function InvoiceTemplateRenderer({
           </div>
 
           {/* ===================== PAGE BOTTOM (FOOTER) ===================== */}
-          <div className="mt-auto pt-2 shrink-0">
+          <div className="mt-auto pt-1.5 shrink-0">
             {/* Payment Details & Signature Block (Rendered on Last Page) */}
             {page.isLastPage ? (
-              <div className="border-t border-slate-200 pt-2 flex items-end justify-between gap-4">
+              <div className="border-t border-slate-200 pt-1.5 flex items-end justify-between gap-4">
                 {/* Left: Payment Instructions & Bank Details */}
                 {blocks.showBankDetails !== false ? (
                   <div className="flex-1 max-w-[360px] space-y-1">
@@ -597,7 +597,7 @@ export function InvoiceTemplateRenderer({
             ) : null}
 
             {/* Bottom Tagline & Page Numbering */}
-            <div className="border-t border-slate-200 pt-2 mt-2 flex items-center justify-between text-[8.5px] text-slate-400 shrink-0">
+            <div className="border-t border-slate-200 pt-1.5 pb-1 mt-1.5 flex items-center justify-between text-[8.5px] text-slate-400 shrink-0">
               <span className="truncate max-w-[460px] leading-tight">{entityFooter}</span>
               {typo.showPageNumbers && (
                 <span className="font-mono font-semibold text-slate-500 shrink-0">

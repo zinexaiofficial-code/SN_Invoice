@@ -135,7 +135,7 @@ export function estimateInvoiceHeights(
   // Bottom Tagline & Page Numbering
   const bottomTaglineHeightMm = 10;
 
-  // Usable height inside A4 sheet: 297mm - 10mm top margin - 14mm bottom margin = 273mm
+  // Usable height inside A4 sheet: 297mm - 8mm top margin - 16mm bottom margin = 273mm
   const totalFirstPageMm =
     headerHeightMm +
     tableHeaderHeightMm +
@@ -144,8 +144,8 @@ export function estimateInvoiceHeights(
     footerHeightMm +
     bottomTaglineHeightMm;
 
-  // A 5mm safety buffer ensures no subpixel rounding ever pushes text into the bottom margin
-  const fitsOnSinglePage = totalFirstPageMm <= 268;
+  // A 10mm safety buffer ensures no subpixel rounding ever pushes text into the bottom margin
+  const fitsOnSinglePage = totalFirstPageMm <= 263;
 
   let recommendedDensity: LayoutDensity = "balanced";
   if (totalItemsHeightMm <= 50) {

@@ -106,11 +106,11 @@ export function DigitalApprovalBlock({
           </div>
 
           {/* Bottom Designation Row */}
-          <div className="border-t border-slate-200 py-1.5 px-3 bg-slate-50 text-center">
-            <span className="text-[11px] font-bold text-slate-800 tracking-normal block">
+          <div className="border-t border-slate-200 pt-1.5 pb-2.5 px-3 bg-slate-50 text-center">
+            <span className="text-[10px] font-bold text-slate-800 tracking-normal block leading-tight">
               {signatoryDesignation || "Authorized Signatory"}
             </span>
-            <span className="text-[9.5px] text-slate-500 block leading-tight">
+            <span className="text-[8.5px] text-slate-500 block leading-normal pt-0.5">
               {entityName}
             </span>
           </div>
@@ -140,7 +140,7 @@ export function DigitalApprovalBlock({
 
   return (
     <div className="flex flex-col items-end text-right not-prose">
-      <div className="w-full max-w-[340px] border border-slate-300 rounded-xl bg-white text-left font-sans shadow-2xs overflow-hidden">
+      <div className="w-full max-w-[340px] border border-slate-300 rounded-lg bg-white text-left font-sans shadow-2xs overflow-hidden">
         {/* Main Signature Content Area */}
         <div className="p-2.5 relative flex items-start justify-between gap-2.5 bg-white">
           {/* Left Column: Signatory Artwork or Typography */}
@@ -215,8 +215,8 @@ export function DigitalApprovalBlock({
         </div>
 
         {/* Bottom Designation Row */}
-        <div className="border-t border-slate-200 py-1 px-2.5 bg-slate-50/80 text-center">
-          <span className="text-[9px] font-semibold text-slate-700 tracking-normal block leading-tight">
+        <div className="border-t border-slate-200 pt-1.5 pb-2.5 px-3 bg-slate-50/90 text-center">
+          <span className="text-[8.5px] font-semibold text-slate-600 tracking-normal block leading-normal">
             {entityName} — Official Digital Authorization
           </span>
         </div>
