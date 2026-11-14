@@ -140,11 +140,11 @@ export function DigitalApprovalBlock({
 
   return (
     <div className="flex flex-col items-end text-right not-prose">
-      <div className="w-full max-w-[340px] border border-slate-300 rounded-lg bg-white text-left font-sans shadow-2xs overflow-hidden">
+      <div className="w-full max-w-[340px] border border-slate-300 rounded-xl bg-white text-left font-sans shadow-2xs overflow-hidden">
         {/* Main Signature Content Area */}
-        <div className="p-2.5 relative flex items-center justify-between gap-2.5 overflow-hidden bg-white">
+        <div className="p-2.5 relative flex items-start justify-between gap-2.5 bg-white">
           {/* Left Column: Signatory Artwork or Typography */}
-          <div className="shrink-0 max-w-[115px] z-10">
+          <div className="shrink-0 max-w-[115px] z-10 flex flex-col justify-between self-stretch">
             {displaySignatureImage && signatureImageUrl ? (
               <div className="w-24 h-9 relative mb-1">
                 <Image
@@ -158,53 +158,56 @@ export function DigitalApprovalBlock({
             ) : null}
 
             {/* Bold Signatory Name */}
-            <div className="font-sans font-extrabold text-navy-950 text-[15px] leading-[1.15] tracking-tight">
+            <div className="font-sans font-extrabold text-navy-950 text-[14px] leading-tight tracking-tight">
               <div>{firstName}</div>
               {lastName ? <div>{lastName}</div> : null}
             </div>
-            <div className="text-[9.5px] font-semibold text-slate-500 mt-0.5 leading-tight">
+            <div className="text-[9.5px] font-semibold text-slate-500 mt-1 leading-snug">
               {signatoryDesignation}
             </div>
           </div>
 
-          {/* Right Column: Digital Approval Details + Verification Link */}
-          <div className="relative flex-1 pl-1 z-10 border-l border-slate-200">
-            <div className="space-y-0.5 text-[8.5px] leading-[1.25] text-slate-800">
-              <p className="font-semibold text-slate-800 flex items-center space-x-1">
-                <span>✓</span>
-                <span>Digitally Approved via SN INVOICE</span>
-              </p>
-              <p className="text-slate-600 truncate">
-                <span className="font-semibold text-slate-800">Org: </span>
-                {entityName}
-              </p>
-              <p className="text-slate-600">
-                <span className="font-semibold text-slate-800">Signatory: </span>
-                {signatoryName}
-              </p>
-              <p className="font-mono text-[8px] text-slate-600">
-                <span className="font-sans font-semibold text-slate-800">Date: </span>
-                {colomboTime.dateStr} {colomboTime.timeStr}
-              </p>
+          {/* Right Column: Digital Approval Details + Verification Link & QR Code */}
+          <div className="relative flex-1 pl-2.5 z-10 border-l border-slate-200">
+            <div className="flex items-start justify-between gap-1.5">
+              <div className="space-y-0.5 text-[8.5px] leading-snug text-slate-800 flex-1 min-w-0">
+                <p className="font-bold text-slate-900 flex items-center space-x-1 tracking-tight">
+                  <span className="text-emerald-600 font-bold">✓</span>
+                  <span>Digitally Approved via SN INVOICE</span>
+                </p>
+                <p className="text-slate-600 leading-snug break-words">
+                  <span className="font-semibold text-slate-800">Org: </span>
+                  <span>{entityName}</span>
+                </p>
+                <p className="text-slate-600 leading-snug break-words">
+                  <span className="font-semibold text-slate-800">Signatory: </span>
+                  <span>{signatoryName}</span>
+                </p>
+                <p className="font-mono text-[8px] text-slate-600 leading-snug">
+                  <span className="font-sans font-semibold text-slate-800">Date: </span>
+                  <span>{colomboTime.dateStr} {colomboTime.timeStr}</span>
+                </p>
 
-              {/* Online Verification Hyperlink & Optional QR Code */}
-              {verificationEnabled && (
-                <div className="pt-1 flex items-center justify-between gap-1 border-t border-slate-100 mt-1">
-                  <a
-                    href={verificationUrl}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    data-verification-link="true"
-                    className="verification-hyperlink text-[8px] font-bold text-slate-700 hover:text-slate-950 underline decoration-slate-400 decoration-1 underline-offset-1 inline-flex items-center space-x-0.5"
-                  >
-                    <span>Verify Authenticity ↗</span>
-                  </a>
+                {/* Online Verification Hyperlink */}
+                {verificationEnabled && (
+                  <div className="pt-0.5">
+                    <a
+                      href={verificationUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      data-verification-link="true"
+                      className="verification-hyperlink text-[8px] font-bold text-slate-700 hover:text-navy-950 underline decoration-slate-400 decoration-1 underline-offset-1 inline-flex items-center space-x-0.5"
+                    >
+                      <span>Verify Authenticity ↗</span>
+                    </a>
+                  </div>
+                )}
+              </div>
 
-                  {showQrCode && (
-                    <div className="bg-white p-0.5 rounded border border-slate-200 shrink-0 shadow-2xs">
-                      <QRCodeDisplay value={verificationUrl} size={28} />
-                    </div>
-                  )}
+              {/* QR Code placed cleanly on the right */}
+              {verificationEnabled && showQrCode && (
+                <div className="bg-white p-0.5 rounded border border-slate-200 shrink-0 shadow-2xs self-center">
+                  <QRCodeDisplay value={verificationUrl} size={30} />
                 </div>
               )}
             </div>
@@ -212,8 +215,8 @@ export function DigitalApprovalBlock({
         </div>
 
         {/* Bottom Designation Row */}
-        <div className="border-t border-slate-200 py-1 px-2.5 bg-slate-50/70 text-center">
-          <span className="text-[9.5px] font-semibold text-slate-700 tracking-normal block">
+        <div className="border-t border-slate-200 py-1 px-2.5 bg-slate-50/80 text-center">
+          <span className="text-[9px] font-semibold text-slate-700 tracking-normal block leading-tight">
             {entityName} — Official Digital Authorization
           </span>
         </div>

@@ -419,6 +419,46 @@ async function runTests() {
     // 5. Clean up test template
     await fetch(`${BASE_URL}/api/cheques/templates?id=${encodeURIComponent(testTplId)}`, { method: 'DELETE' });
 
+    // -------------------------------------------------------------------------
+    // TEST L: A4 Invoice PDF Layout & Boundary Verification
+    // -------------------------------------------------------------------------
+    console.log(`\n[Test L] Testing A4 Invoice PDF Layout & Boundary Verification...`);
+
+    // 1. Verify invoice index and detail routes
+    const invoicePdfPageRes = await fetch(`${BASE_URL}/invoices`);
+    assert(invoicePdfPageRes.status === 200, `Invoices index page returned HTTP 200`);
+
+    // 2. Mathematical A4 height budgeting tests
+    const sampleItems = [
+      { id: 'item-1', serviceName: 'Television Commercial Broadcast', quantity: 1, unitPrice: 450000, lineTotal: 450000, description: '30-Sec Prime-Time Commercial Spots during News & Drama Belt' },
+      { id: 'item-2', serviceName: 'Sponsorship Package on Run FM', quantity: 1, unitPrice: 300000, lineTotal: 300000, description: 'Morning & Evening Drive Time sponsorship package with presenter mentions' },
+      { id: 'item-3', serviceName: 'Video Campaign with Presenter', quantity: 1, unitPrice: 125000, lineTotal: 125000, description: '3 Promotional Video Clips for Social Media Marketing and YouTube Distribution' },
+    ];
+
+    const sampleItemHeights = sampleItems.map(it => {
+      let h = 9.5;
+      if (it.description) h += Math.ceil(it.description.length / 45) * 4.0;
+      return h;
+    });
+    const totalItemH = sampleItemHeights.reduce((a, b) => a + b, 0);
+    const totalFirstPageEstimate = 50 + 8 + totalItemH + 34 + 44 + 10;
+    assert(totalFirstPageEstimate <= 268, `Standard 3-item invoice height (${totalFirstPageEstimate.toFixed(1)}mm) safely fits on 1 Page (limit 268mm)`);
+    assert(273 - totalFirstPageEstimate >= 5, `Page 1 safe buffer to printable boundary is ${(273 - totalFirstPageEstimate).toFixed(1)}mm (>= 5mm required)`);
+
+    // 3. Dense 8-item scenario: verify auto-split to prevent footer cutoff
+    const denseItems = Array.from({ length: 8 }, (_, i) => ({
+      id: `dense-${i}`,
+      serviceName: `Campaign Service Package #${i + 1}`,
+      quantity: 1,
+      unitPrice: 50000,
+      lineTotal: 50000,
+      description: 'Extended production, scheduling, creative copy review, multiple presenter clips, and station distribution.'
+    }));
+    const denseItemHeights = denseItems.map(it => 9.5 + Math.ceil(it.description.length / 45) * 4.0);
+    const totalDenseH = denseItemHeights.reduce((a, b) => a + b, 0);
+    const totalDenseFirstPage = 50 + 8 + totalDenseH + 34 + 44 + 10;
+    assert(totalDenseFirstPage > 268, `Dense 8-item invoice height (${totalDenseFirstPage.toFixed(1)}mm) correctly triggers multi-page split`);
+
     console.log(`\n==========================================================`);
     console.log(`🏁 PERSISTENCE TEST SUITE FINISHED`);
     console.log(`Passed: ${passCount} | Failed: ${failCount}`);

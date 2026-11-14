@@ -192,11 +192,16 @@ export function InvoiceTemplateRenderer({
     customNoteText: "",
   };
 
-  // Paginate items onto true ISO A4 sheets respecting pageFitMode
+  // Paginate items onto true ISO A4 sheets respecting pageFitMode and dynamic content heights
   const pages: PaginatedPage[] = paginateInvoiceItems(
     items,
     typo.density,
-    typo.pageFitMode || "single_page"
+    typo.pageFitMode || "single_page",
+    {
+      hasVat: vatApplicable,
+      hasSpecialNotes: Boolean(specialNotes),
+      blocksConfig: blocks,
+    }
   );
 
   // Default payment instruction fallback
@@ -252,10 +257,13 @@ export function InvoiceTemplateRenderer({
           }`}
           style={{
             width: "210mm",
+            height: "297mm",
             minHeight: "297mm",
-            padding: "8mm 12mm 10mm 12mm",
+            maxHeight: "297mm",
+            padding: "10mm 14mm 14mm 14mm",
             boxSizing: "border-box",
             backgroundColor: "#FFFFFF",
+            overflow: "hidden",
           }}
         >
           {/* ===================== PAGE CONTENT TOP ===================== */}
@@ -554,30 +562,30 @@ export function InvoiceTemplateRenderer({
           </div>
 
           {/* ===================== PAGE BOTTOM (FOOTER) ===================== */}
-          <div className="mt-auto pt-2">
+          <div className="mt-auto pt-2 shrink-0">
             {/* Payment Details & Signature Block (Rendered on Last Page) */}
             {page.isLastPage ? (
-              <div className="border-t border-slate-200 pt-2 grid grid-cols-1 md:grid-cols-2 gap-3 items-end">
+              <div className="border-t border-slate-200 pt-2 flex items-end justify-between gap-4">
                 {/* Left: Payment Instructions & Bank Details */}
                 {blocks.showBankDetails !== false ? (
-                  <div className="text-slate-600 space-y-0.5">
+                  <div className="flex-1 max-w-[360px] space-y-1">
                     <p className="font-bold text-slate-900 text-[9.5px] uppercase tracking-wider">
                       PAYMENT INSTRUCTIONS &amp; BANK DETAILS
                     </p>
                     <p
-                      className="text-slate-600 leading-relaxed font-normal"
+                      className="text-slate-600 leading-relaxed font-normal break-words"
                       style={{ fontSize: `${typo.footerSizePt}pt` }}
                     >
                       {finalPaymentInstructions}
                     </p>
                   </div>
                 ) : (
-                  <div></div>
+                  <div className="flex-1"></div>
                 )}
 
                 {/* Right: Digital Approval or Blank Signature Block */}
                 {blocks.showSignatureBlock !== false && (
-                  <div>
+                  <div className="shrink-0 w-[340px]">
                     <DigitalApprovalBlock
                       invoice={invoice}
                       format={effectiveFormat}
@@ -589,8 +597,8 @@ export function InvoiceTemplateRenderer({
             ) : null}
 
             {/* Bottom Tagline & Page Numbering */}
-            <div className="border-t border-slate-100 pt-2 mt-1.5 flex items-center justify-between text-[8.5px] text-slate-400">
-              <span className="truncate max-w-[450px]">{entityFooter}</span>
+            <div className="border-t border-slate-200 pt-2 mt-2 flex items-center justify-between text-[8.5px] text-slate-400 shrink-0">
+              <span className="truncate max-w-[460px] leading-tight">{entityFooter}</span>
               {typo.showPageNumbers && (
                 <span className="font-mono font-semibold text-slate-500 shrink-0">
                   Page {page.pageNumber} of {page.totalPages}

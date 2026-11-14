@@ -161,6 +161,7 @@ export default function InvoicePrintPDFPage() {
             min-height: 297mm !important;
             max-height: 297mm !important;
             transform: none !important;
+            overflow: hidden !important;
           }
           .print\\:hidden,
           header,
