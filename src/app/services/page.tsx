@@ -43,12 +43,14 @@ import {
 } from "lucide-react";
 
 export default function ServicesPage() {
-  const { services, mediaChannels, saveService, deleteService, refresh } = useDatabase();
+  const { services, mediaChannels, saveService, deleteService, refresh, isSuperAdmin } = useDatabase();
   const channels = mediaChannels;
   const [templates, setTemplates] = useState<InvoiceTemplate[]>([]);
   const [isServiceModalOpen, setIsServiceModalOpen] = useState(false);
   const [editingService, setEditingService] = useState<Service | null>(null);
+  const [serviceToDelete, setServiceToDelete] = useState<Service | null>(null);
   const [isSaving, setIsSaving] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   // Service form fields
   const [serviceName, setServiceName] = useState("");
@@ -292,13 +294,24 @@ export default function ServicesPage() {
                           {formatLKR(srv.defaultPrice)}
                         </td>
                         <td className="py-3.5 px-4 text-right">
-                          <button
-                            onClick={() => handleOpenModal(srv)}
-                            className="p-1.5 text-slate-500 hover:text-navy-950 hover:bg-slate-100 rounded"
-                            title="Edit Service"
-                          >
-                            <Edit2 className="w-4 h-4" />
-                          </button>
+                          <div className="flex items-center justify-end space-x-1">
+                            <button
+                              onClick={() => handleOpenModal(srv)}
+                              className="p-1.5 text-slate-500 hover:text-navy-950 hover:bg-slate-100 rounded"
+                              title="Edit Service"
+                            >
+                              <Edit2 className="w-4 h-4" />
+                            </button>
+                            {isSuperAdmin && (
+                              <button
+                                onClick={() => setServiceToDelete(srv)}
+                                className="p-1.5 text-rose-500 hover:text-rose-700 hover:bg-rose-50 rounded transition-colors"
+                                title="Delete Service (Super Admin)"
+                              >
+                                <Trash2 className="w-4 h-4" />
+                              </button>
+                            )}
+                          </div>
                         </td>
                       </tr>
                     ))}
@@ -561,6 +574,61 @@ export default function ServicesPage() {
               </Button>
             </DialogFooter>
           </form>
+        </DialogContent>
+      </Dialog>
+
+      {/* Super Admin Delete Service Modal */}
+      <Dialog open={Boolean(serviceToDelete)} onOpenChange={(open) => !open && setServiceToDelete(null)}>
+        <DialogContent className="max-w-md p-6 rounded-2xl">
+          <DialogHeader>
+            <div className="w-10 h-10 rounded-full bg-rose-100 text-rose-600 flex items-center justify-center mb-2">
+              <Trash2 className="w-5 h-5" />
+            </div>
+            <DialogTitle className="text-lg font-black text-navy-950">
+              Permanently Delete Service?
+            </DialogTitle>
+          </DialogHeader>
+          <div className="text-xs text-slate-600 space-y-2 py-2">
+            <p>
+              Are you sure you want to permanently delete service <strong className="text-navy-950 font-bold">{serviceToDelete?.name}</strong>?
+            </p>
+            <div className="bg-rose-50 border border-rose-200 text-rose-800 p-2.5 rounded-lg">
+              <p className="font-semibold">⚠️ Super Admin Action:</p>
+              <p className="text-[11px] mt-0.5">This service will be removed from future invoice creation. Historical invoices that used this service will preserve their snapshot line items.</p>
+            </div>
+          </div>
+          <DialogFooter className="mt-4 flex space-x-2">
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={isDeleting}
+              onClick={() => setServiceToDelete(null)}
+              className="text-slate-600"
+            >
+              Cancel
+            </Button>
+            <Button
+              variant="destructive"
+              size="sm"
+              disabled={isDeleting}
+              onClick={async () => {
+                if (!serviceToDelete) return;
+                setIsDeleting(true);
+                try {
+                  await deleteService(serviceToDelete.id);
+                  setServiceToDelete(null);
+                } catch (err: any) {
+                  alert("Failed to delete service: " + (err.message || "Unknown error"));
+                } finally {
+                  setIsDeleting(false);
+                }
+              }}
+              className="bg-rose-600 hover:bg-rose-700 text-white font-bold flex items-center space-x-1"
+            >
+              {isDeleting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
+              <span>Delete Service</span>
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
     </AppLayout>

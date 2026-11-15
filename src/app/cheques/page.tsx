@@ -33,16 +33,30 @@ import { ChequeStatusModal } from "@/components/cheques/ChequeStatusModal";
 import { ChequeDetailsModal } from "@/components/cheques/ChequeDetailsModal";
 import { ChequeCalendar } from "@/components/cheques/ChequeCalendar";
 import { ChequePrintStudio } from "@/components/cheques/ChequePrintStudio";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter
+} from "@/components/ui/dialog";
+import { Button } from "@/components/ui/button";
+import {
+  Trash2,
+  Loader2
+} from "lucide-react";
 import { AppLayout } from "@/components/layout/AppLayout";
 import { cn } from "@/lib/utils";
 
 function ChequesPageContent() {
   const searchParams = useSearchParams();
   const initialSearch = searchParams.get("search") || "";
-  const { cheques: dbCheques, billingEntities: dbEntities, isLoading } = useDatabase();
+  const { cheques: dbCheques, billingEntities: dbEntities, isLoading, isSuperAdmin, deleteCheque } = useDatabase();
 
   const [cheques, setCheques] = useState<Cheque[]>([]);
   const [entities, setEntities] = useState<BillingEntity[]>([]);
+  const [chequeToDelete, setChequeToDelete] = useState<Cheque | null>(null);
+  const [isDeletingCheque, setIsDeletingCheque] = useState(false);
   const [kpis, setKpis] = useState<ChequeKPIs>({
     totalIncomingAmount: 0,
     totalOutgoingAmount: 0,
@@ -822,6 +836,15 @@ function ChequesPageContent() {
                           >
                             <Eye className="w-3.5 h-3.5" />
                           </button>
+                          {isSuperAdmin && (
+                            <button
+                              onClick={() => setChequeToDelete(chq)}
+                              className="p-1.5 text-rose-500 hover:text-rose-700 hover:bg-rose-50 rounded-lg transition-colors"
+                              title="Delete Cheque (Super Admin)"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          )}
                         </td>
                       </tr>
                     );
@@ -868,9 +891,13 @@ function ChequesPageContent() {
           setIsNewChequeModalOpen(true);
         }}
         onUpdateStatus={(c) => setStatusTargetCheque(c)}
-        onDelete={(c) => {
-          storage.deleteCheque(c.id);
-          loadData();
+        onDelete={async (c) => {
+          try {
+            await deleteCheque(c.id);
+            loadData();
+          } catch (err: any) {
+            alert("Failed to delete cheque: " + (err.message || "Unknown error"));
+          }
         }}
       />
 
@@ -884,6 +911,62 @@ function ChequesPageContent() {
         }}
         onSaved={loadData}
       />
+
+      {/* Super Admin Delete Cheque Modal */}
+      <Dialog open={Boolean(chequeToDelete)} onOpenChange={(open) => !open && setChequeToDelete(null)}>
+        <DialogContent className="max-w-md p-6 rounded-2xl">
+          <DialogHeader>
+            <div className="w-10 h-10 rounded-full bg-rose-100 text-rose-600 flex items-center justify-center mb-2">
+              <Trash2 className="w-5 h-5" />
+            </div>
+            <DialogTitle className="text-lg font-black text-navy-950">
+              Permanently Delete Cheque #{chequeToDelete?.chequeNumber}?
+            </DialogTitle>
+          </DialogHeader>
+          <div className="text-xs text-slate-600 space-y-2 py-2">
+            <p>
+              Are you sure you want to permanently delete cheque <strong className="text-navy-950 font-bold">#{chequeToDelete?.chequeNumber}</strong> for <strong className="text-navy-950">{chequeToDelete?.payerOrPayeeName}</strong>?
+            </p>
+            <div className="bg-rose-50 border border-rose-200 text-rose-800 p-2.5 rounded-lg">
+              <p className="font-semibold">⚠️ Super Admin Action:</p>
+              <p className="text-[11px] mt-0.5">This will delete the cheque presentation and reminder entry from PostgreSQL. This action cannot be reversed.</p>
+            </div>
+          </div>
+          <DialogFooter className="mt-4 flex space-x-2">
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={isDeletingCheque}
+              onClick={() => setChequeToDelete(null)}
+              className="text-slate-600"
+            >
+              Cancel
+            </Button>
+            <Button
+              variant="destructive"
+              size="sm"
+              disabled={isDeletingCheque}
+              onClick={async () => {
+                if (!chequeToDelete) return;
+                setIsDeletingCheque(true);
+                try {
+                  await deleteCheque(chequeToDelete.id);
+                  setChequeToDelete(null);
+                  loadData();
+                } catch (err: any) {
+                  alert("Failed to delete cheque: " + (err.message || "Unknown error"));
+                } finally {
+                  setIsDeletingCheque(false);
+                }
+              }}
+              className="bg-rose-600 hover:bg-rose-700 text-white font-bold flex items-center space-x-1"
+            >
+              {isDeletingCheque ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
+              <span>Delete Cheque</span>
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
       </div>
     </AppLayout>
   );

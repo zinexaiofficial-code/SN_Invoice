@@ -4,7 +4,7 @@ import React, { useState, useEffect } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { AppLayout } from "@/components/layout/AppLayout";
-import { Invoice, InvoiceTemplateKey, Cheque, InvoicePdfFormat, PdfTypographySettings } from "@/types";
+import { Invoice, InvoiceTemplateKey, Cheque, InvoicePdfFormat, PdfTypographySettings, UserRole } from "@/types";
 import { useDatabase } from "@/context/DatabaseContext";
 import { storage } from "@/lib/storage";
 import { formatLKR, formatDate, formatDateTime } from "@/lib/utils";
@@ -20,6 +20,13 @@ import { resolveTypography } from "@/lib/pdfTypography";
 import { ShareInvoiceModal } from "@/components/invoices/ShareInvoiceModal";
 import { RecordPaymentModal } from "@/components/invoices/RecordPaymentModal";
 import { ChequeModal } from "@/components/cheques/ChequeModal";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter
+} from "@/components/ui/dialog";
 import {
   Printer,
   Share2,
@@ -41,14 +48,16 @@ import {
   ExternalLink,
   Check,
   FileCheck,
-  Edit
+  Edit,
+  Trash2,
+  Loader2
 } from "lucide-react";
 
 export default function InvoiceDetailPage() {
   const params = useParams();
   const router = useRouter();
   const invoiceId = params.id as string;
-  const { invoices, isLoading, saveInvoice: dbSaveInvoice, refresh: dbRefresh } = useDatabase();
+  const { invoices, isLoading, saveInvoice: dbSaveInvoice, deleteInvoice: dbDeleteInvoice, refresh: dbRefresh, isSuperAdmin } = useDatabase();
 
   const [invoice, setInvoice] = useState<Invoice | null>(null);
   const [templateKey, setTemplateKey] = useState<InvoiceTemplateKey>("standard");
@@ -61,10 +70,12 @@ export default function InvoiceDetailPage() {
   const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
   const [isChequeModalOpen, setIsChequeModalOpen] = useState(false);
   const [isVerificationModalOpen, setIsVerificationModalOpen] = useState(false);
+  const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
   const [isDownloading, setIsDownloading] = useState(false);
   const [copiedLink, setCopiedLink] = useState(false);
   const [cheques, setCheques] = useState<Cheque[]>([]);
-  const [userRole, setUserRole] = useState<'admin' | 'staff'>('admin');
+  const [userRole, setUserRole] = useState<UserRole>('admin');
   const [fetchAttempted, setFetchAttempted] = useState(false);
 
   const loadCheques = () => {
@@ -382,6 +393,19 @@ export default function InvoiceDetailPage() {
               >
                 <Ban className="w-4 h-4 mr-1" />
                 <span>Void</span>
+              </Button>
+            )}
+
+            {isSuperAdmin && (
+              <Button
+                variant="destructive"
+                size="sm"
+                onClick={() => setIsDeleteModalOpen(true)}
+                className="bg-rose-600 hover:bg-rose-700 text-white font-bold flex items-center space-x-1.5 shadow-xs"
+                title="Permanently Delete Invoice (Super Admin)"
+              >
+                <Trash2 className="w-4 h-4" />
+                <span>Delete Invoice</span>
               </Button>
             )}
           </div>
@@ -748,6 +772,60 @@ export default function InvoiceDetailPage() {
         }}
         defaultInvoiceId={invoice.id}
       />
+
+      {/* Super Admin Delete Invoice Modal */}
+      <Dialog open={isDeleteModalOpen} onOpenChange={(open) => !open && setIsDeleteModalOpen(false)}>
+        <DialogContent className="max-w-md p-6 rounded-2xl">
+          <DialogHeader>
+            <div className="w-10 h-10 rounded-full bg-rose-100 text-rose-600 flex items-center justify-center mb-2">
+              <Trash2 className="w-5 h-5" />
+            </div>
+            <DialogTitle className="text-lg font-black text-navy-950">
+              Permanently Delete Invoice #{invoice?.invoiceNumber}?
+            </DialogTitle>
+          </DialogHeader>
+          <div className="text-xs text-slate-600 space-y-2 py-2">
+            <p>
+              Are you sure you want to permanently delete invoice <strong className="text-navy-950">#{invoice?.invoiceNumber}</strong> for <strong className="text-navy-950">{invoice?.clientSnapshot?.name}</strong>?
+            </p>
+            <div className="bg-rose-50 border border-rose-200 text-rose-800 p-2.5 rounded-lg">
+              <p className="font-semibold">⚠️ Super Admin Warning:</p>
+              <p className="text-[11px] mt-0.5">This action permanently deletes this invoice, all associated line items, and financial records from PostgreSQL. This cannot be undone.</p>
+            </div>
+          </div>
+          <DialogFooter className="mt-4 flex space-x-2">
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={isDeleting}
+              onClick={() => setIsDeleteModalOpen(false)}
+              className="text-slate-600"
+            >
+              Cancel
+            </Button>
+            <Button
+              variant="destructive"
+              size="sm"
+              disabled={isDeleting}
+              onClick={async () => {
+                if (!invoice) return;
+                setIsDeleting(true);
+                try {
+                  await dbDeleteInvoice(invoice.id);
+                  router.push("/invoices");
+                } catch (err: any) {
+                  alert("Failed to delete invoice: " + (err.message || "Unknown error"));
+                  setIsDeleting(false);
+                }
+              }}
+              className="bg-rose-600 hover:bg-rose-700 text-white font-bold flex items-center space-x-1"
+            >
+              {isDeleting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
+              <span>Delete Permanently</span>
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </AppLayout>
   );
 }

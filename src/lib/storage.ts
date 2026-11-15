@@ -26,7 +26,8 @@ import {
   VerificationResult,
   MediaChannel,
   ServiceCategory,
-  AdvertisingReferenceType
+  AdvertisingReferenceType,
+  UserRole
 } from '@/types';
 import { generateVerificationToken, computeCanonicalInvoiceHash } from '@/lib/crypto';
 import { formatColomboDateTime, formatDate } from '@/lib/utils';
@@ -2319,14 +2320,16 @@ class StorageService {
   }
 
   // --- User Role Mock Switcher ---
-  getUserRole(): 'admin' | 'staff' {
+  getUserRole(): UserRole {
     if (!this.isBrowser()) return 'admin';
-    return (localStorage.getItem(STORAGE_KEYS.CURRENT_USER_ROLE) as 'admin' | 'staff') || 'admin';
+    return (localStorage.getItem(STORAGE_KEYS.CURRENT_USER_ROLE) as UserRole) || 'admin';
   }
 
-  setUserRole(role: 'admin' | 'staff'): void {
+  setUserRole(role: UserRole): void {
     if (this.isBrowser()) {
       localStorage.setItem(STORAGE_KEYS.CURRENT_USER_ROLE, role);
+      window.dispatchEvent(new CustomEvent('user-role-changed', { detail: role }));
+      window.dispatchEvent(new Event('storage'));
     }
   }
 
@@ -2920,6 +2923,15 @@ class StorageService {
   deleteInvoiceLocally(id: string): void {
     if (!this.isBrowser()) return;
     const list = this.getInvoices().filter(i => i.id !== id);
+    localStorage.setItem(STORAGE_KEYS.INVOICES, JSON.stringify(list));
+    window.dispatchEvent(new Event('invoice-updated'));
+    window.dispatchEvent(new Event('storage'));
+  }
+
+  deleteInvoicesLocally(ids: string[]): void {
+    if (!this.isBrowser() || !ids || ids.length === 0) return;
+    const idSet = new Set(ids);
+    const list = this.getInvoices().filter(i => !idSet.has(i.id));
     localStorage.setItem(STORAGE_KEYS.INVOICES, JSON.stringify(list));
     window.dispatchEvent(new Event('invoice-updated'));
     window.dispatchEvent(new Event('storage'));

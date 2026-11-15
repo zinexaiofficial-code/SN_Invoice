@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getAllInvoices, saveInvoice } from '@/lib/serverDbService';
-import { getDbPool } from '@/lib/db';
+import { getAllInvoices, saveInvoice, deleteInvoice } from '@/lib/serverDbService';
 
 export const dynamic = 'force-dynamic';
 
@@ -45,11 +44,8 @@ export async function DELETE(
   { params }: { params: { id: string } }
 ) {
   try {
-    const pool = getDbPool();
-    if (pool) {
-      await pool.query('DELETE FROM invoices WHERE id = $1', [params.id]);
-    }
-    return NextResponse.json({ success: true }, { headers: NO_CACHE_HEADERS });
+    const ok = await deleteInvoice(params.id);
+    return NextResponse.json({ success: ok }, { headers: NO_CACHE_HEADERS });
   } catch (err: any) {
     return NextResponse.json({ error: err.message }, { status: 500, headers: NO_CACHE_HEADERS });
   }

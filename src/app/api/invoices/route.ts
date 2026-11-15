@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getAllInvoices, saveInvoice } from '@/lib/serverDbService';
+import { getAllInvoices, saveInvoice, deleteInvoice, deleteInvoicesBatch } from '@/lib/serverDbService';
 
 export const dynamic = 'force-dynamic';
 
@@ -29,6 +29,40 @@ export async function POST(req: NextRequest) {
   } catch (err: any) {
     console.error('Failed to save invoice:', err);
     return NextResponse.json({ error: err.message || 'Database error saving invoice' }, { status: 500, headers: NO_CACHE_HEADERS });
+  }
+}
+
+export async function DELETE(req: NextRequest) {
+  try {
+    const { searchParams } = new URL(req.url);
+    const id = searchParams.get('id');
+    const idsParam = searchParams.get('ids');
+
+    let idsToDelete: string[] = [];
+    if (idsParam) {
+      idsToDelete = idsParam.split(',').map((s) => s.trim()).filter(Boolean);
+    } else if (id) {
+      idsToDelete = [id.trim()];
+    } else {
+      try {
+        const body = await req.json();
+        if (Array.isArray(body?.ids)) {
+          idsToDelete = body.ids;
+        } else if (body?.id) {
+          idsToDelete = [body.id];
+        }
+      } catch {}
+    }
+
+    if (idsToDelete.length === 0) {
+      return NextResponse.json({ error: 'No invoice IDs provided for deletion' }, { status: 400, headers: NO_CACHE_HEADERS });
+    }
+
+    const ok = await deleteInvoicesBatch(idsToDelete);
+    return NextResponse.json({ success: ok, count: idsToDelete.length }, { headers: NO_CACHE_HEADERS });
+  } catch (err: any) {
+    console.error('Failed to batch delete invoices:', err);
+    return NextResponse.json({ error: err.message || 'Database error deleting invoices' }, { status: 500, headers: NO_CACHE_HEADERS });
   }
 }
 

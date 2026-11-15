@@ -14,6 +14,8 @@ import {
   Layers,
   Settings,
   ShieldCheck,
+  ShieldAlert,
+  Zap,
   UserCheck,
   Menu,
   X,
@@ -26,7 +28,9 @@ import {
 import { storage } from "@/lib/storage";
 import { useDatabase } from "@/context/DatabaseContext";
 import { cn } from "@/lib/utils";
+import { UserRole } from "@/types";
 import { NotificationBell } from "@/components/notifications/NotificationBell";
+import { RoleSwitchModal } from "@/components/layout/RoleSwitchModal";
 
 interface AppLayoutProps {
   children: React.ReactNode;
@@ -34,9 +38,10 @@ interface AppLayoutProps {
 
 export function AppLayout({ children }: AppLayoutProps) {
   const pathname = usePathname();
-  const { branding: dbBranding, billingEntities } = useDatabase();
+  const { branding: dbBranding, billingEntities, userRole: ctxRole, isSuperAdmin, setUserRole: ctxSetUserRole } = useDatabase();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
-  const [role, setRole] = useState<'admin' | 'staff'>('admin');
+  const [role, setRole] = useState<UserRole>('admin');
+  const [isRoleModalOpen, setIsRoleModalOpen] = useState(false);
   const [isOnline, setIsOnline] = useState(true);
   const [branding, setBranding] = useState({ businessName: 'SN Advertising', logoUrl: '/logo.png' });
 
@@ -47,6 +52,12 @@ export function AppLayout({ children }: AppLayoutProps) {
     const b = dbBranding || storage.getBranding();
     if (b) setBranding({ businessName: b.businessName, logoUrl: b.logoUrl || '/logo.png' });
 
+    const handleRoleChanged = (e: any) => {
+      const r = e.detail || storage.getUserRole();
+      setRole(r);
+    };
+    window.addEventListener("user-role-changed", handleRoleChanged);
+
     const handleOnline = () => setIsOnline(true);
     const handleOffline = () => setIsOnline(false);
 
@@ -55,15 +66,15 @@ export function AppLayout({ children }: AppLayoutProps) {
     setIsOnline(navigator.onLine);
 
     return () => {
+      window.removeEventListener("user-role-changed", handleRoleChanged);
       window.removeEventListener("online", handleOnline);
       window.removeEventListener("offline", handleOffline);
     };
-  }, []);
+  }, [dbBranding]);
 
-  const toggleRole = () => {
-    const newRole = role === 'admin' ? 'staff' : 'admin';
+  const handleRoleChange = (newRole: UserRole) => {
     setRole(newRole);
-    storage.setUserRole(newRole);
+    ctxSetUserRole(newRole);
   };
 
   const navItems = [
@@ -75,7 +86,7 @@ export function AppLayout({ children }: AppLayoutProps) {
     { name: "Monthly History", href: "/history", icon: CalendarDays },
     { name: "Reports", href: "/reports", icon: BarChart3 },
     { name: "Services & Templates", href: "/services", icon: Layers },
-    ...(role === 'admin' ? [{ name: "Settings", href: "/settings", icon: Settings }] : []),
+    ...(role === 'admin' || role === 'super_admin' ? [{ name: "Settings", href: "/settings", icon: Settings }] : []),
   ];
 
   return (
@@ -94,12 +105,25 @@ export function AppLayout({ children }: AppLayoutProps) {
         <div className="flex items-center space-x-2">
           <NotificationBell />
           <button
-            onClick={toggleRole}
-            className="text-xs bg-navy-900 border border-navy-700 px-2 py-1 rounded text-slate-200 flex items-center space-x-1"
-            title="Toggle between Admin and Staff mode"
+            onClick={() => setIsRoleModalOpen(true)}
+            className={cn(
+              "text-xs px-2 py-1 rounded flex items-center space-x-1 border transition-colors",
+              role === "super_admin"
+                ? "bg-rose-950 border-rose-500 text-rose-300 font-bold"
+                : "bg-navy-900 border-navy-700 text-slate-200"
+            )}
+            title="Switch system role & permissions"
           >
-            {role === 'admin' ? <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" /> : <UserCheck className="w-3.5 h-3.5 text-blue-400" />}
-            <span className="capitalize text-[11px] font-medium">{role}</span>
+            {role === "super_admin" ? (
+              <Zap className="w-3.5 h-3.5 text-rose-400" />
+            ) : role === "admin" ? (
+              <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" />
+            ) : (
+              <UserCheck className="w-3.5 h-3.5 text-blue-400" />
+            )}
+            <span className="capitalize text-[11px] font-semibold">
+              {role === "super_admin" ? "Super Admin" : role}
+            </span>
           </button>
           <button
             onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
@@ -180,20 +204,47 @@ export function AppLayout({ children }: AppLayoutProps) {
             <span className="text-[11px] font-mono text-slate-400">v1.0 LKR</span>
           </div>
 
-          <div className="bg-navy-900 rounded-lg p-2.5 flex items-center justify-between border border-navy-800">
+          <div className={cn(
+            "rounded-lg p-2.5 flex items-center justify-between border transition-all",
+            role === 'super_admin'
+              ? "bg-gradient-to-r from-rose-950 to-purple-950 border-rose-700/60 shadow-sm"
+              : "bg-navy-900 border-navy-800"
+          )}>
             <div className="flex items-center space-x-2">
-              <div className={cn("w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold", role === 'admin' ? "bg-emerald-500/20 text-emerald-300" : "bg-blue-500/20 text-blue-300")}>
-                {role === 'admin' ? <ShieldCheck className="w-4 h-4" /> : <UserCheck className="w-4 h-4" />}
+              <div className={cn(
+                "w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold",
+                role === 'super_admin'
+                  ? "bg-rose-500/30 text-rose-300 ring-1 ring-rose-400"
+                  : role === 'admin'
+                  ? "bg-emerald-500/20 text-emerald-300"
+                  : "bg-blue-500/20 text-blue-300"
+              )}>
+                {role === 'super_admin' ? (
+                  <Zap className="w-4 h-4 text-rose-300" />
+                ) : role === 'admin' ? (
+                  <ShieldCheck className="w-4 h-4 text-emerald-300" />
+                ) : (
+                  <UserCheck className="w-4 h-4 text-blue-300" />
+                )}
               </div>
               <div>
-                <p className="text-xs font-semibold text-white capitalize">{role} Account</p>
-                <p className="text-[10px] text-slate-400 truncate max-w-[120px]">{activeEntityName}</p>
+                <p className="text-xs font-semibold text-white capitalize">
+                  {role === 'super_admin' ? "Super Admin" : `${role} Account`}
+                </p>
+                <p className="text-[10px] text-slate-400 truncate max-w-[120px]">
+                  {role === 'super_admin' ? "⚡ Deletion Unlocked" : activeEntityName}
+                </p>
               </div>
             </div>
             <button
-              onClick={toggleRole}
-              className="text-[11px] text-slate-300 hover:text-white bg-navy-800 hover:bg-navy-700 px-2 py-1 rounded transition-colors"
-              title="Switch role for testing"
+              onClick={() => setIsRoleModalOpen(true)}
+              className={cn(
+                "text-[11px] px-2 py-1 rounded transition-colors font-semibold",
+                role === 'super_admin'
+                  ? "bg-rose-600 hover:bg-rose-500 text-white"
+                  : "text-slate-300 hover:text-white bg-navy-800 hover:bg-navy-700"
+              )}
+              title="Switch role & permissions"
             >
               Switch
             </button>
@@ -276,19 +327,55 @@ export function AppLayout({ children }: AppLayoutProps) {
             <div className="h-6 w-px bg-slate-200" />
 
             <button
-              onClick={toggleRole}
-              className="text-xs font-semibold px-3 py-1.5 rounded-lg border flex items-center space-x-1.5 transition-all shadow-xs bg-slate-50 hover:bg-slate-100 text-slate-700 border-slate-200"
-              title="Click to switch role"
-            >
-              {role === 'admin' ? (
-                <ShieldCheck className="w-4 h-4 text-emerald-600" />
-              ) : (
-                <UserCheck className="w-4 h-4 text-blue-600" />
+              onClick={() => setIsRoleModalOpen(true)}
+              className={cn(
+                "text-xs font-semibold px-3 py-1.5 rounded-lg border flex items-center space-x-1.5 transition-all shadow-xs",
+                role === 'super_admin'
+                  ? "bg-rose-50 hover:bg-rose-100 text-rose-900 border-rose-300 ring-1 ring-rose-200"
+                  : "bg-slate-50 hover:bg-slate-100 text-slate-700 border-slate-200"
               )}
-              <span className="capitalize font-semibold">{role} View</span>
+              title="Click to switch role & deletion permissions"
+            >
+              {role === 'super_admin' ? (
+                <>
+                  <Zap className="w-4 h-4 text-rose-600 fill-rose-100" />
+                  <span className="font-bold text-rose-800">⚡ Super Admin Mode</span>
+                </>
+              ) : role === 'admin' ? (
+                <>
+                  <ShieldCheck className="w-4 h-4 text-emerald-600" />
+                  <span className="font-semibold text-slate-700">Admin View</span>
+                </>
+              ) : (
+                <>
+                  <UserCheck className="w-4 h-4 text-blue-600" />
+                  <span className="font-semibold text-slate-700">Staff View</span>
+                </>
+              )}
             </button>
           </div>
         </header>
+
+        {/* Super Admin Persistent Alert Banner */}
+        {role === 'super_admin' && (
+          <div className="bg-gradient-to-r from-rose-900 via-rose-950 to-purple-950 text-white px-4 md:px-8 py-2 text-xs flex items-center justify-between border-b border-rose-500/30 shadow-xs">
+            <div className="flex items-center space-x-2">
+              <span className="flex h-2 w-2 relative">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-rose-400 opacity-75"></span>
+                <span className="relative inline-flex rounded-full h-2 w-2 bg-rose-500"></span>
+              </span>
+              <span className="font-black text-rose-300 tracking-wide uppercase">Super Admin Active:</span>
+              <span className="text-slate-200 hidden sm:inline">Permanent deletion and total history purge options are unlocked across all sections.</span>
+            </div>
+            <button
+              onClick={() => handleRoleChange('admin')}
+              className="bg-white/10 hover:bg-white/20 text-white px-2.5 py-1 rounded text-[11px] font-bold transition-colors shrink-0"
+              title="Switch back to standard Admin Account"
+            >
+              Switch to Admin
+            </button>
+          </div>
+        )}
 
         {/* Offline Banner if offline */}
         {!isOnline && (
@@ -302,6 +389,14 @@ export function AppLayout({ children }: AppLayoutProps) {
           {children}
         </div>
       </main>
+
+      {/* Role Switcher Modal */}
+      <RoleSwitchModal
+        isOpen={isRoleModalOpen}
+        onClose={() => setIsRoleModalOpen(false)}
+        currentRole={role}
+        onSelectRole={handleRoleChange}
+      />
 
       {/* Mobile Bottom Navigation (as requested in Section 2) */}
       <nav className="md:hidden fixed bottom-0 left-0 right-0 bg-white border-t border-slate-200 z-40 px-2 py-1.5 flex items-center justify-around shadow-lg">

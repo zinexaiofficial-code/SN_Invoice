@@ -9,6 +9,7 @@ import {
   MediaChannel,
   Cheque,
   BrandingSettings,
+  UserRole,
 } from "@/types";
 import { storage } from "@/lib/storage";
 
@@ -20,8 +21,11 @@ interface DatabaseContextType {
   mediaChannels: MediaChannel[];
   cheques: Cheque[];
   branding: BrandingSettings | null;
+  userRole: UserRole;
+  isSuperAdmin: boolean;
   isLoading: boolean;
   error: string | null;
+  setUserRole: (role: UserRole) => void;
   refresh: () => Promise<void>;
   saveClient: (client: Partial<Client>) => Promise<Client>;
   archiveClient: (id: string) => Promise<boolean>;
@@ -33,6 +37,7 @@ interface DatabaseContextType {
   deleteService: (id: string) => Promise<boolean>;
   saveInvoice: (invoice: Partial<Invoice>) => Promise<Invoice>;
   deleteInvoice: (id: string) => Promise<boolean>;
+  deleteInvoicesBatch: (ids: string[]) => Promise<boolean>;
   saveCheque: (cheque: Partial<Cheque>) => Promise<Cheque>;
   deleteCheque: (id: string) => Promise<boolean>;
   saveBranding: (branding: Partial<BrandingSettings>) => Promise<BrandingSettings>;
@@ -48,8 +53,26 @@ export function DatabaseProvider({ children }: { children: React.ReactNode }) {
   const [mediaChannels, setMediaChannels] = useState<MediaChannel[]>([]);
   const [cheques, setCheques] = useState<Cheque[]>([]);
   const [branding, setBranding] = useState<BrandingSettings | null>(null);
+  const [userRole, setUserRoleState] = useState<UserRole>("admin");
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
+
+  const isSuperAdmin = userRole === "super_admin";
+
+  useEffect(() => {
+    setUserRoleState(storage.getUserRole());
+    const handleRoleChanged = (e: any) => {
+      const r = e.detail || storage.getUserRole();
+      setUserRoleState(r);
+    };
+    window.addEventListener("user-role-changed", handleRoleChanged);
+    return () => window.removeEventListener("user-role-changed", handleRoleChanged);
+  }, []);
+
+  const setUserRole = (role: UserRole) => {
+    setUserRoleState(role);
+    storage.setUserRole(role);
+  };
 
   const isFetchingRef = React.useRef(false);
 
@@ -385,6 +408,25 @@ export function DatabaseProvider({ children }: { children: React.ReactNode }) {
     return true;
   };
 
+  const deleteInvoicesBatch = async (ids: string[]): Promise<boolean> => {
+    if (!ids || ids.length === 0) return true;
+    const res = await fetch("/api/invoices", {
+      method: "DELETE",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ ids }),
+    });
+
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.error || "Failed to batch delete invoices");
+    }
+
+    const idSet = new Set(ids);
+    setInvoices((prev) => prev.filter((i) => !idSet.has(i.id)));
+    storage.deleteInvoicesLocally(ids);
+    return true;
+  };
+
   const saveCheque = async (chequeData: Partial<Cheque>): Promise<Cheque> => {
     const res = await fetch("/api/cheques", {
       method: "POST",
@@ -458,8 +500,11 @@ export function DatabaseProvider({ children }: { children: React.ReactNode }) {
         mediaChannels,
         cheques,
         branding,
+        userRole,
+        isSuperAdmin,
         isLoading,
         error,
+        setUserRole,
         refresh: fetchBootstrap,
         saveClient,
         archiveClient,
@@ -471,6 +516,7 @@ export function DatabaseProvider({ children }: { children: React.ReactNode }) {
         deleteService,
         saveInvoice,
         deleteInvoice,
+        deleteInvoicesBatch,
         saveCheque,
         deleteCheque,
         saveBranding,

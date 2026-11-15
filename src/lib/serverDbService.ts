@@ -813,6 +813,49 @@ export async function saveInvoice(invoice: Invoice): Promise<Invoice> {
   }
 }
 
+export async function deleteInvoice(id: string): Promise<boolean> {
+  const pool = getDbPool();
+  if (!pool) return false;
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    await client.query('DELETE FROM invoice_items WHERE invoice_id = $1', [id]);
+    await client.query('DELETE FROM payments WHERE invoice_id = $1', [id]);
+    await client.query('UPDATE cheques SET invoice_id = NULL WHERE invoice_id = $1', [id]);
+    const res = await client.query('DELETE FROM invoices WHERE id = $1', [id]);
+    await client.query('COMMIT');
+    return (res.rowCount ?? 0) > 0;
+  } catch (err) {
+    await client.query('ROLLBACK');
+    console.error('Failed to delete invoice:', err);
+    throw err;
+  } finally {
+    client.release();
+  }
+}
+
+export async function deleteInvoicesBatch(ids: string[]): Promise<boolean> {
+  if (!ids || ids.length === 0) return true;
+  const pool = getDbPool();
+  if (!pool) return false;
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    await client.query('DELETE FROM invoice_items WHERE invoice_id = ANY($1::text[])', [ids]);
+    await client.query('DELETE FROM payments WHERE invoice_id = ANY($1::text[])', [ids]);
+    await client.query('UPDATE cheques SET invoice_id = NULL WHERE invoice_id = ANY($1::text[])', [ids]);
+    const res = await client.query('DELETE FROM invoices WHERE id = ANY($1::text[])', [ids]);
+    await client.query('COMMIT');
+    return (res.rowCount ?? 0) > 0;
+  } catch (err) {
+    await client.query('ROLLBACK');
+    console.error('Failed to batch delete invoices:', err);
+    throw err;
+  } finally {
+    client.release();
+  }
+}
+
 // -----------------------------------------------------------------------------
 // CHEQUES
 // -----------------------------------------------------------------------------

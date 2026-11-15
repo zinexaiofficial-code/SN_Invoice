@@ -12,6 +12,13 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { ClientModal } from "@/components/clients/ClientModal";
 import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter
+} from "@/components/ui/dialog";
+import {
   Users,
   UserPlus,
   Search,
@@ -21,15 +28,19 @@ import {
   FileText,
   ChevronRight,
   Edit2,
-  RefreshCw
+  RefreshCw,
+  Trash2,
+  Loader2
 } from "lucide-react";
 
 export default function ClientsListPage() {
-  const { clients, invoices, isLoading, error, refresh } = useDatabase();
+  const { clients, invoices, isLoading, error, refresh, isSuperAdmin, deleteClient } = useDatabase();
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<"all" | "active" | "inactive">("active");
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingClient, setEditingClient] = useState<Client | null>(null);
+  const [clientToDelete, setClientToDelete] = useState<Client | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   const filteredClients = clients.filter((c) => {
     if (statusFilter === "active" && !c.isActive) return false;
@@ -175,6 +186,15 @@ export default function ClientsListPage() {
                             >
                               <ChevronRight className="w-5 h-5 text-slate-400" />
                             </Link>
+                            {isSuperAdmin && (
+                              <button
+                                onClick={() => setClientToDelete(client)}
+                                className="p-1.5 text-rose-500 hover:text-rose-700 hover:bg-rose-50 rounded transition-colors"
+                                title="Delete Client (Super Admin)"
+                              >
+                                <Trash2 className="w-4 h-4" />
+                              </button>
+                            )}
                           </div>
                         </td>
                       </tr>
@@ -212,6 +232,61 @@ export default function ClientsListPage() {
         }}
         onSaved={refresh}
       />
+
+      {/* Super Admin Delete Client Modal */}
+      <Dialog open={Boolean(clientToDelete)} onOpenChange={(open) => !open && setClientToDelete(null)}>
+        <DialogContent className="max-w-md p-6 rounded-2xl">
+          <DialogHeader>
+            <div className="w-10 h-10 rounded-full bg-rose-100 text-rose-600 flex items-center justify-center mb-2">
+              <Trash2 className="w-5 h-5" />
+            </div>
+            <DialogTitle className="text-lg font-black text-navy-950">
+              Permanently Delete Client?
+            </DialogTitle>
+          </DialogHeader>
+          <div className="text-xs text-slate-600 space-y-2 py-2">
+            <p>
+              Are you sure you want to delete client <strong className="text-navy-950 font-bold">{clientToDelete?.name}</strong> ({clientToDelete?.code})?
+            </p>
+            <div className="bg-rose-50 border border-rose-200 text-rose-800 p-2.5 rounded-lg">
+              <p className="font-semibold">⚠️ Super Admin Action:</p>
+              <p className="text-[11px] mt-0.5">If this client has existing invoices, they will safely archive to preserve invoice audit integrity, or be permanently removed if unused.</p>
+            </div>
+          </div>
+          <DialogFooter className="mt-4 flex space-x-2">
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={isDeleting}
+              onClick={() => setClientToDelete(null)}
+              className="text-slate-600"
+            >
+              Cancel
+            </Button>
+            <Button
+              variant="destructive"
+              size="sm"
+              disabled={isDeleting}
+              onClick={async () => {
+                if (!clientToDelete) return;
+                setIsDeleting(true);
+                try {
+                  await deleteClient(clientToDelete.id);
+                  setClientToDelete(null);
+                } catch (err: any) {
+                  alert("Failed to delete client: " + (err.message || "Unknown error"));
+                } finally {
+                  setIsDeleting(false);
+                }
+              }}
+              className="bg-rose-600 hover:bg-rose-700 text-white font-bold flex items-center space-x-1"
+            >
+              {isDeleting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
+              <span>Delete Client</span>
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </AppLayout>
   );
 }

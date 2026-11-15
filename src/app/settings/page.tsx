@@ -45,7 +45,8 @@ export default function SettingsPage() {
     deleteBillingEntity,
     saveBranding,
     refresh,
-    isLoading
+    isLoading,
+    isSuperAdmin
   } = useDatabase();
 
   const [branding, setBranding] = useState<BrandingSettings>(
@@ -314,7 +315,11 @@ export default function SettingsPage() {
                       {/* Footer Actions */}
                       <div className="pt-2 border-t border-slate-100 flex items-center justify-between">
                         <span className="text-[11px] text-slate-400">
-                          {hasInvoices ? "Has historical invoices (Protected)" : "No invoices issued"}
+                          {hasInvoices
+                            ? isSuperAdmin
+                              ? "Has invoices (Super Admin Override Active)"
+                              : "Has historical invoices (Protected)"
+                            : "No invoices issued"}
                         </span>
 
                         <div className="flex items-center space-x-1.5">
@@ -353,13 +358,14 @@ export default function SettingsPage() {
                             </Button>
                           )}
 
-                          {!hasInvoices && (
+                          {(!hasInvoices || isSuperAdmin) && (
                             <Button
                               type="button"
                               variant="outline"
                               size="sm"
                               onClick={() => setConfirmAction({ type: "delete", entity: ent })}
                               className="h-8 text-xs text-rose-600 hover:bg-rose-50 border-rose-200"
+                              title={hasInvoices ? "Delete Entity (Super Admin Override)" : "Delete Entity"}
                             >
                               <Trash2 className="w-3.5 h-3.5" />
                             </Button>
