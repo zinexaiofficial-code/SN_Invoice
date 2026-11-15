@@ -79,7 +79,7 @@ async function main() {
     sortOrder: i
   }));
 
-  const createDenseRes = await fetch('http://localhost:3009/api/invoices', {
+  const createDenseRes = await fetch('https://sn-invoice.duckdns.org/api/invoices', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
@@ -120,7 +120,7 @@ async function main() {
       ws.addEventListener('message', loadHandler);
     });
 
-    await cdp('Page.navigate', { url: `http://localhost:3009/invoices/${inv.id}/pdf?format=digital` });
+    await cdp('Page.navigate', { url: `https://sn-invoice.duckdns.org/invoices/${inv.id}/pdf?format=digital` });
     await loadPromise;
 
     // Check what is on the page
