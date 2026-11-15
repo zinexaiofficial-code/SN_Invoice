@@ -748,7 +748,7 @@ function ChequesPageContent() {
                         {/* Entity */}
                         <td className="py-3.5 px-4">
                           <span className="font-mono text-[11px] font-bold px-1.5 py-0.5 bg-slate-100 text-slate-800 rounded">
-                            {chq.billingEntityPrefix || "SN"}
+                            {entities.find(e => e.id === chq.billingEntityId)?.prefix || chq.billingEntityPrefix || "SN"}
                           </span>
                         </td>
 

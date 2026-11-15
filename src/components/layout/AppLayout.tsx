@@ -24,6 +24,7 @@ import {
   CreditCard
 } from "lucide-react";
 import { storage } from "@/lib/storage";
+import { useDatabase } from "@/context/DatabaseContext";
 import { cn } from "@/lib/utils";
 import { NotificationBell } from "@/components/notifications/NotificationBell";
 
@@ -33,14 +34,17 @@ interface AppLayoutProps {
 
 export function AppLayout({ children }: AppLayoutProps) {
   const pathname = usePathname();
+  const { branding: dbBranding, billingEntities } = useDatabase();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [role, setRole] = useState<'admin' | 'staff'>('admin');
   const [isOnline, setIsOnline] = useState(true);
   const [branding, setBranding] = useState({ businessName: 'SN Advertising', logoUrl: '/logo.png' });
 
+  const activeEntityName = dbBranding?.businessName || billingEntities?.[0]?.displayName || billingEntities?.[0]?.name || "SN Advertising";
+
   useEffect(() => {
     setRole(storage.getUserRole());
-    const b = storage.getBranding();
+    const b = dbBranding || storage.getBranding();
     if (b) setBranding({ businessName: b.businessName, logoUrl: b.logoUrl || '/logo.png' });
 
     const handleOnline = () => setIsOnline(true);
@@ -183,7 +187,7 @@ export function AppLayout({ children }: AppLayoutProps) {
               </div>
               <div>
                 <p className="text-xs font-semibold text-white capitalize">{role} Account</p>
-                <p className="text-[10px] text-slate-400">SN Advertising</p>
+                <p className="text-[10px] text-slate-400 truncate max-w-[120px]">{activeEntityName}</p>
               </div>
             </div>
             <button
@@ -207,7 +211,7 @@ export function AppLayout({ children }: AppLayoutProps) {
               </div>
               <div>
                 <h2 className="font-bold text-lg text-white">SN INVOICE</h2>
-                <p className="text-xs text-slate-400">SN Advertising</p>
+                <p className="text-xs text-slate-400 truncate">{activeEntityName}</p>
               </div>
             </div>
             <button onClick={() => setIsMobileMenuOpen(false)} className="p-2 text-slate-300 hover:text-white">

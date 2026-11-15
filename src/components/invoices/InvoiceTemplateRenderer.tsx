@@ -17,6 +17,8 @@ import {
 } from "@/lib/utils";
 import { resolveTypography, paginateInvoiceItems, PaginatedPage } from "@/lib/pdfTypography";
 import { DigitalApprovalBlock } from "@/components/invoices/DigitalApprovalBlock";
+import { useDatabase } from "@/context/DatabaseContext";
+import { storage } from "@/lib/storage";
 
 export interface InvoiceTemplateRendererProps {
   invoice: Invoice;
@@ -128,6 +130,46 @@ export function InvoiceTemplateRenderer({
   typographySettings,
   zoomScale = 1,
 }: InvoiceTemplateRendererProps) {
+  const { billingEntities } = useDatabase();
+  const liveEntity =
+    (billingEntities || []).find((e) => e.id === invoice.billingEntityId) ||
+    (invoice.billingEntityId ? storage.getBillingEntities().find((e) => e.id === invoice.billingEntityId) : undefined);
+
+  const rawSnapshot = invoice.billingSnapshot || (invoice as any).billingEntitySnapshot;
+
+  const billingSnapshot = {
+    ...rawSnapshot,
+    name: liveEntity?.name || rawSnapshot?.name || "SN Advertising",
+    displayName: liveEntity?.displayName || rawSnapshot?.displayName || liveEntity?.name || rawSnapshot?.name || "SN Advertising",
+    address: liveEntity?.address || rawSnapshot?.address || "",
+    addressLine1: liveEntity?.addressLine1 || rawSnapshot?.addressLine1 || "",
+    addressLine2: liveEntity?.addressLine2 || rawSnapshot?.addressLine2 || "",
+    city: liveEntity?.city || rawSnapshot?.city || "",
+    postalCode: liveEntity?.postalCode || rawSnapshot?.postalCode || "",
+    country: liveEntity?.country || rawSnapshot?.country || "Sri Lanka",
+    phone: liveEntity?.phone || rawSnapshot?.phone || "",
+    secondaryPhone: liveEntity?.secondaryPhone || rawSnapshot?.secondaryPhone || "",
+    email: liveEntity?.email || rawSnapshot?.email || "",
+    website: liveEntity?.website || rawSnapshot?.website || "",
+    brn: liveEntity?.brn || rawSnapshot?.brn || "",
+    vatNumber: liveEntity?.vatNumber || rawSnapshot?.vatNumber || "",
+    isVatRegistered: liveEntity ? Boolean(liveEntity.isVatRegistered) : Boolean(rawSnapshot?.isVatRegistered),
+    bankName: liveEntity?.bankName || rawSnapshot?.bankName || "",
+    branch: liveEntity?.branch || rawSnapshot?.branch || "",
+    accountName: liveEntity?.accountName || rawSnapshot?.accountName || "",
+    accountNumber: liveEntity?.accountNumber || rawSnapshot?.accountNumber || "",
+    swiftCode: liveEntity?.swiftCode || rawSnapshot?.swiftCode || "",
+    chequePayee: liveEntity?.chequePayee || rawSnapshot?.chequePayee || liveEntity?.displayName || liveEntity?.name || rawSnapshot?.displayName || rawSnapshot?.name || "",
+    paymentInstructions: liveEntity?.paymentInstructions || rawSnapshot?.paymentInstructions || "",
+    logoUrl: liveEntity?.logoUrl || rawSnapshot?.logoUrl || "",
+    signatoryName: liveEntity?.signatoryName || rawSnapshot?.signatoryName || "",
+    signatoryDesignation: liveEntity?.signatoryDesignation || rawSnapshot?.signatoryDesignation || "",
+    signatoryEmail: liveEntity?.signatoryEmail || rawSnapshot?.signatoryEmail || "",
+    signatureImageUrl: liveEntity?.signatureImageUrl || liveEntity?.signatureUrl || rawSnapshot?.signatureImageUrl || rawSnapshot?.signatureUrl || "",
+    footerText: liveEntity?.footerText || rawSnapshot?.footerText || "",
+    prefix: liveEntity?.prefix || rawSnapshot?.prefix || "SN",
+  };
+
   const {
     invoiceNumber = "",
     invoiceDate,
@@ -136,7 +178,6 @@ export function InvoiceTemplateRenderer({
     yourRef,
     product,
     clientSnapshot,
-    billingSnapshot,
     items = [],
     subtotal = 0,
     vatApplicable = false,

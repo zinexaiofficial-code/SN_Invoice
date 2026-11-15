@@ -314,6 +314,50 @@ export async function saveBillingEntity(entity: BillingEntity): Promise<BillingE
   ];
 
   const res = await pool.query(query, values);
+
+  // Keep invoice billing entity snapshots in sync with authoritative entity updates
+  try {
+    const snapshot = {
+      id: entityId,
+      name: entity.name,
+      displayName: entity.displayName || entity.name,
+      address: fullAddress,
+      addressLine1: entity.addressLine1 || '',
+      addressLine2: entity.addressLine2 || '',
+      city: entity.city || '',
+      postalCode: entity.postalCode || '',
+      country: entity.country || 'Sri Lanka',
+      phone: entity.phone || '',
+      secondaryPhone: entity.secondaryPhone || '',
+      email: entity.email || '',
+      website: entity.website || '',
+      brn: entity.brn || '',
+      vatNumber: entity.vatNumber || '',
+      isVatRegistered: Boolean(entity.vatNumber || entity.isVatRegistered),
+      bankName: entity.bankName || '',
+      branch: entity.branch || '',
+      accountName: entity.accountName || '',
+      accountNumber: entity.accountNumber || '',
+      swiftCode: entity.swiftCode || '',
+      chequePayee: entity.chequePayee || entity.name,
+      paymentInstructions: entity.paymentInstructions || '',
+      logoUrl: entity.logoUrl || '',
+      signatoryName: entity.signatoryName || '',
+      signatoryDesignation: entity.signatoryDesignation || '',
+      signatoryEmail: entity.signatoryEmail || '',
+      signatureImageUrl: entity.signatureImageUrl || entity.signatureUrl || '',
+      footerText: entity.footerText || '',
+      prefix: entity.prefix || 'INV',
+    };
+
+    await pool.query(
+      'UPDATE invoices SET billing_entity_snapshot = $1::jsonb, updated_at = NOW() WHERE billing_entity_id = $2',
+      [JSON.stringify(snapshot), entityId]
+    );
+  } catch (syncErr) {
+    console.warn('Failed to sync invoices billing_entity_snapshot:', syncErr);
+  }
+
   return mapEntityRow(res.rows[0]);
 }
 

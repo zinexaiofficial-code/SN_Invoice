@@ -68,27 +68,30 @@ export default function ReportsPage() {
 
   // Export to Excel / CSV with entity details
   const handleExportExcel = () => {
-    const data = displayedInvoices.map((inv) => ({
-      "Invoice Number": inv.invoiceNumber,
-      "Invoice Date": formatDate(inv.invoiceDate),
-      "Billing Entity": inv.billingSnapshot?.displayName || inv.billingSnapshot?.name || "N/A",
-      "Entity Prefix": inv.billingSnapshot?.prefix || "SN",
-      "Entity VAT Reg": inv.billingSnapshot?.vatNumber || "Non-VAT",
-      "Client Name": inv.clientSnapshot?.name,
-      "Client Code": inv.clientSnapshot?.code,
-      "Client VAT": inv.clientSnapshot?.vatNumber || "N/A",
-      "Service Description": inv.items?.[0]?.description || inv.items?.[0]?.serviceName,
-      "Advertising Period": inv.servicePeriodText || inv.items?.[0]?.servicePeriod || "-",
-      "Subtotal (LKR)": inv.subtotal,
-      "VAT Applicable": inv.vatApplicable ? "Yes" : "No",
-      "VAT Amount (LKR)": inv.vatAmount,
-      "Grand Total (LKR)": inv.grandTotal,
-      "Total Paid (LKR)": inv.totalPaid,
-      "Outstanding Balance (LKR)": inv.outstandingBalance,
-      "Sent Status": inv.sentStatus,
-      "Sent Date": inv.sentAt ? formatDate(inv.sentAt) : "-",
-      "Payment Status": inv.paymentStatus,
-    }));
+    const data = displayedInvoices.map((inv) => {
+      const ent = billingEntities.find((e) => e.id === inv.billingEntityId);
+      return {
+        "Invoice Number": inv.invoiceNumber,
+        "Invoice Date": formatDate(inv.invoiceDate),
+        "Billing Entity": ent?.displayName || ent?.name || inv.billingSnapshot?.displayName || inv.billingSnapshot?.name || "N/A",
+        "Entity Prefix": ent?.prefix || inv.billingSnapshot?.prefix || "SN",
+        "Entity VAT Reg": ent?.vatNumber || inv.billingSnapshot?.vatNumber || "Non-VAT",
+        "Client Name": inv.clientSnapshot?.name,
+        "Client Code": inv.clientSnapshot?.code,
+        "Client VAT": inv.clientSnapshot?.vatNumber || "N/A",
+        "Service Description": inv.items?.[0]?.description || inv.items?.[0]?.serviceName,
+        "Advertising Period": inv.servicePeriodText || inv.items?.[0]?.servicePeriod || "-",
+        "Subtotal (LKR)": inv.subtotal,
+        "VAT Applicable": inv.vatApplicable ? "Yes" : "No",
+        "VAT Amount (LKR)": inv.vatAmount,
+        "Grand Total (LKR)": inv.grandTotal,
+        "Total Paid (LKR)": inv.totalPaid,
+        "Outstanding Balance (LKR)": inv.outstandingBalance,
+        "Sent Status": inv.sentStatus,
+        "Sent Date": inv.sentAt ? formatDate(inv.sentAt) : "-",
+        "Payment Status": inv.paymentStatus,
+      };
+    });
 
     const worksheet = XLSX.utils.json_to_sheet(data);
     const workbook = XLSX.utils.book_new();
@@ -247,7 +250,7 @@ export default function ReportsPage() {
                       <td className="py-3 px-4 font-mono font-bold text-navy-950">
                         <div>#{inv.invoiceNumber}</div>
                         <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-slate-100 text-navy-900 border border-slate-200 inline-block mt-0.5">
-                          {inv.billingSnapshot?.prefix || "SN"}
+                          {billingEntities.find(e => e.id === inv.billingEntityId)?.prefix || inv.billingSnapshot?.prefix || "SN"}
                         </span>
                       </td>
                       <td className="py-3 px-3 font-mono text-xs text-slate-600">
