@@ -190,15 +190,29 @@ export async function saveBillingEntity(entity: BillingEntity): Promise<BillingE
     return entityWithId;
   }
 
+  const fullAddress = (entity.address && entity.address.trim()) || [
+    entity.addressLine1,
+    entity.addressLine2,
+    entity.city,
+    entity.postalCode,
+    entity.country || 'Sri Lanka',
+  ].filter(Boolean).join(', ');
+
   const query = `
     INSERT INTO billing_entities (
       id, name, legal_name, is_default, brn, vat_number, address, phone, email,
       logo_url, bank_name, bank_account_number, bank_branch, bank_account_name,
       invoice_prefix, invoice_next_number, payee_name, signatory_name, signatory_designation,
       signatory_email, signature_enabled, display_signature_image, verification_enabled,
-      show_qr_code, signature_image_url, is_archived, updated_at
+      show_qr_code, signature_image_url, is_archived,
+      address_line1, address_line2, city, postal_code, country, secondary_phone,
+      website, swift_code, payment_instructions, primary_color, secondary_color,
+      header_style, footer_text, starting_sequence, default_currency,
+      default_payment_terms, default_due_days, default_invoice_template,
+      invoice_notes, default_pdf_layout, updated_at
     ) VALUES (
-      $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, NOW()
+      $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26,
+      $27, $28, $29, $30, $31, $32, $33, $34, $35, $36, $37, $38, $39, $40, $41, $42, $43, $44, $45, $46, NOW()
     )
     ON CONFLICT (id) DO UPDATE SET
       name = EXCLUDED.name,
@@ -226,6 +240,26 @@ export async function saveBillingEntity(entity: BillingEntity): Promise<BillingE
       show_qr_code = EXCLUDED.show_qr_code,
       signature_image_url = EXCLUDED.signature_image_url,
       is_archived = EXCLUDED.is_archived,
+      address_line1 = EXCLUDED.address_line1,
+      address_line2 = EXCLUDED.address_line2,
+      city = EXCLUDED.city,
+      postal_code = EXCLUDED.postal_code,
+      country = EXCLUDED.country,
+      secondary_phone = EXCLUDED.secondary_phone,
+      website = EXCLUDED.website,
+      swift_code = EXCLUDED.swift_code,
+      payment_instructions = EXCLUDED.payment_instructions,
+      primary_color = EXCLUDED.primary_color,
+      secondary_color = EXCLUDED.secondary_color,
+      header_style = EXCLUDED.header_style,
+      footer_text = EXCLUDED.footer_text,
+      starting_sequence = EXCLUDED.starting_sequence,
+      default_currency = EXCLUDED.default_currency,
+      default_payment_terms = EXCLUDED.default_payment_terms,
+      default_due_days = EXCLUDED.default_due_days,
+      default_invoice_template = EXCLUDED.default_invoice_template,
+      invoice_notes = EXCLUDED.invoice_notes,
+      default_pdf_layout = EXCLUDED.default_pdf_layout,
       updated_at = NOW()
     RETURNING *;
   `;
@@ -237,7 +271,7 @@ export async function saveBillingEntity(entity: BillingEntity): Promise<BillingE
     Boolean((entity as any).isDefault),
     entity.brn || '',
     entity.vatNumber || '',
-    entity.address || '',
+    fullAddress,
     entity.phone || '',
     entity.email || '',
     entity.logoUrl || '',
@@ -246,7 +280,7 @@ export async function saveBillingEntity(entity: BillingEntity): Promise<BillingE
     entity.branch || '',
     entity.accountName || '',
     entity.prefix || 'INV',
-    entity.currentSequence || 1,
+    entity.currentSequence || entity.startingSequence || 1,
     entity.chequePayee || entity.name,
     entity.signatoryName || '',
     entity.signatoryDesignation || '',
@@ -255,8 +289,28 @@ export async function saveBillingEntity(entity: BillingEntity): Promise<BillingE
     entity.displaySignatureImage || false,
     entity.verificationEnabled !== false,
     entity.showQrCode !== false,
-    entity.signatureImageUrl || '',
+    entity.signatureImageUrl || entity.signatureUrl || '',
     entity.status === 'archived',
+    entity.addressLine1 || '',
+    entity.addressLine2 || '',
+    entity.city || '',
+    entity.postalCode || '',
+    entity.country || 'Sri Lanka',
+    entity.secondaryPhone || '',
+    entity.website || '',
+    entity.swiftCode || '',
+    entity.paymentInstructions || '',
+    entity.primaryColor || '#0f172a',
+    entity.secondaryColor || '#059669',
+    entity.headerStyle || 'classic',
+    entity.footerText || '',
+    entity.startingSequence || 1,
+    entity.defaultCurrency || 'LKR',
+    entity.defaultPaymentTerms || 'Immediate',
+    entity.defaultDueDays || 7,
+    entity.defaultInvoiceTemplate || 'standard',
+    entity.invoiceNotes || '',
+    entity.defaultPdfLayout ? JSON.stringify(entity.defaultPdfLayout) : null,
   ];
 
   const res = await pool.query(query, values);
@@ -990,13 +1044,28 @@ export async function migrateFromBrowser(data: {
 // ROW MAPPERS (Row -> Domain Model)
 // -----------------------------------------------------------------------------
 function mapEntityRow(r: any): BillingEntity {
+  const addressLine1 = r.address_line1 || (r.address ? r.address.split(',')[0]?.trim() : '');
+  let defaultPdfLayout: any = undefined;
+  if (r.default_pdf_layout) {
+    try {
+      defaultPdfLayout = typeof r.default_pdf_layout === 'string' ? JSON.parse(r.default_pdf_layout) : r.default_pdf_layout;
+    } catch {}
+  }
+
   return {
     id: r.id,
     name: r.name,
     displayName: r.legal_name || r.name,
     address: r.address || '',
+    addressLine1,
+    addressLine2: r.address_line2 || '',
+    city: r.city || '',
+    postalCode: r.postal_code || '',
+    country: r.country || 'Sri Lanka',
     phone: r.phone || '',
+    secondaryPhone: r.secondary_phone || '',
     email: r.email || '',
+    website: r.website || '',
     brn: r.brn || '',
     vatNumber: r.vat_number || '',
     isVatRegistered: Boolean(r.vat_number),
@@ -1005,9 +1074,22 @@ function mapEntityRow(r: any): BillingEntity {
     accountNumber: r.bank_account_number || '',
     branch: r.bank_branch || '',
     accountName: r.bank_account_name || '',
+    swiftCode: r.swift_code || '',
     chequePayee: r.payee_name || r.name,
+    paymentInstructions: r.payment_instructions || '',
     prefix: r.invoice_prefix || 'INV',
+    startingSequence: r.starting_sequence || 1,
     currentSequence: r.invoice_next_number || 1,
+    defaultCurrency: r.default_currency || 'LKR',
+    defaultPaymentTerms: r.default_payment_terms || 'Immediate',
+    defaultDueDays: r.default_due_days || 7,
+    defaultInvoiceTemplate: r.default_invoice_template || 'standard',
+    invoiceNotes: r.invoice_notes || '',
+    primaryColor: r.primary_color || '#0f172a',
+    secondaryColor: r.secondary_color || '#059669',
+    headerStyle: r.header_style || 'classic',
+    footerText: r.footer_text || '',
+    defaultPdfLayout,
     signatoryName: r.signatory_name || '',
     signatoryDesignation: r.signatory_designation || '',
     signatoryEmail: r.signatory_email || '',

@@ -27,6 +27,7 @@ import {
   RefreshCw
 } from "lucide-react";
 import { DigitalApprovalBlock } from "@/components/invoices/DigitalApprovalBlock";
+import { useDatabase } from "@/context/DatabaseContext";
 
 interface EntityModalProps {
   isOpen: boolean;
@@ -36,8 +37,10 @@ interface EntityModalProps {
 }
 
 export function EntityModal({ isOpen, onClose, entityToEdit, onSaved }: EntityModalProps) {
+  const { saveBillingEntity } = useDatabase();
   const [activeTab, setActiveTab] = useState<"identity" | "branding" | "banking" | "invoice" | "signature">("identity");
   const [error, setError] = useState<string>("");
+  const [isSaving, setIsSaving] = useState(false);
 
   // Form State - Business Identity
   const [legalName, setLegalName] = useState("");
@@ -104,7 +107,7 @@ export function EntityModal({ isOpen, onClose, entityToEdit, onSaved }: EntityMo
       setVatNumber(entityToEdit.vatNumber || "");
       setAddressLine1(entityToEdit.addressLine1 || entityToEdit.address || "");
       setAddressLine2(entityToEdit.addressLine2 || "");
-      setCity(entityToEdit.city || "Kelaniya");
+      setCity(entityToEdit.city !== undefined && entityToEdit.city !== null ? entityToEdit.city : (entityToEdit.prefix === "SN" || entityToEdit.prefix === "HRP" ? "Kelaniya" : ""));
       setPostalCode(entityToEdit.postalCode || "");
       setCountry(entityToEdit.country || "Sri Lanka");
       setEmail(entityToEdit.email || "");
@@ -270,7 +273,7 @@ export function EntityModal({ isOpen, onClose, entityToEdit, onSaved }: EntityMo
       .catch((err) => console.error("Signature upload to persistent server failed:", err));
   };
 
-  const handleSave = (e: React.FormEvent) => {
+  const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
 
@@ -295,7 +298,13 @@ export function EntityModal({ isOpen, onClose, entityToEdit, onSaved }: EntityMo
       return;
     }
 
-    const fullAddress = [addressLine1.trim(), addressLine2.trim(), city.trim(), country.trim()]
+    const fullAddress = [
+      addressLine1.trim(),
+      addressLine2.trim(),
+      city.trim(),
+      postalCode.trim(),
+      country.trim()
+    ]
       .filter(Boolean)
       .join(", ");
 
@@ -307,7 +316,7 @@ export function EntityModal({ isOpen, onClose, entityToEdit, onSaved }: EntityMo
       brn: brn.trim() || undefined,
       isVatRegistered,
       vatNumber: isVatRegistered ? vatNumber.trim() : undefined,
-      address: fullAddress || "Kelaniya, Sri Lanka",
+      address: fullAddress || "Sri Lanka",
       addressLine1: addressLine1.trim(),
       addressLine2: addressLine2.trim(),
       city: city.trim(),
@@ -356,9 +365,17 @@ export function EntityModal({ isOpen, onClose, entityToEdit, onSaved }: EntityMo
       isActive: entityToEdit?.isActive !== false,
     };
 
-    const saved = storage.saveBillingEntity(entityPayload);
-    onSaved(saved);
-    onClose();
+    setIsSaving(true);
+    try {
+      const saved = await saveBillingEntity(entityPayload);
+      onSaved(saved);
+      onClose();
+    } catch (err: any) {
+      console.error("Failed to save billing entity:", err);
+      setError(err?.message || "Failed to save billing entity to database");
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   return (
@@ -1134,12 +1151,21 @@ export function EntityModal({ isOpen, onClose, entityToEdit, onSaved }: EntityMo
           )}
 
           <DialogFooter className="pt-4 border-t border-slate-200 flex items-center justify-between">
-            <Button type="button" variant="outline" onClick={onClose}>
+            <Button type="button" variant="outline" onClick={onClose} disabled={isSaving}>
               Cancel
             </Button>
-            <Button type="submit" className="bg-navy-950 hover:bg-navy-900 text-white font-bold px-6 shadow-sm">
-              <CheckCircle2 className="w-4 h-4 mr-1.5 text-emerald-400" />
-              <span>{entityToEdit ? "Save Entity Changes" : "Create Billing Entity"}</span>
+            <Button type="submit" disabled={isSaving} className="bg-navy-950 hover:bg-navy-900 text-white font-bold px-6 shadow-sm">
+              {isSaving ? (
+                <>
+                  <RefreshCw className="w-4 h-4 mr-1.5 animate-spin" />
+                  <span>Saving Changes...</span>
+                </>
+              ) : (
+                <>
+                  <CheckCircle2 className="w-4 h-4 mr-1.5 text-emerald-400" />
+                  <span>{entityToEdit ? "Save Entity Changes" : "Create Billing Entity"}</span>
+                </>
+              )}
             </Button>
           </DialogFooter>
         </form>

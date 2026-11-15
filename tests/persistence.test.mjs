@@ -581,6 +581,62 @@ async function runTests() {
     assert(Boolean(outChqData.data?.id), `Created outgoing cheque assigned ID: ${outChqData.data?.id}`);
     const createdOutChqId = outChqData.data?.id;
 
+    // -------------------------------------------------------------------------
+    // TEST R: Billing Entity City & Postal Code Persistence & Update
+    // -------------------------------------------------------------------------
+    console.log(`\n[Test R] Testing Billing Entity City, Postal Code, and Address Update...`);
+    const testEntityToUpdate = {
+      name: `Test Entity Addr ${Date.now()}`,
+      displayName: 'Test Entity Addr',
+      prefix: `TA${Date.now().toString().slice(-2)}`,
+      addressLine1: '456 Galle Road',
+      addressLine2: 'Bambalapitiya',
+      city: 'Colombo 04',
+      postalCode: '00400',
+      country: 'Sri Lanka',
+    };
+    const createEntRes = await fetch(`${BASE_URL}/api/billing-entities`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(testEntityToUpdate),
+    });
+    assert(createEntRes.status === 200, `Entity with city & postalCode created HTTP 200`);
+    const createEntData = await createEntRes.json();
+    const createdAddrEntId = createEntData.data?.id;
+    assert(createEntData.data?.city === 'Colombo 04', `Created entity returned city 'Colombo 04' (got ${createEntData.data?.city})`);
+    assert(createEntData.data?.postalCode === '00400', `Created entity returned postalCode '00400' (got ${createEntData.data?.postalCode})`);
+
+    // Now update city & postal code
+    const updateEntRes = await fetch(`${BASE_URL}/api/billing-entities`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        id: createdAddrEntId,
+        name: testEntityToUpdate.name,
+        prefix: testEntityToUpdate.prefix,
+        addressLine1: '456 Galle Road',
+        addressLine2: 'Bambalapitiya',
+        city: 'Dehiwala',
+        postalCode: '10350',
+        country: 'Sri Lanka',
+      }),
+    });
+    assert(updateEntRes.status === 200, `Entity update city & postalCode returned HTTP 200`);
+    const updateEntData = await updateEntRes.json();
+    assert(updateEntData.data?.city === 'Dehiwala', `Updated entity city persists as 'Dehiwala' (got ${updateEntData.data?.city})`);
+    assert(updateEntData.data?.postalCode === '10350', `Updated entity postalCode persists as '10350' (got ${updateEntData.data?.postalCode})`);
+
+    // Verify via GET bootstrap
+    const verifyBootstrap = await fetch(`${BASE_URL}/api/bootstrap`);
+    const bootstrapJson = await verifyBootstrap.json();
+    const verifiedEnt = (bootstrapJson.data?.billingEntities || []).find(e => e.id === createdAddrEntId);
+    assert(Boolean(verifiedEnt), `Entity found in bootstrap query`);
+    assert(verifiedEnt?.city === 'Dehiwala', `Bootstrap query returns persisted city 'Dehiwala' (got ${verifiedEnt?.city})`);
+    assert(verifiedEnt?.postalCode === '10350', `Bootstrap query returns persisted postalCode '10350' (got ${verifiedEnt?.postalCode})`);
+
+    // Cleanup dynamic test records
+    if (createdAddrEntId) await fetch(`${BASE_URL}/api/billing-entities?id=${encodeURIComponent(createdAddrEntId)}`, { method: 'DELETE' }).catch(() => {});
+
     // Cleanup dynamic test records
     if (createdOutChqId) await fetch(`${BASE_URL}/api/cheques?id=${encodeURIComponent(createdOutChqId)}`, { method: 'DELETE' }).catch(() => {});
     if (createdInv1Id) await fetch(`${BASE_URL}/api/invoices/${encodeURIComponent(createdInv1Id)}`, { method: 'DELETE' }).catch(() => {});

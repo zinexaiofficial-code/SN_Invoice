@@ -113,6 +113,26 @@ export async function initializeDatabase(): Promise<boolean> {
         created_at TIMESTAMPTZ DEFAULT NOW(),
         updated_at TIMESTAMPTZ DEFAULT NOW()
       );
+      ALTER TABLE billing_entities ADD COLUMN IF NOT EXISTS address_line1 TEXT;
+      ALTER TABLE billing_entities ADD COLUMN IF NOT EXISTS address_line2 TEXT;
+      ALTER TABLE billing_entities ADD COLUMN IF NOT EXISTS city TEXT;
+      ALTER TABLE billing_entities ADD COLUMN IF NOT EXISTS postal_code TEXT;
+      ALTER TABLE billing_entities ADD COLUMN IF NOT EXISTS country TEXT;
+      ALTER TABLE billing_entities ADD COLUMN IF NOT EXISTS secondary_phone TEXT;
+      ALTER TABLE billing_entities ADD COLUMN IF NOT EXISTS website TEXT;
+      ALTER TABLE billing_entities ADD COLUMN IF NOT EXISTS swift_code TEXT;
+      ALTER TABLE billing_entities ADD COLUMN IF NOT EXISTS payment_instructions TEXT;
+      ALTER TABLE billing_entities ADD COLUMN IF NOT EXISTS primary_color TEXT;
+      ALTER TABLE billing_entities ADD COLUMN IF NOT EXISTS secondary_color TEXT;
+      ALTER TABLE billing_entities ADD COLUMN IF NOT EXISTS header_style TEXT;
+      ALTER TABLE billing_entities ADD COLUMN IF NOT EXISTS footer_text TEXT;
+      ALTER TABLE billing_entities ADD COLUMN IF NOT EXISTS starting_sequence INTEGER DEFAULT 1;
+      ALTER TABLE billing_entities ADD COLUMN IF NOT EXISTS default_currency TEXT DEFAULT 'LKR';
+      ALTER TABLE billing_entities ADD COLUMN IF NOT EXISTS default_payment_terms TEXT DEFAULT 'Immediate';
+      ALTER TABLE billing_entities ADD COLUMN IF NOT EXISTS default_due_days INTEGER DEFAULT 7;
+      ALTER TABLE billing_entities ADD COLUMN IF NOT EXISTS default_invoice_template TEXT DEFAULT 'standard';
+      ALTER TABLE billing_entities ADD COLUMN IF NOT EXISTS invoice_notes TEXT;
+      ALTER TABLE billing_entities ADD COLUMN IF NOT EXISTS default_pdf_layout JSONB;
     `);
 
     // 2. Clients
