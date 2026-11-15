@@ -106,7 +106,7 @@ export function DigitalApprovalBlock({
           </div>
 
           {/* Bottom Designation Row */}
-          <div className="border-t border-slate-200 pt-1.5 pb-2.5 px-3 bg-slate-50 text-center">
+          <div className="border-t border-slate-200 py-1.5 px-3 bg-slate-50 text-center flex flex-col items-center justify-center">
             <span className="text-[10px] font-bold text-slate-800 tracking-normal block leading-tight">
               {signatoryDesignation || "Authorized Signatory"}
             </span>
@@ -215,7 +215,7 @@ export function DigitalApprovalBlock({
         </div>
 
         {/* Bottom Designation Row */}
-        <div className="border-t border-slate-200 pt-1.5 pb-2.5 px-3 bg-slate-50/90 text-center">
+        <div className="border-t border-slate-200 py-1.5 px-3 bg-slate-50/90 text-center flex items-center justify-center">
           <span className="text-[8.5px] font-semibold text-slate-600 tracking-normal block leading-normal">
             {entityName} — Official Digital Authorization
           </span>

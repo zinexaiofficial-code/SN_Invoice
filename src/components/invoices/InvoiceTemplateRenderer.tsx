@@ -260,14 +260,14 @@ export function InvoiceTemplateRenderer({
             height: "297mm",
             minHeight: "297mm",
             maxHeight: "297mm",
-            padding: "8mm 14mm 16mm 14mm",
+            padding: "10mm 14mm 14mm 14mm",
             boxSizing: "border-box",
             backgroundColor: "#FFFFFF",
             overflow: "hidden",
           }}
         >
           {/* ===================== PAGE CONTENT TOP ===================== */}
-          <div className="flex-1 flex flex-col">
+          <div className="flex-1 flex flex-col min-h-0">
             {/* ----------------- FIRST PAGE HEADER ----------------- */}
             {page.isFirstPage ? (
               <div>
@@ -539,7 +539,7 @@ export function InvoiceTemplateRenderer({
                   <div className="border-t border-slate-300 my-1 pt-1 flex justify-between items-baseline">
                     <span className="text-slate-500 font-semibold text-xs">Grand Total</span>
                     <span className="font-mono font-extrabold text-slate-900 text-sm tracking-tight">
-                      Rs. {formatLKR(grandTotal)}
+                      {formatLKR(grandTotal)}
                     </span>
                   </div>
 
@@ -561,46 +561,55 @@ export function InvoiceTemplateRenderer({
             )}
           </div>
 
-          {/* ===================== PAGE BOTTOM (FOOTER) ===================== */}
-          <div className="mt-auto pt-1.5 shrink-0">
+          {/* ===================== DEDICATED A4 FOOTER ===================== */}
+          <div className="mt-auto pt-2 shrink-0">
             {/* Payment Details & Signature Block (Rendered on Last Page) */}
-            {page.isLastPage ? (
-              <div className="border-t border-slate-200 pt-1.5 flex items-end justify-between gap-4">
-                {/* Left: Payment Instructions & Bank Details */}
-                {blocks.showBankDetails !== false ? (
-                  <div className="flex-1 max-w-[360px] space-y-1">
-                    <p className="font-bold text-slate-900 text-[9.5px] uppercase tracking-wider">
-                      PAYMENT INSTRUCTIONS &amp; BANK DETAILS
-                    </p>
-                    <p
-                      className="text-slate-600 leading-relaxed font-normal break-words"
-                      style={{ fontSize: `${typo.footerSizePt}pt` }}
-                    >
-                      {finalPaymentInstructions}
-                    </p>
-                  </div>
-                ) : (
-                  <div className="flex-1"></div>
-                )}
+            {page.isLastPage && (
+              <div className="border-t border-slate-200 pt-2">
+                {/* Two side-by-side cards: Payment Instructions & Digital Signature */}
+                <div className="flex items-stretch justify-between gap-3.5">
+                  {/* Left Card: Payment Instructions & Bank Details */}
+                  {blocks.showBankDetails !== false ? (
+                    <div className="flex-1 border border-slate-300 rounded-lg p-2.5 bg-slate-50/60 flex flex-col justify-between">
+                      <div>
+                        <p className="font-bold text-slate-800 text-[9px] uppercase tracking-wider mb-1">
+                          PAYMENT INSTRUCTIONS &amp; BANK DETAILS
+                        </p>
+                        <p
+                          className="text-slate-600 leading-relaxed font-normal break-words"
+                          style={{ fontSize: `${typo.footerSizePt}pt` }}
+                        >
+                          {finalPaymentInstructions}
+                        </p>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="flex-1"></div>
+                  )}
 
-                {/* Right: Digital Approval or Blank Signature Block */}
-                {blocks.showSignatureBlock !== false && (
-                  <div className="shrink-0 w-[340px]">
-                    <DigitalApprovalBlock
-                      invoice={invoice}
-                      format={effectiveFormat}
-                      isDraftPreview={isDraftPreview}
-                    />
-                  </div>
-                )}
+                  {/* Right Card: Digital Approval or Blank Signature Block */}
+                  {blocks.showSignatureBlock !== false && (
+                    <div className="shrink-0 w-[340px]">
+                      <DigitalApprovalBlock
+                        invoice={invoice}
+                        format={effectiveFormat}
+                        isDraftPreview={isDraftPreview}
+                      />
+                    </div>
+                  )}
+                </div>
               </div>
-            ) : null}
+            )}
 
             {/* Bottom Tagline & Page Numbering */}
-            <div className="border-t border-slate-200 pt-1.5 pb-1 mt-1.5 flex items-center justify-between text-[8.5px] text-slate-400 shrink-0">
-              <span className="truncate max-w-[460px] leading-tight">{entityFooter}</span>
+            <div className={`flex items-center justify-between text-[8.5px] text-slate-500 pt-2 pb-0 ${
+              page.isLastPage ? "mt-2 border-t border-slate-100" : "border-t border-slate-200"
+            }`}>
+              <span className="leading-normal max-w-[520px] font-medium">
+                {entityFooter}
+              </span>
               {typo.showPageNumbers && (
-                <span className="font-mono font-semibold text-slate-500 shrink-0">
+                <span className="font-mono font-semibold text-slate-500 shrink-0 ml-2">
                   Page {page.pageNumber} of {page.totalPages}
                 </span>
               )}

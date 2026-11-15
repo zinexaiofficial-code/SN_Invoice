@@ -441,7 +441,7 @@ async function runTests() {
       return h;
     });
     const totalItemH = sampleItemHeights.reduce((a, b) => a + b, 0);
-    const totalFirstPageEstimate = 72 + 8 + totalItemH + 34 + 42 + 10;
+    const totalFirstPageEstimate = 72 + 8 + totalItemH + 34 + 44 + 8;
     assert(totalFirstPageEstimate <= 263, `Standard 3-item invoice height (${totalFirstPageEstimate.toFixed(1)}mm) safely fits on 1 Page (limit 263mm)`);
     assert(273 - totalFirstPageEstimate >= 5, `Page 1 safe buffer to printable boundary is ${(273 - totalFirstPageEstimate).toFixed(1)}mm (>= 5mm required)`);
 
@@ -456,7 +456,7 @@ async function runTests() {
     }));
     const denseItemHeights = denseItems.map(it => 9.5 + Math.ceil(it.description.length / 45) * 4.2 + 2);
     const totalDenseH = denseItemHeights.reduce((a, b) => a + b, 0);
-    const totalDenseFirstPage = 72 + 8 + totalDenseH + 34 + 42 + 10;
+    const totalDenseFirstPage = 72 + 8 + totalDenseH + 34 + 44 + 8;
     assert(totalDenseFirstPage > 263, `Dense 8-item invoice height (${totalDenseFirstPage.toFixed(1)}mm) correctly triggers multi-page split`);
 
     // -------------------------------------------------------------------------

@@ -15,9 +15,16 @@ import { ArrowLeft } from "lucide-react";
 export default function InvoicePrintPDFPage() {
   const params = useParams();
   const searchParams = useSearchParams();
-  const invoiceId = params.id as string;
-  const templateParam = searchParams.get("template") as InvoiceTemplateKey | null;
-  const formatParam = searchParams.get("format") as InvoicePdfFormat | null;
+
+  // Robust ID extraction supporting both Next.js route params and direct URL pathname
+  const pathname = typeof window !== "undefined" ? window.location.pathname : "";
+  const pathParts = pathname.split("/").filter(Boolean);
+  const routeInvoiceId = pathParts[0] === "invoices" ? pathParts[1] : undefined;
+  const rawId = params?.id;
+  const invoiceId = (Array.isArray(rawId) ? rawId[0] : (rawId as string)) || routeInvoiceId;
+
+  const templateParam = searchParams?.get ? (searchParams.get("template") as InvoiceTemplateKey | null) : null;
+  const formatParam = searchParams?.get ? (searchParams.get("format") as InvoicePdfFormat | null) : null;
 
   const [invoice, setInvoice] = useState<Invoice | null>(null);
   const [format, setFormat] = useState<InvoicePdfFormat>(formatParam || "digital");
@@ -29,7 +36,7 @@ export default function InvoicePrintPDFPage() {
   const [isDownloading, setIsDownloading] = useState(false);
 
   useEffect(() => {
-    let active = true;
+    if (!invoiceId) return;
 
     const applyInvoice = (inv: Invoice) => {
       setInvoice(inv);
@@ -61,10 +68,9 @@ export default function InvoicePrintPDFPage() {
     }
 
     // Always fetch latest invoice from API / PostgreSQL backend as authoritative source
-    fetch(`/api/invoices/${invoiceId}`)
+    fetch(`/api/invoices/${encodeURIComponent(invoiceId)}`)
       .then((res) => (res.ok ? res.json() : null))
       .then((resData) => {
-        if (!active) return;
         const fetchedInvoice = resData?.data || (resData && !resData.error ? resData : null);
         if (fetchedInvoice && fetchedInvoice.id) {
           applyInvoice(fetchedInvoice);
@@ -76,10 +82,6 @@ export default function InvoicePrintPDFPage() {
         }
       })
       .catch((err) => console.error("Failed to fetch invoice from API:", err));
-
-    return () => {
-      active = false;
-    };
   }, [invoiceId, templateParam, formatParam]);
 
   if (!invoice) {

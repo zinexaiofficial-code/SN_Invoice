@@ -16,3 +16,4 @@ ALTER TABLE public.cheques ALTER COLUMN id SET DEFAULT gen_random_uuid()::text;
 ALTER TABLE public.cheque_print_templates ALTER COLUMN id SET DEFAULT gen_random_uuid()::text;
 ALTER TABLE public.cheque_printer_profiles ALTER COLUMN id SET DEFAULT gen_random_uuid()::text;
 ALTER TABLE public.cheque_print_jobs ALTER COLUMN id SET DEFAULT gen_random_uuid()::text;
+

@@ -127,15 +127,15 @@ export function estimateInvoiceHeights(
   if (hasSpecialNotes) totalsHeightMm += 8;
   if (blocksConfig?.customNoteText) totalsHeightMm += 8;
 
-  // Footer: Payment instructions + Digital Signature Block
+  // Dedicated Footer: Payment instructions & Digital Signature Cards
   const showBank = blocksConfig?.showBankDetails !== false;
   const showSig = blocksConfig?.showSignatureBlock !== false;
-  const footerHeightMm = showBank || showSig ? 42 : 0;
+  const footerHeightMm = showBank || showSig ? 44 : 0;
 
   // Bottom Tagline & Page Numbering
-  const bottomTaglineHeightMm = 10;
+  const bottomTaglineHeightMm = 8;
 
-  // Usable height inside A4 sheet: 297mm - 8mm top margin - 16mm bottom margin = 273mm
+  // Usable height inside A4 sheet: 297mm - 10mm top margin - 14mm bottom margin = 273mm
   const totalFirstPageMm =
     headerHeightMm +
     tableHeaderHeightMm +
