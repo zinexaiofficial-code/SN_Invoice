@@ -31,6 +31,7 @@ import {
   CreditCard,
   Mail,
   Phone,
+  Globe,
   ShieldCheck,
   RefreshCw
 } from "lucide-react";
@@ -241,7 +242,9 @@ export default function SettingsPage() {
                       {/* Address & Contacts */}
                       <div className="space-y-1">
                         <span className="text-[10px] uppercase font-bold text-slate-400 block tracking-wider">Address &amp; Contacts</span>
-                        <p className="text-slate-800 leading-snug">{ent.address}</p>
+                        <p className="text-slate-800 leading-snug">
+                          {[ent.addressLine1, ent.addressLine2, ent.city, ent.postalCode, ent.country].filter(Boolean).join(", ") || ent.address}
+                        </p>
                         <div className="flex flex-wrap gap-x-4 gap-y-1 pt-1 text-slate-600 font-sans">
                           {ent.email && (
                             <span className="flex items-center space-x-1">
@@ -253,6 +256,25 @@ export default function SettingsPage() {
                             <span className="flex items-center space-x-1">
                               <Phone className="w-3 h-3 text-slate-400" />
                               <span>{ent.phone}</span>
+                            </span>
+                          )}
+                          {ent.secondaryPhone && (
+                            <span className="flex items-center space-x-1">
+                              <Phone className="w-3 h-3 text-slate-400" />
+                              <span>{ent.secondaryPhone}</span>
+                            </span>
+                          )}
+                          {ent.website && (
+                            <span className="flex items-center space-x-1">
+                              <Globe className="w-3 h-3 text-slate-400" />
+                              <a
+                                href={ent.website.startsWith("http") ? ent.website : `https://${ent.website}`}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="text-navy-600 hover:underline"
+                              >
+                                {ent.website.replace(/^https?:\/\//, "")}
+                              </a>
                             </span>
                           )}
                         </div>

@@ -58,7 +58,8 @@ export function DatabaseProvider({ children }: { children: React.ReactNode }) {
     isFetchingRef.current = true;
     try {
       setError(null);
-      const res = await fetch("/api/bootstrap", {
+      const res = await fetch(`/api/bootstrap?t=${Date.now()}`, {
+        cache: "no-store",
         headers: {
           "Cache-Control": "no-cache, no-store, must-revalidate",
           Pragma: "no-cache",

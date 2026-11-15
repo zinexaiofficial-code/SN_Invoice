@@ -10,6 +10,7 @@ export function PwaRegister() {
           .register("/sw.js")
           .then((reg) => {
             console.log("SN Invoice PWA ServiceWorker registered with scope:", reg.scope);
+            reg.update().catch(() => {});
           })
           .catch((err) => {
             console.log("ServiceWorker registration error:", err);

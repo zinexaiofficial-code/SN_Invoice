@@ -533,26 +533,26 @@ export function EntityModal({ isOpen, onClose, entityToEdit, onSaved }: EntityMo
                     />
                   </div>
                   <div className="space-y-1">
-                    <Label className="text-xs text-slate-600">Address Line 2</Label>
+                    <Label className="text-xs text-slate-600">Address Line 2 (Optional)</Label>
                     <Input
                       value={addressLine2}
                       onChange={(e) => setAddressLine2(e.target.value)}
-                      placeholder="Gonawala"
+                      placeholder="e.g. Suite 10 / Floor 2 / Area"
                     />
                   </div>
                 </div>
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                   <div className="space-y-1">
                     <Label className="text-xs text-slate-600">City *</Label>
-                    <Input value={city} onChange={(e) => setCity(e.target.value)} placeholder="Kelaniya" required />
+                    <Input value={city} onChange={(e) => setCity(e.target.value)} placeholder="e.g. Colombo / Kelaniya / Kandy" required />
                   </div>
                   <div className="space-y-1">
                     <Label className="text-xs text-slate-600">Postal Code</Label>
-                    <Input value={postalCode} onChange={(e) => setPostalCode(e.target.value)} placeholder="11600" />
+                    <Input value={postalCode} onChange={(e) => setPostalCode(e.target.value)} placeholder="e.g. 11600" />
                   </div>
                   <div className="space-y-1">
                     <Label className="text-xs text-slate-600">Country</Label>
-                    <Input value={country} onChange={(e) => setCountry(e.target.value)} placeholder="Sri Lanka" />
+                    <Input value={country} onChange={(e) => setCountry(e.target.value)} placeholder="e.g. Sri Lanka" />
                   </div>
                 </div>
               </div>
@@ -563,20 +563,20 @@ export function EntityModal({ isOpen, onClose, entityToEdit, onSaved }: EntityMo
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                   <div className="space-y-1">
                     <Label className="text-xs text-slate-600">Primary Phone</Label>
-                    <Input value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="+94 11 772 8282" />
+                    <Input value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="e.g. +94 11 772 8282" />
                   </div>
                   <div className="space-y-1">
-                    <Label className="text-xs text-slate-600">Secondary / Mobile Phone</Label>
-                    <Input value={secondaryPhone} onChange={(e) => setSecondaryPhone(e.target.value)} placeholder="+94 77 400 0004" />
+                    <Label className="text-xs text-slate-600">Secondary / Mobile Phone (Optional)</Label>
+                    <Input value={secondaryPhone} onChange={(e) => setSecondaryPhone(e.target.value)} placeholder="e.g. +94 77 400 0004" />
                   </div>
                   <div className="space-y-1">
                     <Label className="text-xs text-slate-600">Official Email Address</Label>
-                    <Input value={email} onChange={(e) => setEmail(e.target.value)} placeholder="billing@entity.lk" type="email" />
+                    <Input value={email} onChange={(e) => setEmail(e.target.value)} placeholder="e.g. info@company.lk" type="email" />
                   </div>
                 </div>
                 <div className="space-y-1">
-                  <Label className="text-xs text-slate-600">Website</Label>
-                  <Input value={website} onChange={(e) => setWebsite(e.target.value)} placeholder="www.entity.lk" />
+                  <Label className="text-xs text-slate-600">Website (Optional)</Label>
+                  <Input value={website} onChange={(e) => setWebsite(e.target.value)} placeholder="e.g. https://company.lk" />
                 </div>
               </div>
             </div>

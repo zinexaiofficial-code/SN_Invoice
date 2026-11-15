@@ -1,5 +1,5 @@
-// SN Invoice Service Worker v3
-const CACHE_NAME = 'sn-invoice-v3';
+// SN Invoice Service Worker v4
+const CACHE_NAME = 'sn-invoice-v4';
 const STATIC_ASSETS = [
   '/',
   '/manifest.json',
@@ -63,7 +63,6 @@ self.addEventListener('fetch', (event) => {
   if (
     url.pathname.startsWith('/icons/') ||
     url.pathname.startsWith('/images/') ||
-    url.pathname.startsWith('/_next/static/') ||
     STATIC_ASSETS.includes(url.pathname)
   ) {
     event.respondWith(
