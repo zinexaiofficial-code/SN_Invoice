@@ -33,6 +33,7 @@ import { ChequeStatusModal } from "@/components/cheques/ChequeStatusModal";
 import { ChequeDetailsModal } from "@/components/cheques/ChequeDetailsModal";
 import { ChequeCalendar } from "@/components/cheques/ChequeCalendar";
 import { ChequePrintStudio } from "@/components/cheques/ChequePrintStudio";
+import { KpiCurrencyValue } from "@/components/ui/KpiValue";
 import {
   Dialog,
   DialogContent,
@@ -331,73 +332,73 @@ function ChequesPageContent() {
         </div>
       </div>
 
-      {/* 7 KPI Summary Cards */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-7 gap-3">
+      {/* 7 KPI Summary Cards (Multi-Breakpoint Grid to Prevent Clipping) */}
+      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 2xl:grid-cols-7 gap-3.5">
         {/* 1. Total Incoming */}
-        <div className="bg-white p-3.5 rounded-2xl border border-slate-200 shadow-xs flex flex-col justify-between">
+        <div className="bg-white p-3.5 rounded-2xl border border-slate-200 shadow-xs flex flex-col justify-between min-w-0 overflow-hidden">
           <div className="flex items-center justify-between text-slate-500 text-[11px] font-medium mb-1">
             <span>Total Incoming</span>
             <ArrowDownLeft className="w-3.5 h-3.5 text-emerald-600" />
           </div>
           <div>
-            <p className="text-base font-black text-slate-900 truncate">
-              Rs. {Number(kpis.totalIncomingAmount).toLocaleString("en-US", { minimumFractionDigits: 0 })}
-            </p>
+            <div className="my-0.5">
+              <KpiCurrencyValue amount={kpis.totalIncomingAmount} colorClass="text-slate-900" size="sm" />
+            </div>
             <span className="text-[10px] text-slate-400">Client cheques</span>
           </div>
         </div>
 
         {/* 2. Total Outgoing */}
-        <div className="bg-white p-3.5 rounded-2xl border border-slate-200 shadow-xs flex flex-col justify-between">
+        <div className="bg-white p-3.5 rounded-2xl border border-slate-200 shadow-xs flex flex-col justify-between min-w-0 overflow-hidden">
           <div className="flex items-center justify-between text-slate-500 text-[11px] font-medium mb-1">
             <span>Total Outgoing</span>
             <ArrowUpRight className="w-3.5 h-3.5 text-blue-600" />
           </div>
           <div>
-            <p className="text-base font-black text-slate-900 truncate">
-              Rs. {Number(kpis.totalOutgoingAmount).toLocaleString("en-US", { minimumFractionDigits: 0 })}
-            </p>
+            <div className="my-0.5">
+              <KpiCurrencyValue amount={kpis.totalOutgoingAmount} colorClass="text-slate-900" size="sm" />
+            </div>
             <span className="text-[10px] text-slate-400">Vendor payments</span>
           </div>
         </div>
 
         {/* 3. Pending Cheques */}
-        <div className="bg-white p-3.5 rounded-2xl border border-slate-200 shadow-xs flex flex-col justify-between">
+        <div className="bg-white p-3.5 rounded-2xl border border-slate-200 shadow-xs flex flex-col justify-between min-w-0 overflow-hidden">
           <div className="flex items-center justify-between text-slate-500 text-[11px] font-medium mb-1">
             <span>Pending</span>
             <Clock className="w-3.5 h-3.5 text-amber-500" />
           </div>
           <div>
             <div className="flex items-baseline space-x-1">
-              <span className="text-base font-black text-amber-900">{kpis.pendingChequesCount}</span>
+              <span className="text-base sm:text-lg font-black text-amber-900">{kpis.pendingChequesCount}</span>
               <span className="text-[10px] text-slate-400">cheques</span>
             </div>
-            <p className="text-[10px] font-semibold text-slate-600 truncate">
-              Rs. {Number(kpis.pendingChequesAmount).toLocaleString("en-US", { minimumFractionDigits: 0 })}
-            </p>
+            <div className="mt-0.5">
+              <KpiCurrencyValue amount={kpis.pendingChequesAmount} colorClass="text-slate-700" size="sm" />
+            </div>
           </div>
         </div>
 
         {/* 4. Due Within 7 Days */}
-        <div className="bg-white p-3.5 rounded-2xl border border-slate-200 shadow-xs flex flex-col justify-between">
+        <div className="bg-white p-3.5 rounded-2xl border border-slate-200 shadow-xs flex flex-col justify-between min-w-0 overflow-hidden">
           <div className="flex items-center justify-between text-slate-500 text-[11px] font-medium mb-1">
             <span>Due 7 Days</span>
             <Calendar className="w-3.5 h-3.5 text-indigo-500" />
           </div>
           <div>
             <div className="flex items-baseline space-x-1">
-              <span className="text-base font-black text-indigo-950">{kpis.due7DaysCount}</span>
+              <span className="text-base sm:text-lg font-black text-indigo-950">{kpis.due7DaysCount}</span>
               <span className="text-[10px] text-slate-400">cheques</span>
             </div>
-            <p className="text-[10px] font-semibold text-slate-600 truncate">
-              Rs. {Number(kpis.due7DaysAmount).toLocaleString("en-US", { minimumFractionDigits: 0 })}
-            </p>
+            <div className="mt-0.5">
+              <KpiCurrencyValue amount={kpis.due7DaysAmount} colorClass="text-slate-700" size="sm" />
+            </div>
           </div>
         </div>
 
         {/* 5. Overdue Cheques */}
         <div className={cn(
-          "bg-white p-3.5 rounded-2xl border shadow-xs flex flex-col justify-between",
+          "bg-white p-3.5 rounded-2xl border shadow-xs flex flex-col justify-between min-w-0 overflow-hidden",
           kpis.overdueCount > 0 ? "border-rose-300 bg-rose-50/30" : "border-slate-200"
         )}>
           <div className="flex items-center justify-between text-slate-500 text-[11px] font-medium mb-1">
@@ -406,37 +407,37 @@ function ChequesPageContent() {
           </div>
           <div>
             <div className="flex items-baseline space-x-1">
-              <span className={cn("text-base font-black", kpis.overdueCount > 0 ? "text-rose-600" : "text-slate-900")}>
+              <span className={cn("text-base sm:text-lg font-black", kpis.overdueCount > 0 ? "text-rose-600" : "text-slate-900")}>
                 {kpis.overdueCount}
               </span>
               <span className="text-[10px] text-slate-400">cheques</span>
             </div>
-            <p className="text-[10px] font-semibold text-slate-600 truncate">
-              Rs. {Number(kpis.overdueAmount).toLocaleString("en-US", { minimumFractionDigits: 0 })}
-            </p>
+            <div className="mt-0.5">
+              <KpiCurrencyValue amount={kpis.overdueAmount} colorClass={kpis.overdueCount > 0 ? "text-rose-700" : "text-slate-700"} size="sm" />
+            </div>
           </div>
         </div>
 
         {/* 6. Cleared */}
-        <div className="bg-white p-3.5 rounded-2xl border border-slate-200 shadow-xs flex flex-col justify-between">
+        <div className="bg-white p-3.5 rounded-2xl border border-slate-200 shadow-xs flex flex-col justify-between min-w-0 overflow-hidden">
           <div className="flex items-center justify-between text-slate-500 text-[11px] font-medium mb-1">
             <span>Cleared</span>
             <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
           </div>
           <div>
             <div className="flex items-baseline space-x-1">
-              <span className="text-base font-black text-emerald-700">{kpis.clearedCount}</span>
+              <span className="text-base sm:text-lg font-black text-emerald-700">{kpis.clearedCount}</span>
               <span className="text-[10px] text-slate-400">cheques</span>
             </div>
-            <p className="text-[10px] font-semibold text-slate-600 truncate">
-              Rs. {Number(kpis.clearedAmount).toLocaleString("en-US", { minimumFractionDigits: 0 })}
-            </p>
+            <div className="mt-0.5">
+              <KpiCurrencyValue amount={kpis.clearedAmount} colorClass="text-slate-700" size="sm" />
+            </div>
           </div>
         </div>
 
         {/* 7. Returned */}
         <div className={cn(
-          "bg-white p-3.5 rounded-2xl border shadow-xs flex flex-col justify-between col-span-2 sm:col-span-1",
+          "bg-white p-3.5 rounded-2xl border shadow-xs flex flex-col justify-between min-w-0 overflow-hidden",
           kpis.returnedCount > 0 ? "border-rose-300 bg-rose-50/50" : "border-slate-200"
         )}>
           <div className="flex items-center justify-between text-slate-500 text-[11px] font-medium mb-1">
@@ -445,14 +446,14 @@ function ChequesPageContent() {
           </div>
           <div>
             <div className="flex items-baseline space-x-1">
-              <span className={cn("text-base font-black", kpis.returnedCount > 0 ? "text-rose-700 animate-pulse" : "text-slate-900")}>
+              <span className={cn("text-base sm:text-lg font-black", kpis.returnedCount > 0 ? "text-rose-700 animate-pulse" : "text-slate-900")}>
                 {kpis.returnedCount}
               </span>
               <span className="text-[10px] text-slate-400">action req.</span>
             </div>
-            <p className="text-[10px] font-semibold text-slate-600 truncate">
-              Rs. {Number(kpis.returnedAmount).toLocaleString("en-US", { minimumFractionDigits: 0 })}
-            </p>
+            <div className="mt-0.5">
+              <KpiCurrencyValue amount={kpis.returnedAmount} colorClass="text-slate-700" size="sm" />
+            </div>
           </div>
         </div>
       </div>

@@ -8,6 +8,7 @@ import { Client, Invoice, BillingEntity } from "@/types";
 import { useDatabase } from "@/context/DatabaseContext";
 import { storage } from "@/lib/storage";
 import { formatLKR, formatDate } from "@/lib/utils";
+import { KpiCurrencyValue } from "@/components/ui/KpiValue";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -150,44 +151,48 @@ export default function ClientDetailPage() {
         </div>
 
         {/* Client KPI Cards */}
-        <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
-          <Card className="p-4 bg-white">
+        <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-5 gap-4">
+          <Card className="p-4 bg-white min-w-0 flex flex-col justify-between shadow-xs">
             <span className="text-xs text-slate-500 block">Total Invoices</span>
-            <span className="text-2xl font-black font-mono text-navy-950 mt-1 block">
-              {validInvoices.length}
-            </span>
+            <div className="my-1">
+              <span className="text-2xl font-black font-mono text-navy-950 block">
+                {validInvoices.length}
+              </span>
+            </div>
             <span className="text-[11px] text-slate-400">Generated</span>
           </Card>
 
-          <Card className="p-4 bg-white">
+          <Card className="p-4 bg-white min-w-0 flex flex-col justify-between shadow-xs">
             <span className="text-xs text-slate-500 block">Total Invoiced</span>
-            <span className="text-2xl font-black font-mono text-navy-950 mt-1 block">
-              {formatLKR(totalInvoiced)}
-            </span>
+            <div className="my-1">
+              <KpiCurrencyValue amount={totalInvoiced} colorClass="text-navy-950" size="lg" />
+            </div>
             <span className="text-[11px] text-emerald-600 font-medium">Lifetime revenue</span>
           </Card>
 
-          <Card className="p-4 bg-white">
+          <Card className="p-4 bg-white min-w-0 flex flex-col justify-between shadow-xs">
             <span className="text-xs text-slate-500 block">Total Paid</span>
-            <span className="text-2xl font-black font-mono text-emerald-600 mt-1 block">
-              {formatLKR(totalPaid)}
-            </span>
+            <div className="my-1">
+              <KpiCurrencyValue amount={totalPaid} colorClass="text-emerald-600" size="lg" />
+            </div>
             <span className="text-[11px] text-slate-400">Received payments</span>
           </Card>
 
-          <Card className="p-4 bg-white">
+          <Card className="p-4 bg-white min-w-0 flex flex-col justify-between shadow-xs">
             <span className="text-xs text-slate-500 block">Outstanding Balance</span>
-            <span className="text-2xl font-black font-mono text-rose-600 mt-1 block">
-              {formatLKR(outstandingBalance)}
-            </span>
+            <div className="my-1">
+              <KpiCurrencyValue amount={outstandingBalance} colorClass="text-rose-600" size="lg" />
+            </div>
             <span className="text-[11px] text-rose-500 font-medium">To be collected</span>
           </Card>
 
-          <Card className="p-4 bg-white">
+          <Card className="p-4 bg-white min-w-0 flex flex-col justify-between shadow-xs">
             <span className="text-xs text-slate-500 block">Last Invoice Date</span>
-            <span className="text-lg font-bold font-mono text-slate-800 mt-1 block">
-              {lastInvoice ? formatDate(lastInvoice.invoiceDate) : "None"}
-            </span>
+            <div className="my-1">
+              <span className="text-lg font-bold font-mono text-slate-800 block truncate">
+                {lastInvoice ? formatDate(lastInvoice.invoiceDate) : "None"}
+              </span>
+            </div>
             <span className="text-[11px] text-slate-400">
               {lastInvoice ? `#${lastInvoice.invoiceNumber}` : "-"}
             </span>

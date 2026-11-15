@@ -6,6 +6,7 @@ import { AppLayout } from "@/components/layout/AppLayout";
 import { Invoice, Client, BillingEntity } from "@/types";
 import { storage } from "@/lib/storage";
 import { formatLKR, formatDate } from "@/lib/utils";
+import { KpiCurrencyValue } from "@/components/ui/KpiValue";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -200,30 +201,32 @@ export default function ReportsPage() {
         </div>
 
         {/* Financial Summary Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-          <Card className="p-4 bg-white">
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
+          <Card className="p-4 bg-white min-w-0 flex flex-col justify-between shadow-xs">
             <span className="text-xs text-slate-500 block">Total Records</span>
-            <span className="text-2xl font-black font-mono text-navy-950 mt-1 block">
-              {displayedInvoices.length}
-            </span>
+            <div className="my-1">
+              <span className="text-2xl font-black font-mono text-navy-950 block">
+                {displayedInvoices.length}
+              </span>
+            </div>
           </Card>
-          <Card className="p-4 bg-white">
+          <Card className="p-4 bg-white min-w-0 flex flex-col justify-between shadow-xs">
             <span className="text-xs text-slate-500 block">Total Invoiced</span>
-            <span className="text-2xl font-black font-mono text-navy-950 mt-1 block">
-              {formatLKR(totalSum)}
-            </span>
+            <div className="my-1">
+              <KpiCurrencyValue amount={totalSum} colorClass="text-navy-950" size="lg" />
+            </div>
           </Card>
-          <Card className="p-4 bg-white">
+          <Card className="p-4 bg-white min-w-0 flex flex-col justify-between shadow-xs">
             <span className="text-xs text-slate-500 block">Total Collected</span>
-            <span className="text-2xl font-black font-mono text-emerald-600 mt-1 block">
-              {formatLKR(totalPaidSum)}
-            </span>
+            <div className="my-1">
+              <KpiCurrencyValue amount={totalPaidSum} colorClass="text-emerald-600" size="lg" />
+            </div>
           </Card>
-          <Card className="p-4 bg-white">
+          <Card className="p-4 bg-white min-w-0 flex flex-col justify-between shadow-xs">
             <span className="text-xs text-slate-500 block">Total Outstanding</span>
-            <span className="text-2xl font-black font-mono text-rose-600 mt-1 block">
-              {formatLKR(totalOutstandingSum)}
-            </span>
+            <div className="my-1">
+              <KpiCurrencyValue amount={totalOutstandingSum} colorClass="text-rose-600" size="lg" />
+            </div>
           </Card>
         </div>
 

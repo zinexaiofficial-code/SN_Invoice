@@ -11,6 +11,7 @@ import {
 } from "@/types";
 import { storage } from "@/lib/storage";
 import { formatLKR, formatDate } from "@/lib/utils";
+import { KpiCurrencyValue } from "@/components/ui/KpiValue";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -298,41 +299,53 @@ export default function MonthlyHistoryPage() {
           </div>
         </div>
 
-        {/* Monthly Summary KPI Bar (Section 10 Requirement) */}
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
-          <Card className="p-3 bg-white border-slate-200">
+        {/* Monthly Summary KPI Bar (Responsive Grid to Prevent Value Clipping) */}
+        <div className="grid grid-cols-2 sm:grid-cols-3 2xl:grid-cols-6 gap-3.5">
+          <Card className="p-3.5 bg-white border-slate-200 min-w-0 flex flex-col justify-between shadow-xs">
             <span className="text-[11px] text-slate-500 block font-medium">Invoices Issued</span>
-            <span className="text-xl font-black font-mono text-navy-950 mt-0.5 block">{invoices.length}</span>
+            <div className="my-1">
+              <span className="text-xl sm:text-2xl font-black font-mono text-navy-950 block">{invoices.length}</span>
+            </div>
             <span className="text-[10px] text-slate-400">In {monthNames[selectedMonth - 1]} {selectedYear}</span>
           </Card>
 
-          <Card className="p-3 bg-white border-slate-200">
+          <Card className="p-3.5 bg-white border-slate-200 min-w-0 flex flex-col justify-between shadow-xs">
             <span className="text-[11px] text-slate-500 block font-medium">Invoices Sent</span>
-            <span className="text-xl font-black font-mono text-blue-600 mt-0.5 block">{invoicesSentCount}</span>
+            <div className="my-1">
+              <span className="text-xl sm:text-2xl font-black font-mono text-blue-600 block">{invoicesSentCount}</span>
+            </div>
             <span className="text-[10px] text-slate-400">{invoices.length - invoicesSentCount} not sent</span>
           </Card>
 
-          <Card className="p-3 bg-white border-slate-200">
+          <Card className="p-3.5 bg-white border-slate-200 border-l-4 border-l-navy-950 min-w-0 flex flex-col justify-between shadow-xs">
             <span className="text-[11px] text-slate-500 block font-medium">Total Invoiced</span>
-            <span className="text-xl font-black font-mono text-navy-950 mt-0.5 block">{formatLKR(totalInvoiced)}</span>
+            <div className="my-1">
+              <KpiCurrencyValue amount={totalInvoiced} colorClass="text-navy-950" size="lg" />
+            </div>
             <span className="text-[10px] text-emerald-600 font-medium">Gross revenue</span>
           </Card>
 
-          <Card className="p-3 bg-white border-slate-200">
+          <Card className="p-3.5 bg-white border-slate-200 border-l-4 border-l-emerald-500 min-w-0 flex flex-col justify-between shadow-xs">
             <span className="text-[11px] text-slate-500 block font-medium">Total Paid</span>
-            <span className="text-xl font-black font-mono text-emerald-600 mt-0.5 block">{formatLKR(totalPaid)}</span>
+            <div className="my-1">
+              <KpiCurrencyValue amount={totalPaid} colorClass="text-emerald-600" size="lg" />
+            </div>
             <span className="text-[10px] text-slate-400">Collected</span>
           </Card>
 
-          <Card className="p-3 bg-white border-slate-200">
+          <Card className="p-3.5 bg-white border-slate-200 border-l-4 border-l-rose-500 min-w-0 flex flex-col justify-between shadow-xs">
             <span className="text-[11px] text-slate-500 block font-medium">Total Outstanding</span>
-            <span className="text-xl font-black font-mono text-rose-600 mt-0.5 block">{formatLKR(totalOutstanding)}</span>
+            <div className="my-1">
+              <KpiCurrencyValue amount={totalOutstanding} colorClass="text-rose-600" size="lg" />
+            </div>
             <span className="text-[10px] text-rose-500 font-medium">Receivables</span>
           </Card>
 
-          <Card className="p-3 bg-white border-slate-200">
+          <Card className="p-3.5 bg-white border-slate-200 min-w-0 flex flex-col justify-between shadow-xs">
             <span className="text-[11px] text-slate-500 block font-medium">Active Clients Billed</span>
-            <span className="text-xl font-black font-mono text-purple-600 mt-0.5 block">{uniqueClientsBilled}</span>
+            <div className="my-1">
+              <span className="text-xl sm:text-2xl font-black font-mono text-purple-600 block">{uniqueClientsBilled}</span>
+            </div>
             <span className="text-[10px] text-slate-400">Unique advertisers</span>
           </Card>
         </div>

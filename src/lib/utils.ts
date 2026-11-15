@@ -24,6 +24,36 @@ export function formatLKR(amount: number | string | null | undefined): string {
 }
 
 /**
+ * Cleanly format currency for KPI display cards without clipping or overflow.
+ * Splits into prefix, whole number, and optional decimals for elegant layout.
+ */
+export function formatKpiCurrency(amount: number | string | null | undefined): {
+  prefix: string;
+  whole: string;
+  decimal: string;
+  full: string;
+} {
+  const numeric = typeof amount === 'string' ? parseFloat(amount) : Number(amount || 0);
+  if (isNaN(numeric) || numeric === 0) {
+    return { prefix: 'Rs.', whole: '0', decimal: '.00', full: 'Rs. 0.00' };
+  }
+
+  const parts = Math.abs(numeric)
+    .toLocaleString('en-US', {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    })
+    .split('.');
+
+  const prefix = numeric < 0 ? '-Rs.' : 'Rs.';
+  const whole = parts[0];
+  const decimal = `.${parts[1] || '00'}`;
+  const full = `${prefix} ${whole}${decimal}`;
+
+  return { prefix, whole, decimal, full };
+}
+
+/**
  * Format date in DD/MM/YYYY
  */
 export function formatDate(dateInput: string | Date | null | undefined): string {

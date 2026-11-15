@@ -7,6 +7,7 @@ import { Invoice, Client, BillingEntity, DashboardKPIs } from "@/types";
 import { useDatabase } from "@/context/DatabaseContext";
 import { storage } from "@/lib/storage";
 import { formatLKR, formatDate } from "@/lib/utils";
+import { KpiCurrencyValue } from "@/components/ui/KpiValue";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -171,82 +172,90 @@ export default function DashboardPage() {
           </div>
         </div>
 
-        {/* 7 KPI Cards (Section 4 Requirements) */}
-        <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-3">
-          <Card className="p-3 bg-white">
+        {/* 7 KPI Cards (Responsive Multi-Breakpoint Grid to Prevent Clipping) */}
+        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 2xl:grid-cols-7 gap-3.5">
+          <Card className="p-3.5 bg-white min-w-0 flex flex-col justify-between shadow-xs">
             <span className="text-[11px] font-medium text-slate-500 flex items-center justify-between">
               Total Clients
               <Users className="w-3.5 h-3.5 text-slate-400" />
             </span>
-            <span className="text-xl font-black font-mono text-navy-950 mt-1 block">
-              {kpis.totalClients}
-            </span>
+            <div className="my-1">
+              <span className="text-xl sm:text-2xl font-black font-mono text-navy-950 block">
+                {kpis.totalClients}
+              </span>
+            </div>
             <span className="text-[10px] text-slate-400">Active accounts</span>
           </Card>
 
-          <Card className="p-3 bg-white">
+          <Card className="p-3.5 bg-white min-w-0 flex flex-col justify-between shadow-xs">
             <span className="text-[11px] font-medium text-slate-500 flex items-center justify-between">
               Invoices This Month
               <FileText className="w-3.5 h-3.5 text-slate-400" />
             </span>
-            <span className="text-xl font-black font-mono text-navy-950 mt-1 block">
-              {kpis.invoicesThisMonth}
-            </span>
+            <div className="my-1">
+              <span className="text-xl sm:text-2xl font-black font-mono text-navy-950 block">
+                {kpis.invoicesThisMonth}
+              </span>
+            </div>
             <span className="text-[10px] text-slate-400">{monthNames[selectedMonth - 1]}</span>
           </Card>
 
-          <Card className="p-3 bg-white border-l-4 border-l-navy-950">
+          <Card className="p-3.5 bg-white border-l-4 border-l-navy-950 min-w-0 flex flex-col justify-between shadow-xs">
             <span className="text-[11px] font-medium text-slate-500 flex items-center justify-between">
               Invoiced This Month
               <DollarSign className="w-3.5 h-3.5 text-navy-950" />
             </span>
-            <span className="text-lg font-black font-mono text-navy-950 mt-1 block truncate">
-              {formatLKR(kpis.totalInvoicedThisMonth)}
-            </span>
+            <div className="my-1">
+              <KpiCurrencyValue amount={kpis.totalInvoicedThisMonth} colorClass="text-navy-950" />
+            </div>
             <span className="text-[10px] text-emerald-600 font-medium">Billed gross</span>
           </Card>
 
-          <Card className="p-3 bg-white">
+          <Card className="p-3.5 bg-white min-w-0 flex flex-col justify-between shadow-xs">
             <span className="text-[11px] font-medium text-slate-500 flex items-center justify-between">
               Sent This Month
               <Send className="w-3.5 h-3.5 text-blue-500" />
             </span>
-            <span className="text-xl font-black font-mono text-blue-600 mt-1 block">
-              {kpis.invoicesSentThisMonth}
-            </span>
+            <div className="my-1">
+              <span className="text-xl sm:text-2xl font-black font-mono text-blue-600 block">
+                {kpis.invoicesSentThisMonth}
+              </span>
+            </div>
             <span className="text-[10px] text-slate-400">Dispatched</span>
           </Card>
 
-          <Card className="p-3 bg-white border-l-4 border-l-rose-500">
+          <Card className="p-3.5 bg-white border-l-4 border-l-rose-500 min-w-0 flex flex-col justify-between shadow-xs">
             <span className="text-[11px] font-medium text-slate-500 flex items-center justify-between">
               Outstanding Amount
               <Clock className="w-3.5 h-3.5 text-rose-500" />
             </span>
-            <span className="text-lg font-black font-mono text-rose-600 mt-1 block truncate">
-              {formatLKR(kpis.outstandingAmount)}
-            </span>
+            <div className="my-1">
+              <KpiCurrencyValue amount={kpis.outstandingAmount} colorClass="text-rose-600" />
+            </div>
             <span className="text-[10px] text-rose-500 font-medium">Receivables</span>
           </Card>
 
-          <Card className="p-3 bg-white border-l-4 border-l-emerald-500">
+          <Card className="p-3.5 bg-white border-l-4 border-l-emerald-500 min-w-0 flex flex-col justify-between shadow-xs">
             <span className="text-[11px] font-medium text-slate-500 flex items-center justify-between">
               Paid Amount
               <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500" />
             </span>
-            <span className="text-lg font-black font-mono text-emerald-600 mt-1 block truncate">
-              {formatLKR(kpis.paidAmount)}
-            </span>
+            <div className="my-1">
+              <KpiCurrencyValue amount={kpis.paidAmount} colorClass="text-emerald-600" />
+            </div>
             <span className="text-[10px] text-emerald-600 font-medium">Collected</span>
           </Card>
 
-          <Card className="p-3 bg-white">
+          <Card className="p-3.5 bg-white min-w-0 flex flex-col justify-between shadow-xs">
             <span className="text-[11px] font-medium text-slate-500 flex items-center justify-between">
               Overdue Invoices
               <AlertCircle className="w-3.5 h-3.5 text-amber-500" />
             </span>
-            <span className="text-xl font-black font-mono text-amber-600 mt-1 block">
-              {kpis.overdueInvoicesCount}
-            </span>
+            <div className="my-1">
+              <span className="text-xl sm:text-2xl font-black font-mono text-amber-600 block">
+                {kpis.overdueInvoicesCount}
+              </span>
+            </div>
             <span className="text-[10px] text-slate-400">Past due date</span>
           </Card>
         </div>
