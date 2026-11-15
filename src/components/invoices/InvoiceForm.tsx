@@ -351,7 +351,7 @@ export function InvoiceForm({ initialInvoice }: InvoiceFormProps) {
       id: entity?.id || "unknown",
       name: entity?.name || "SN Advertising",
       displayName: entity?.displayName || entity?.name || "SN Advertising",
-      address: entity?.address || "Kelaniya",
+      address: entity?.address || "",
       addressLine1: entity?.addressLine1,
       addressLine2: entity?.addressLine2,
       city: entity?.city,

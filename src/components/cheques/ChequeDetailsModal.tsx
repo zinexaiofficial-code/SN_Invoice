@@ -19,6 +19,7 @@ import {
   Image as ImageIcon
 } from "lucide-react";
 import { Cheque } from "@/types";
+import { useDatabase } from "@/context/DatabaseContext";
 
 interface ChequeDetailsModalProps {
   cheque: Cheque | null;
@@ -37,7 +38,12 @@ export function ChequeDetailsModal({
   onUpdateStatus,
   onDelete
 }: ChequeDetailsModalProps) {
+  const { billingEntities } = useDatabase();
   if (!isOpen || !cheque) return null;
+
+  const liveEntity = (billingEntities || []).find((e) => e.id === cheque.billingEntityId);
+  const effectivePrefix = liveEntity?.prefix || cheque.billingEntityPrefix;
+  const effectiveEntityName = liveEntity?.displayName || liveEntity?.name || cheque.billingEntityName || "SN Advertising";
 
   const isIncoming = cheque.type === "incoming";
   const isCleared = cheque.status === "cleared";
@@ -75,9 +81,9 @@ export function ChequeDetailsModal({
               <span className="text-[11px] font-semibold px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-300 font-mono uppercase">
                 {isIncoming ? "Incoming Cheque" : "Outgoing Cheque"}
               </span>
-              {cheque.billingEntityPrefix && (
+              {effectivePrefix && (
                 <span className="text-[11px] font-mono px-2 py-0.5 bg-slate-800 text-slate-300 rounded font-bold">
-                  {cheque.billingEntityPrefix}
+                  {effectivePrefix}
                 </span>
               )}
               <span
@@ -207,7 +213,7 @@ export function ChequeDetailsModal({
             </div>
             <div className="p-3 bg-slate-50 rounded-xl border border-slate-200">
               <span className="text-slate-400 block mb-0.5">Billing Entity</span>
-              <span className="font-bold text-slate-800">{cheque.billingEntityName}</span>
+              <span className="font-bold text-slate-800">{effectiveEntityName}</span>
             </div>
             <div className="p-3 bg-slate-50 rounded-xl border border-slate-200">
               <span className="text-slate-400 block mb-0.5">Target/Issuing Bank A/C</span>

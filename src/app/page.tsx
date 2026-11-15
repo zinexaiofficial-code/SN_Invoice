@@ -365,7 +365,7 @@ export default function DashboardPage() {
                         </Link>
                         <div className="flex items-center space-x-1.5 mt-0.5">
                           <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-slate-100 text-navy-950 font-mono border border-slate-200">
-                            {inv.billingSnapshot?.prefix || "SN"}
+                            {billingEntities.find(e => e.id === inv.billingEntityId)?.prefix || inv.billingSnapshot?.prefix || "SN"}
                           </span>
                           {inv.regNo && (
                             <span className="text-[11px] font-normal text-slate-400 font-mono">

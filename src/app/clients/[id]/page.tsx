@@ -218,7 +218,7 @@ export default function ClientDetailPage() {
           <Card className="p-4">
             <CardTitle className="text-xs font-bold uppercase text-slate-500 mb-2">Default Billing Settings</CardTitle>
             <div className="space-y-1.5 text-xs text-slate-700">
-              <div><strong>Entity:</strong> {billingEntity?.name || "SN Advertising"}</div>
+              <div><strong>Entity:</strong> {billingEntity?.displayName || billingEntity?.name || "SN Advertising"}</div>
               <div><strong>Payment Terms:</strong> {client.defaultPaymentTerms || "Immediate"}</div>
               {client.defaultAdvancePercentage ? (
                 <div><strong>Advance %:</strong> {client.defaultAdvancePercentage}%</div>

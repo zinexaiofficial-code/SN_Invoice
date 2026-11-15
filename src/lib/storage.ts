@@ -2815,6 +2815,58 @@ class StorageService {
     if (idx >= 0) list[idx] = entity;
     else list.push(entity);
     localStorage.setItem(STORAGE_KEYS.BILLING_ENTITIES, JSON.stringify(list));
+
+    // Also synchronize invoices cached in localStorage
+    try {
+      const invRaw = localStorage.getItem(STORAGE_KEYS.INVOICES);
+      if (invRaw) {
+        const invoices: Invoice[] = JSON.parse(invRaw);
+        let updated = false;
+        for (const inv of invoices) {
+          if (inv.billingEntityId === entity.id) {
+            inv.billingSnapshot = {
+              ...inv.billingSnapshot,
+              name: entity.name,
+              displayName: entity.displayName || entity.name,
+              address: entity.address,
+              addressLine1: entity.addressLine1,
+              addressLine2: entity.addressLine2,
+              city: entity.city,
+              postalCode: entity.postalCode,
+              country: entity.country,
+              phone: entity.phone,
+              secondaryPhone: entity.secondaryPhone,
+              email: entity.email,
+              website: entity.website,
+              brn: entity.brn,
+              vatNumber: entity.vatNumber,
+              isVatRegistered: entity.isVatRegistered,
+              chequePayee: entity.chequePayee || entity.displayName || entity.name,
+              bankName: entity.bankName,
+              branch: entity.branch,
+              accountName: entity.accountName,
+              accountNumber: entity.accountNumber,
+              swiftCode: entity.swiftCode,
+              paymentInstructions: entity.paymentInstructions,
+              logoUrl: entity.logoUrl,
+              signatureImageUrl: entity.signatureImageUrl || entity.signatureUrl,
+              signatoryName: entity.signatoryName,
+              signatoryDesignation: entity.signatoryDesignation,
+              signatoryEmail: entity.signatoryEmail,
+              footerText: entity.footerText,
+              prefix: entity.prefix,
+            };
+            updated = true;
+          }
+        }
+        if (updated) {
+          localStorage.setItem(STORAGE_KEYS.INVOICES, JSON.stringify(invoices));
+        }
+      }
+    } catch (e) {
+      // ignore
+    }
+
     window.dispatchEvent(new Event('entity-updated'));
     window.dispatchEvent(new Event('storage'));
   }

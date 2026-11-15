@@ -51,7 +51,7 @@ export function EntityModal({ isOpen, onClose, entityToEdit, onSaved }: EntityMo
   const [vatNumber, setVatNumber] = useState("");
   const [addressLine1, setAddressLine1] = useState("");
   const [addressLine2, setAddressLine2] = useState("");
-  const [city, setCity] = useState("Kelaniya");
+  const [city, setCity] = useState("");
   const [postalCode, setPostalCode] = useState("");
   const [country, setCountry] = useState("Sri Lanka");
   const [email, setEmail] = useState("");
@@ -107,7 +107,7 @@ export function EntityModal({ isOpen, onClose, entityToEdit, onSaved }: EntityMo
       setVatNumber(entityToEdit.vatNumber || "");
       setAddressLine1(entityToEdit.addressLine1 || entityToEdit.address || "");
       setAddressLine2(entityToEdit.addressLine2 || "");
-      setCity(entityToEdit.city !== undefined && entityToEdit.city !== null ? entityToEdit.city : (entityToEdit.prefix === "SN" || entityToEdit.prefix === "HRP" ? "Kelaniya" : ""));
+      setCity(entityToEdit.city !== undefined && entityToEdit.city !== null ? entityToEdit.city : "");
       setPostalCode(entityToEdit.postalCode || "");
       setCountry(entityToEdit.country || "Sri Lanka");
       setEmail(entityToEdit.email || "");
@@ -156,7 +156,7 @@ export function EntityModal({ isOpen, onClose, entityToEdit, onSaved }: EntityMo
       setVatNumber("");
       setAddressLine1("");
       setAddressLine2("");
-      setCity("Kelaniya");
+      setCity("");
       setPostalCode("");
       setCountry("Sri Lanka");
       setEmail("");

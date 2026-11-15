@@ -197,6 +197,64 @@ export function DatabaseProvider({ children }: { children: React.ReactNode }) {
       return [...prev, saved];
     });
 
+    // Reactively synchronize invoices state in memory
+    setInvoices((prev) =>
+      prev.map((inv) => {
+        if (inv.billingEntityId === saved.id) {
+          return {
+            ...inv,
+            billingSnapshot: {
+              ...inv.billingSnapshot,
+              name: saved.name,
+              displayName: saved.displayName || saved.name,
+              address: saved.address,
+              addressLine1: saved.addressLine1,
+              addressLine2: saved.addressLine2,
+              city: saved.city,
+              postalCode: saved.postalCode,
+              country: saved.country,
+              phone: saved.phone,
+              secondaryPhone: saved.secondaryPhone,
+              email: saved.email,
+              website: saved.website,
+              brn: saved.brn,
+              vatNumber: saved.vatNumber,
+              isVatRegistered: saved.isVatRegistered,
+              chequePayee: saved.chequePayee || saved.displayName || saved.name,
+              bankName: saved.bankName,
+              branch: saved.branch,
+              accountName: saved.accountName,
+              accountNumber: saved.accountNumber,
+              swiftCode: saved.swiftCode,
+              paymentInstructions: saved.paymentInstructions,
+              logoUrl: saved.logoUrl,
+              signatureImageUrl: saved.signatureImageUrl || saved.signatureUrl,
+              signatoryName: saved.signatoryName,
+              signatoryDesignation: saved.signatoryDesignation,
+              signatoryEmail: saved.signatoryEmail,
+              footerText: saved.footerText,
+              prefix: saved.prefix,
+            },
+          };
+        }
+        return inv;
+      })
+    );
+
+    // Reactively synchronize cheques state in memory
+    setCheques((prev) =>
+      prev.map((chq) => {
+        if (chq.billingEntityId === saved.id) {
+          return {
+            ...chq,
+            billingEntityName: saved.displayName || saved.name,
+            billingEntityPrefix: saved.prefix,
+          };
+        }
+        return chq;
+      })
+    );
+
     storage.saveBillingEntityLocally(saved);
     return saved;
   };
