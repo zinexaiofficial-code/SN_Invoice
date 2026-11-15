@@ -1,5 +1,38 @@
 import { ChequePrintTemplate, ChequePrinterProfile, ChequePrintFields } from '@/types/chequePrint';
 
+/**
+ * Format and deduplicate Amount in Words for Cheque Printing
+ * Ensures "Rupees Only" is NEVER repeated or duplicated.
+ */
+export function formatChequeAmountWords(
+  words: string,
+  prefix: string = '*** ',
+  suffix: string = ' ***'
+): string {
+  let cleanWords = (words || '').trim();
+
+  // Strip multiple consecutive "Rupees Only" from the base words
+  cleanWords = cleanWords.replace(/(Rupees\s+Only\s*)+/gi, 'Rupees Only');
+
+  let cleanSuffix = suffix || '';
+  // If cleanWords already has "Rupees Only", remove it from suffix
+  if (/Rupees\s+Only\b/i.test(cleanWords) && /Rupees\s+Only/i.test(cleanSuffix)) {
+    cleanSuffix = cleanSuffix.replace(/Rupees\s+Only\s*/gi, '').trim();
+    if (cleanSuffix && !cleanSuffix.startsWith(' ')) {
+      cleanSuffix = ' ' + cleanSuffix;
+    }
+  }
+
+  // If neither words nor suffix has "Rupees Only", append it to words
+  if (!/Rupees\s+Only\b/i.test(cleanWords) && !/Rupees\s+Only/i.test(cleanSuffix)) {
+    cleanWords = `${cleanWords} Rupees Only`;
+  }
+
+  const result = `${prefix || ''}${cleanWords}${cleanSuffix}`.trim();
+  // Final safeguard: remove duplicate consecutive "Rupees Only"
+  return result.replace(/(Rupees\s+Only)(\s+Rupees\s+Only)+/gi, '$1').replace(/\s+/g, ' ');
+}
+
 export const STANDARD_FIELDS: ChequePrintFields = {
   date: {
     id: 'date',
@@ -44,7 +77,7 @@ export const STANDARD_FIELDS: ChequePrintFields = {
     fontWeight: 'normal',
     textAlign: 'left',
     prefix: '*** ',
-    suffix: ' Rupees Only ***',
+    suffix: ' ***', // Fixed: was duplicate ' Rupees Only ***'
     maxLines: 2,
     lineHeight: 1.25,
     isVisible: true,
@@ -69,18 +102,25 @@ export const STANDARD_FIELDS: ChequePrintFields = {
   crossing: {
     id: 'crossing',
     name: 'A/C Payee Crossing',
-    x: 14,
-    y: 8,
-    width: 32,
-    height: 12,
-    fontSize: 8,
+    x: 16,
+    y: 10,
+    width: 34,
+    height: 10,
+    fontSize: 8.5,
     fontFamily: 'Inter',
     fontWeight: 'bold',
     textAlign: 'center',
     text: 'A/C PAYEE ONLY',
     style: 'parallel_lines',
     angle: 0,
-    isVisible: true,
+    showLines: true,
+    lineColor: '#B3262D',
+    lineThickness: 0.35,
+    lineLength: 34,
+    lineSpacing: 7.5,
+    textColor: '#B3262D',
+    textLineGap: 1.0,
+    isVisible: false, // Default: OFF for new bank templates
     isLocked: false,
   },
   bearerStrike: {
@@ -109,8 +149,38 @@ export const DEFAULT_CHEQUE_TEMPLATES: ChequePrintTemplate[] = [
     feedDirection: 'top',
     chequeX: 59.5,
     chequeY: 15,
-    fields: { ...STANDARD_FIELDS },
+    fields: {
+      ...STANDARD_FIELDS,
+      crossing: { ...STANDARD_FIELDS.crossing, isVisible: false },
+    },
     isDefault: true,
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+  },
+  {
+    id: 'tpl-ntb-01',
+    bankName: 'Nations Trust Bank (NTB)',
+    templateName: 'NTB — Standard A4 Feed',
+    chequeWidth: 178,
+    chequeHeight: 89,
+    a4Orientation: 'landscape',
+    a4Rotation: 0,
+    chequeRotation: 0,
+    feedDirection: 'top',
+    chequeX: 59.5,
+    chequeY: 15,
+    fields: {
+      ...STANDARD_FIELDS,
+      date: { ...STANDARD_FIELDS.date, x: 134, y: 11 },
+      payee: { ...STANDARD_FIELDS.payee, x: 28, y: 27 },
+      amountWords: { ...STANDARD_FIELDS.amountWords, x: 28, y: 36, width: 122 },
+      amountFigures: { ...STANDARD_FIELDS.amountFigures, x: 128, y: 46 },
+      crossing: { ...STANDARD_FIELDS.crossing, isVisible: false }, // Physical cheques typically preprinted
+      bearerStrike: STANDARD_FIELDS.bearerStrike
+        ? { ...STANDARD_FIELDS.bearerStrike, x: 154, y: 27, isVisible: false }
+        : undefined,
+    },
+    isDefault: false,
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString(),
   },
@@ -130,6 +200,7 @@ export const DEFAULT_CHEQUE_TEMPLATES: ChequePrintTemplate[] = [
       ...STANDARD_FIELDS,
       date: { ...STANDARD_FIELDS.date, x: 134, y: 12 },
       amountFigures: { ...STANDARD_FIELDS.amountFigures, x: 130, y: 46 },
+      crossing: { ...STANDARD_FIELDS.crossing, isVisible: false },
     },
     isDefault: false,
     createdAt: new Date().toISOString(),
@@ -151,6 +222,7 @@ export const DEFAULT_CHEQUE_TEMPLATES: ChequePrintTemplate[] = [
       ...STANDARD_FIELDS,
       date: { ...STANDARD_FIELDS.date, x: 133, y: 12 },
       payee: { ...STANDARD_FIELDS.payee, x: 33, y: 28 },
+      crossing: { ...STANDARD_FIELDS.crossing, isVisible: false },
     },
     isDefault: false,
     createdAt: new Date().toISOString(),
@@ -172,6 +244,7 @@ export const DEFAULT_CHEQUE_TEMPLATES: ChequePrintTemplate[] = [
       ...STANDARD_FIELDS,
       date: { ...STANDARD_FIELDS.date, x: 135, y: 13 },
       amountWords: { ...STANDARD_FIELDS.amountWords, x: 30, y: 39 },
+      crossing: { ...STANDARD_FIELDS.crossing, isVisible: false },
     },
     isDefault: false,
     createdAt: new Date().toISOString(),
@@ -193,6 +266,7 @@ export const DEFAULT_CHEQUE_TEMPLATES: ChequePrintTemplate[] = [
       ...STANDARD_FIELDS,
       date: { ...STANDARD_FIELDS.date, x: 132, y: 12 },
       amountFigures: { ...STANDARD_FIELDS.amountFigures, x: 128, y: 45 },
+      crossing: { ...STANDARD_FIELDS.crossing, isVisible: false },
     },
     isDefault: false,
     createdAt: new Date().toISOString(),
@@ -210,15 +284,18 @@ export const DEFAULT_CHEQUE_TEMPLATES: ChequePrintTemplate[] = [
     feedDirection: 'top',
     chequeX: 59.5,
     chequeY: 15,
-    fields: { ...STANDARD_FIELDS },
+    fields: {
+      ...STANDARD_FIELDS,
+      crossing: { ...STANDARD_FIELDS.crossing, isVisible: false },
+    },
     isDefault: false,
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString(),
   },
   {
-    id: 'tpl-ntb-01',
-    bankName: 'Nations Trust Bank (NTB)',
-    templateName: 'NTB — Standard A4 Feed',
+    id: 'tpl-custom-01',
+    bankName: 'Custom Bank Template',
+    templateName: 'Custom Cheque Layout — 178x89mm',
     chequeWidth: 178,
     chequeHeight: 89,
     a4Orientation: 'landscape',
@@ -227,7 +304,10 @@ export const DEFAULT_CHEQUE_TEMPLATES: ChequePrintTemplate[] = [
     feedDirection: 'top',
     chequeX: 59.5,
     chequeY: 15,
-    fields: { ...STANDARD_FIELDS },
+    fields: {
+      ...STANDARD_FIELDS,
+      crossing: { ...STANDARD_FIELDS.crossing, isVisible: false },
+    },
     isDefault: false,
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString(),
@@ -269,4 +349,3 @@ export const DEFAULT_PRINTER_PROFILES: ChequePrinterProfile[] = [
     updatedAt: new Date().toISOString(),
   },
 ];
-

@@ -23,12 +23,26 @@ export interface ChequeFieldConfig {
   isLocked: boolean;
 }
 
+export interface ChequeCrossingConfig extends ChequeFieldConfig {
+  text?: string;
+  style?: 'parallel_lines' | 'text_only' | 'box';
+  angle?: number; // degrees (-180 to 180)
+  showLines?: boolean;
+  lineColor?: string; // hex color e.g. '#B3262D'
+  lineThickness?: number; // mm (0.2 to 2.0)
+  lineLength?: number; // mm (15 to 60)
+  lineSpacing?: number; // mm (4 to 16)
+  textColor?: string; // hex color e.g. '#B3262D'
+  textLineGap?: number; // mm
+  warningAcknowledged?: boolean;
+}
+
 export interface ChequePrintFields {
   date: ChequeFieldConfig;
   payee: ChequeFieldConfig;
   amountWords: ChequeFieldConfig & { maxLines?: number; lineHeight?: number };
   amountFigures: ChequeFieldConfig;
-  crossing: ChequeFieldConfig & { text?: string; style?: 'parallel_lines' | 'text_only' | 'box'; angle?: number };
+  crossing: ChequeCrossingConfig;
   bearerStrike?: ChequeFieldConfig;
 }
 

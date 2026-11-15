@@ -1364,6 +1364,32 @@ function mapBrandingRow(r: any): BrandingSettings {
 // -----------------------------------------------------------------------------
 
 function mapChequeTemplateRow(r: any): ChequePrintTemplate {
+  const fields = typeof r.fields === 'string' ? JSON.parse(r.fields) : (r.fields || {});
+
+  // Sanitize amountWords suffix to prevent duplicate "Rupees Only" from historical rows
+  if (fields.amountWords && typeof fields.amountWords.suffix === 'string') {
+    if (fields.amountWords.suffix.includes('Rupees Only')) {
+      fields.amountWords.suffix = ' ***';
+    }
+  }
+
+  // Populate crossing defaults if missing
+  if (fields.crossing) {
+    fields.crossing = {
+      ...fields.crossing,
+      text: fields.crossing.text || 'A/C PAYEE ONLY',
+      angle: Number(fields.crossing.angle) || 0,
+      showLines: fields.crossing.showLines ?? true,
+      lineColor: fields.crossing.lineColor || fields.crossing.textColor || '#B3262D',
+      textColor: fields.crossing.textColor || '#B3262D',
+      lineThickness: Number(fields.crossing.lineThickness) || 0.35,
+      lineLength: Number(fields.crossing.lineLength) || Number(fields.crossing.width) || 34,
+      lineSpacing: Number(fields.crossing.lineSpacing) || 7.5,
+      textLineGap: Number(fields.crossing.textLineGap) || 1.0,
+      isVisible: Boolean(fields.crossing.isVisible),
+    };
+  }
+
   return {
     id: r.id,
     bankName: r.bank_name,
@@ -1376,7 +1402,7 @@ function mapChequeTemplateRow(r: any): ChequePrintTemplate {
     feedDirection: r.feed_direction || 'top',
     chequeX: Number(r.cheque_x) ?? 10,
     chequeY: Number(r.cheque_y) ?? 10,
-    fields: typeof r.fields === 'string' ? JSON.parse(r.fields) : (r.fields || {}),
+    fields,
     isDefault: Boolean(r.is_default),
     createdAt: r.created_at ? new Date(r.created_at).toISOString() : new Date().toISOString(),
     updatedAt: r.updated_at ? new Date(r.updated_at).toISOString() : new Date().toISOString(),

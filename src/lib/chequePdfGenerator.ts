@@ -1,5 +1,26 @@
 import { jsPDF } from 'jspdf';
 import { ChequePrintPayload } from '@/types/chequePrint';
+import { formatChequeAmountWords } from '@/lib/chequeDefaults';
+
+/**
+ * Converts a hex color string (#RRGGBB or #RGB) to RGB tuple [r, g, b]
+ */
+function hexToRgb(hex?: string): [number, number, number] {
+  if (!hex) return [179, 38, 45]; // default #B3262D (dark red)
+  const clean = hex.replace('#', '').trim();
+  if (clean.length === 3) {
+    return [
+      parseInt(clean[0] + clean[0], 16),
+      parseInt(clean[1] + clean[1], 16),
+      parseInt(clean[2] + clean[2], 16),
+    ];
+  }
+  return [
+    parseInt(clean.substring(0, 2), 16) || 0,
+    parseInt(clean.substring(2, 4), 16) || 0,
+    parseInt(clean.substring(4, 6), 16) || 0,
+  ];
+}
 
 /**
  * High-precision mm-based Vector PDF Generator for Cheque Calibration and Final Printing
@@ -27,6 +48,49 @@ export function createChequePdf(payload: ChequePrintPayload): jsPDF {
   const cW = Number(template.chequeWidth) || 178;
   const cH = Number(template.chequeHeight) || 89;
   const cRot = (Number(template.chequeRotation) || 0) % 360;
+
+  // ---------------------------------------------------------------------------
+  // HELPER: Transform Cheque-Local (x, y) into Page Absolute Coordinates
+  // ---------------------------------------------------------------------------
+  function transformCoord(localX: number, localY: number): { x: number; y: number; textAngle: number } {
+    let pageX = cX;
+    let pageY = cY;
+    let angle = 0;
+
+    switch (cRot) {
+      case 0:
+        pageX = cX + localX;
+        pageY = cY + localY;
+        angle = 0;
+        break;
+      case 90:
+        // 90 deg clockwise: origin (0,0) lands at (cX + cH, cY)
+        // Local X points down (+Y page), Local Y points left (-X page)
+        pageX = cX + (cH - localY);
+        pageY = cY + localX;
+        angle = 270; // 90 deg clockwise in text orientation
+        break;
+      case 180:
+        // 180 deg clockwise (upside-down):
+        // Local X points left (-X page), Local Y points up (-Y page)
+        pageX = cX + (cW - localX);
+        pageY = cY + (cH - localY);
+        angle = 180;
+        break;
+      case 270:
+        // 270 deg clockwise (90 deg counter-clockwise):
+        pageX = cX + localY;
+        pageY = cY + (cW - localX);
+        angle = 90;
+        break;
+      default:
+        pageX = cX + localX;
+        pageY = cY + localY;
+        angle = 0;
+    }
+
+    return { x: pageX, y: pageY, textAngle: angle };
+  }
 
   // ---------------------------------------------------------------------------
   // TEST PRINT OVERLAYS (Only drawn when printType === 'test')
@@ -80,58 +144,6 @@ export function createChequePdf(payload: ChequePrintPayload): jsPDF {
     });
 
     // 6. Draw Cheque Outer Box (Rotated)
-    doc.saveGraphicsState();
-    // Rotate canvas around (cX, cY)
-    if (cRot !== 0) {
-      // jsPDF angle is in degrees clockwise if using matrix, or convert
-    }
-  }
-
-  // ---------------------------------------------------------------------------
-  // HELPER: Transform Cheque-Local (x, y) into Page Absolute Coordinates
-  // ---------------------------------------------------------------------------
-  function transformCoord(localX: number, localY: number): { x: number; y: number; textAngle: number } {
-    let pageX = cX;
-    let pageY = cY;
-    let angle = 0;
-
-    switch (cRot) {
-      case 0:
-        pageX = cX + localX;
-        pageY = cY + localY;
-        angle = 0;
-        break;
-      case 90:
-        // 90 deg clockwise: origin (0,0) lands at (cX + cH, cY)
-        // Local X points down (+Y page), Local Y points left (-X page)
-        pageX = cX + (cH - localY);
-        pageY = cY + localX;
-        angle = 270; // 90 deg clockwise in text orientation
-        break;
-      case 180:
-        // 180 deg clockwise (upside-down):
-        // Local X points left (-X page), Local Y points up (-Y page)
-        pageX = cX + (cW - localX);
-        pageY = cY + (cH - localY);
-        angle = 180;
-        break;
-      case 270:
-        // 270 deg clockwise (90 deg counter-clockwise):
-        pageX = cX + localY;
-        pageY = cY + (cW - localX);
-        angle = 90;
-        break;
-      default:
-        pageX = cX + localX;
-        pageY = cY + localY;
-        angle = 0;
-    }
-
-    return { x: pageX, y: pageY, textAngle: angle };
-  }
-
-  // If Test Mode, draw the cheque boundary rectangle
-  if (printType === 'test') {
     doc.setDrawColor(16, 185, 129); // Emerald border
     doc.setLineWidth(0.5);
 
@@ -161,13 +173,8 @@ export function createChequePdf(payload: ChequePrintPayload): jsPDF {
   // ---------------------------------------------------------------------------
   const fields = template.fields;
 
-  // Helper to draw a text field
-  const renderField = (
-    cfg: any,
-    value: string,
-    fallbackName: string,
-    options?: { isCrossing?: boolean }
-  ) => {
+  // Helper to draw standard text fields (Date, Payee, Amount in Words, Figures)
+  const renderStandardField = (cfg: any, value: string, fallbackName: string) => {
     if (!cfg || cfg.isVisible === false || !value) return;
 
     const coords = transformCoord(cfg.x, cfg.y);
@@ -200,44 +207,15 @@ export function createChequePdf(payload: ChequePrintPayload): jsPDF {
     }
 
     // Prepare text styling
-    const font = cfg.fontFamily === 'Courier' ? 'courier' : 'helvetica';
+    const font = cfg.fontFamily === 'Courier' ? 'courier' : cfg.fontFamily === 'Times' ? 'times' : 'helvetica';
     const weight = cfg.fontWeight === 'bold' ? 'bold' : 'normal';
     doc.setFont(font, weight);
     doc.setFontSize(cfg.fontSize || 10);
     doc.setTextColor(15, 23, 42); // Clean dark navy / black for crisp printing
 
-    // Special Crossing handling (A/C PAYEE ONLY with double parallel lines)
-    if (options?.isCrossing) {
-      const crossingText = value || 'A/C PAYEE ONLY';
-      doc.setFont('helvetica', 'bold');
-      doc.setFontSize(cfg.fontSize || 8);
-
-      // Render crossing text
-      doc.text(crossingText, coords.x, coords.y, {
-        angle: coords.textAngle,
-        align: cfg.textAlign || 'center',
-      });
-
-      // Draw double parallel lines if style is parallel_lines
-      if (cfg.style !== 'text_only') {
-        doc.setDrawColor(15, 23, 42);
-        doc.setLineWidth(0.35);
-        const l1Start = transformCoord(cfg.x, cfg.y - 2);
-        const l1End = transformCoord(cfg.x + (cfg.width || 30), cfg.y - 2);
-        const l2Start = transformCoord(cfg.x, cfg.y + 4);
-        const l2End = transformCoord(cfg.x + (cfg.width || 30), cfg.y + 4);
-        doc.line(l1Start.x, l1Start.y, l1End.x, l1End.y);
-        doc.line(l2Start.x, l2Start.y, l2End.x, l2End.y);
-      }
-      return;
-    }
-
-    // Format text with prefix / suffix
-    let displayText = `${cfg.prefix || ''}${value}${cfg.suffix || ''}`;
-
     // Date spacing if letterSpacing is set
     if (cfg.id === 'date' && cfg.letterSpacing && cfg.letterSpacing > 0) {
-      // Split characters and space them
+      const displayText = `${cfg.prefix || ''}${value}${cfg.suffix || ''}`;
       const chars = displayText.replace(/\s+/g, '').split('');
       chars.forEach((char, idx) => {
         const charCoord = transformCoord(cfg.x + idx * (cfg.letterSpacing || 3.5), cfg.y);
@@ -248,8 +226,9 @@ export function createChequePdf(payload: ChequePrintPayload): jsPDF {
       return;
     }
 
-    // Amount in words: multi-line wrapping if needed
+    // Amount in words: multi-line word-wrapping without truncation mid-word + deduplicated Rupees Only
     if (cfg.id === 'amountWords') {
+      const displayText = formatChequeAmountWords(value, cfg.prefix, cfg.suffix);
       const maxW = cfg.width || 120;
       const splitLines = doc.splitTextToSize(displayText, maxW);
       const lineH = (cfg.fontSize || 10) * 0.45; // mm per line
@@ -265,35 +244,130 @@ export function createChequePdf(payload: ChequePrintPayload): jsPDF {
     }
 
     // Standard Single Line Text
+    const displayText = `${cfg.prefix || ''}${value}${cfg.suffix || ''}`;
     doc.text(displayText, coords.x, coords.y, {
       angle: coords.textAngle,
       align: cfg.textAlign || 'left',
     });
   };
 
+  // ---------------------------------------------------------------------------
+  // DEDICATED A/C PAYEE ONLY CROSSING RENDERER (Unified Group Rotation & Vector Lines)
+  // ---------------------------------------------------------------------------
+  const renderCrossingField = (cfg: any, value: string) => {
+    // If crossing is disabled, DO NOT PRINT ANYTHING!
+    if (!cfg || cfg.isVisible === false) return;
+
+    const crossingText = cfg.text || value || 'A/C PAYEE ONLY';
+    const lineLength = Number(cfg.lineLength) || Number(cfg.width) || 34;
+    const lineSpacing = Number(cfg.lineSpacing) || 7.5;
+    const lineThickness = Number(cfg.lineThickness) || 0.35;
+    const angleDeg = Number(cfg.angle) || 0;
+    const showLines = cfg.showLines !== false;
+
+    // Center point of crossing group in local cheque coordinates
+    const localCenterX = cfg.x + lineLength / 2;
+    const localCenterY = cfg.y + lineSpacing / 2;
+
+    // Unit vectors along line (u) and perpendicular (v)
+    const theta = (angleDeg * Math.PI) / 180;
+    const ux = Math.cos(theta);
+    const uy = Math.sin(theta);
+    const vx = -Math.sin(theta);
+    const vy = Math.cos(theta);
+
+    const halfL = lineLength / 2;
+    const halfS = lineSpacing / 2;
+
+    // 4 endpoints in cheque local coordinates
+    const p1Start = { x: localCenterX - halfS * vx - halfL * ux, y: localCenterY - halfS * vy - halfL * uy };
+    const p1End = { x: localCenterX - halfS * vx + halfL * ux, y: localCenterY - halfS * vy + halfL * uy };
+    const p2Start = { x: localCenterX + halfS * vx - halfL * ux, y: localCenterY + halfS * vy - halfL * uy };
+    const p2End = { x: localCenterX + halfS * vx + halfL * ux, y: localCenterY + halfS * vy + halfL * uy };
+
+    // Transform endpoints to A4 page coordinates
+    const t1Start = transformCoord(p1Start.x, p1Start.y);
+    const t1End = transformCoord(p1End.x, p1End.y);
+    const t2Start = transformCoord(p2Start.x, p2Start.y);
+    const t2End = transformCoord(p2End.x, p2End.y);
+
+    // Transform center and calculate absolute page angle for text
+    const centerPt = transformCoord(localCenterX, localCenterY);
+    const dirPt = transformCoord(localCenterX + ux, localCenterY + uy);
+    const dx = dirPt.x - centerPt.x;
+    const dy = dirPt.y - centerPt.y;
+    // jsPDF text rotation: counter-clockwise degrees
+    const jsPdfTextAngle = (- (Math.atan2(dy, dx) * 180 / Math.PI) + 360) % 360;
+
+    // 1. In Test Print, draw the bounding guide box
+    if (printType === 'test') {
+      doc.setDrawColor(244, 63, 94); // Rose color
+      doc.setLineWidth(0.2);
+      doc.setLineDashPattern([1, 1], 0);
+
+      // Connect 4 corners of crossing box
+      doc.line(t1Start.x, t1Start.y, t1End.x, t1End.y);
+      doc.line(t1End.x, t1End.y, t2End.x, t2End.y);
+      doc.line(t2End.x, t2End.y, t2Start.x, t2Start.y);
+      doc.line(t2Start.x, t2Start.y, t1Start.x, t1Start.y);
+
+      doc.setLineDashPattern([], 0);
+
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(6);
+      doc.setTextColor(244, 63, 94);
+      doc.text('[A/C Payee Crossing]', t1Start.x, t1Start.y - 1, { angle: jsPdfTextAngle });
+    }
+
+    // 2. Draw Parallel Vector Lines (if enabled)
+    if (showLines) {
+      const [lr, lg, lb] = hexToRgb(cfg.lineColor || cfg.textColor || '#B3262D');
+      doc.setDrawColor(lr, lg, lb);
+      doc.setLineWidth(lineThickness);
+
+      doc.line(t1Start.x, t1Start.y, t1End.x, t1End.y);
+      doc.line(t2Start.x, t2Start.y, t2End.x, t2End.y);
+    }
+
+    // 3. Render Crossing Text Centered Between Lines
+    const [tr, tg, tb] = hexToRgb(cfg.textColor || '#B3262D');
+    doc.setTextColor(tr, tg, tb);
+
+    const font = cfg.fontFamily === 'Courier' ? 'courier' : cfg.fontFamily === 'Times' ? 'times' : 'helvetica';
+    const weight = cfg.fontWeight === 'normal' ? 'normal' : 'bold';
+    doc.setFont(font, weight);
+    doc.setFontSize(cfg.fontSize || 8.5);
+
+    doc.text(crossingText, centerPt.x, centerPt.y, {
+      align: cfg.textAlign || 'center',
+      baseline: 'middle',
+      angle: jsPdfTextAngle,
+    });
+  };
+
   // 1. Date
   if (fields.date) {
-    renderField(fields.date, liveData.date, 'Date');
+    renderStandardField(fields.date, liveData.date, 'Date');
   }
 
   // 2. Payee Name
   if (fields.payee) {
-    renderField(fields.payee, liveData.payeeName, 'Payee');
+    renderStandardField(fields.payee, liveData.payeeName, 'Payee');
   }
 
   // 3. Amount in Words
   if (fields.amountWords) {
-    renderField(fields.amountWords, liveData.amountWords, 'Amount in Words');
+    renderStandardField(fields.amountWords, liveData.amountWords, 'Amount in Words');
   }
 
   // 4. Amount in Figures
   if (fields.amountFigures) {
-    renderField(fields.amountFigures, liveData.amountFigures, 'Amount in Figures');
+    renderStandardField(fields.amountFigures, liveData.amountFigures, 'Amount in Figures');
   }
 
   // 5. Crossing (A/C Payee Only)
   if (fields.crossing) {
-    renderField(fields.crossing, liveData.crossingText || 'A/C PAYEE ONLY', 'Crossing', { isCrossing: true });
+    renderCrossingField(fields.crossing, liveData.crossingText || 'A/C PAYEE ONLY');
   }
 
   return doc;
@@ -314,4 +388,3 @@ export function downloadChequePdf(payload: ChequePrintPayload, filename?: string
   const defaultName = `Cheque_${payload.liveData.chequeNumber || 'Print'}_${payload.printType}.pdf`;
   doc.save(filename || defaultName);
 }
-

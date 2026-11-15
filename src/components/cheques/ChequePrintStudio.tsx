@@ -32,6 +32,8 @@ import {
   AlignLeft,
   AlignCenter,
   AlignRight,
+  Palette,
+  Compass,
 } from "lucide-react";
 import {
   Cheque,
@@ -39,12 +41,13 @@ import {
   ChequePrinterProfile,
   ChequePrintFields,
   ChequeFieldConfig,
+  ChequeCrossingConfig,
   A4Orientation,
   RotationAngle,
   FeedDirection,
   ChequePrintPayload,
 } from "@/types/chequePrint";
-import { DEFAULT_CHEQUE_TEMPLATES, DEFAULT_PRINTER_PROFILES } from "@/lib/chequeDefaults";
+import { DEFAULT_CHEQUE_TEMPLATES, DEFAULT_PRINTER_PROFILES, formatChequeAmountWords } from "@/lib/chequeDefaults";
 import { downloadChequePdf, createChequePdf } from "@/lib/chequePdfGenerator";
 import { numberToWordsLKR } from "@/lib/utils";
 
@@ -71,6 +74,7 @@ export function ChequePrintStudio({ isOpen, onClose, cheque, onSaved }: ChequePr
   const [zoomLevel, setZoomLevel] = useState<number>(1);
   const [isSaving, setIsSaving] = useState<boolean>(false);
   const [saveSuccessMsg, setSaveSuccessMsg] = useState<string | null>(null);
+  const [showCrossingSidebar, setShowCrossingSidebar] = useState<boolean>(true);
 
   // Undo / Redo history
   const [history, setHistory] = useState<ChequePrintTemplate[]>([]);
@@ -110,9 +114,9 @@ export function ChequePrintStudio({ isOpen, onClose, cheque, onSaved }: ChequePr
       payeeName: cheque?.payerOrPayeeName || cheque?.supplierName || "SAMPLE COMPANY (PVT) LTD",
       amountFigures: formattedAmount,
       amountWords: words,
-      crossingText: "A/C PAYEE ONLY",
+      crossingText: activeTemplate.fields.crossing?.text || "A/C PAYEE ONLY",
     };
-  }, [cheque]);
+  }, [cheque, activeTemplate.fields.crossing?.text]);
 
   // Load saved templates and printer profiles from PostgreSQL on mount
   useEffect(() => {
@@ -450,6 +454,7 @@ export function ChequePrintStudio({ isOpen, onClose, cheque, onSaved }: ChequePr
           a4Orientation: activeTemplate.a4Orientation,
           offsetX: activeProfile.offsetX,
           offsetY: activeProfile.offsetY,
+          crossingVisible: activeTemplate.fields.crossing?.isVisible,
         },
       }),
     }).catch((e) => console.warn("Notice: Print job record warning", e));
@@ -786,6 +791,92 @@ export function ChequePrintStudio({ isOpen, onClose, cheque, onSaved }: ChequePr
               </div>
             </div>
 
+            {/* =============================================================== */}
+            {/* ADVANCED CROSSING SETTINGS (A/C PAYEE ONLY) - HIGH PRIORITY */}
+            {/* =============================================================== */}
+            <div className="pt-2 border-t border-navy-800/80 space-y-3">
+              <div
+                className="flex items-center justify-between cursor-pointer"
+                onClick={() => setShowCrossingSidebar(!showCrossingSidebar)}
+              >
+                <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 flex items-center space-x-1.5">
+                  <span>Advanced Crossing Settings</span>
+                </span>
+                <span className="text-slate-500">
+                  {showCrossingSidebar ? <ChevronDown className="w-3.5 h-3.5" /> : <ChevronRight className="w-3.5 h-3.5" />}
+                </span>
+              </div>
+
+              {showCrossingSidebar && (
+                <div className="p-3 bg-navy-900/70 border border-navy-800 rounded-xl space-y-3">
+                  {/* Primary Toggle: Print A/C Payee Only Crossing */}
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <span className="text-xs font-bold text-white block">
+                        Print A/C Payee Only
+                      </span>
+                      <span className="text-[10px] text-slate-400">
+                        {activeTemplate.fields.crossing?.isVisible ? "Enabled for print" : "Disabled (Default)"}
+                      </span>
+                    </div>
+
+                    <label className="relative inline-flex items-center cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={Boolean(activeTemplate.fields.crossing?.isVisible)}
+                        onChange={(e) => {
+                          const checked = e.target.checked;
+                          updateTemplate((prev) => ({
+                            ...prev,
+                            fields: {
+                              ...prev.fields,
+                              crossing: {
+                                ...prev.fields.crossing,
+                                isVisible: checked,
+                              },
+                            },
+                          }));
+                          if (checked) {
+                            setIsMoveTextFields(true);
+                            setSelectedFieldKey("crossing");
+                          }
+                        }}
+                        className="sr-only peer"
+                      />
+                      <div className="w-8 h-4 bg-slate-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-3 after:w-3 after:transition-all peer-checked:bg-emerald-500"></div>
+                    </label>
+                  </div>
+
+                  {/* Warning Notice for Preprinted Cheques */}
+                  <div className="p-2.5 bg-amber-500/10 border border-amber-500/30 rounded-lg text-amber-200/90 text-[11px] space-y-1">
+                    <div className="flex items-center space-x-1 font-bold text-amber-300">
+                      <AlertCircle className="w-3.5 h-3.5 shrink-0 text-amber-400" />
+                      <span>Physical Cheque Notice</span>
+                    </div>
+                    <p className="leading-snug">
+                      Check whether your physical cheque already has a crossing before enabling this option.
+                    </p>
+                  </div>
+
+                  {/* Quick summary & customize button */}
+                  <div className="pt-1 flex items-center justify-between">
+                    <span className="text-[10px] font-mono text-slate-400">
+                      Angle: {activeTemplate.fields.crossing?.angle || 0}°
+                    </span>
+                    <button
+                      onClick={() => {
+                        setIsMoveTextFields(true);
+                        setSelectedFieldKey("crossing");
+                      }}
+                      className="px-2 py-1 bg-slate-800 hover:bg-slate-700 text-emerald-400 rounded text-[11px] font-medium transition"
+                    >
+                      Customize Crossing →
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+
             {/* Canvas Helpers */}
             <div className="pt-2 border-t border-navy-800/80 space-y-2">
               <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
@@ -1048,32 +1139,38 @@ export function ChequePrintStudio({ isOpen, onClose, cheque, onSaved }: ChequePr
                     </div>
                   )}
 
-                  {/* 3. Amount in Words */}
-                  {activeTemplate.fields.amountWords && activeTemplate.fields.amountWords.isVisible && (
-                    <div
-                      onMouseDown={(e) => handleMouseDownField("amountWords", e)}
-                      style={{
-                        position: "absolute",
-                        left: `${activeTemplate.fields.amountWords.x * displayScale}px`,
-                        top: `${activeTemplate.fields.amountWords.y * displayScale}px`,
-                        width: `${(activeTemplate.fields.amountWords.width || 120) * displayScale}px`,
-                        fontSize: `${activeTemplate.fields.amountWords.fontSize * 1.25}px`,
-                        lineHeight: activeTemplate.fields.amountWords.lineHeight || 1.2,
-                        cursor: isMoveTextFields ? "move" : "inherit",
-                      }}
-                      className={`p-1 rounded text-slate-900 border border-dashed transition ${
-                        isMoveTextFields
-                          ? selectedFieldKey === "amountWords"
-                            ? "border-emerald-600 bg-emerald-100/70 ring-2 ring-emerald-400"
-                            : "border-emerald-500/80 hover:bg-emerald-50/50 cursor-move"
-                          : "border-emerald-500/60"
-                      }`}
-                    >
-                      {activeTemplate.fields.amountWords.prefix}
-                      {liveData.amountWords}
-                      {activeTemplate.fields.amountWords.suffix}
-                    </div>
-                  )}
+                  {/* 3. Amount in Words (Deduplicated "Rupees Only" & Strict Word Wrapping) */}
+                  {activeTemplate.fields.amountWords && activeTemplate.fields.amountWords.isVisible && (() => {
+                    const formattedWords = formatChequeAmountWords(
+                      liveData.amountWords,
+                      activeTemplate.fields.amountWords.prefix || "*** ",
+                      activeTemplate.fields.amountWords.suffix || " ***"
+                    );
+
+                    return (
+                      <div
+                        onMouseDown={(e) => handleMouseDownField("amountWords", e)}
+                        style={{
+                          position: "absolute",
+                          left: `${activeTemplate.fields.amountWords.x * displayScale}px`,
+                          top: `${activeTemplate.fields.amountWords.y * displayScale}px`,
+                          width: `${(activeTemplate.fields.amountWords.width || 120) * displayScale}px`,
+                          fontSize: `${activeTemplate.fields.amountWords.fontSize * 1.25}px`,
+                          lineHeight: activeTemplate.fields.amountWords.lineHeight || 1.25,
+                          cursor: isMoveTextFields ? "move" : "inherit",
+                        }}
+                        className={`p-1 rounded text-slate-900 border border-dashed transition break-words ${
+                          isMoveTextFields
+                            ? selectedFieldKey === "amountWords"
+                              ? "border-emerald-600 bg-emerald-100/70 ring-2 ring-emerald-400"
+                              : "border-emerald-500/80 hover:bg-emerald-50/50 cursor-move"
+                            : "border-emerald-500/60"
+                        }`}
+                      >
+                        {formattedWords}
+                      </div>
+                    );
+                  })()}
 
                   {/* 4. Amount in Figures */}
                   {activeTemplate.fields.amountFigures && activeTemplate.fields.amountFigures.isVisible && (
@@ -1102,35 +1199,91 @@ export function ChequePrintStudio({ isOpen, onClose, cheque, onSaved }: ChequePr
                     </div>
                   )}
 
-                  {/* 5. Crossing (A/C Payee Only) */}
-                  {activeTemplate.fields.crossing && activeTemplate.fields.crossing.isVisible && (
-                    <div
-                      onMouseDown={(e) => handleMouseDownField("crossing", e)}
-                      style={{
-                        position: "absolute",
-                        left: `${activeTemplate.fields.crossing.x * displayScale}px`,
-                        top: `${activeTemplate.fields.crossing.y * displayScale}px`,
-                        width: `${(activeTemplate.fields.crossing.width || 32) * displayScale}px`,
-                        fontSize: `${activeTemplate.fields.crossing.fontSize * 1.2}px`,
-                        cursor: isMoveTextFields ? "move" : "inherit",
-                      }}
-                      className={`text-center font-bold text-slate-900 border border-dashed transition ${
-                        isMoveTextFields
-                          ? selectedFieldKey === "crossing"
-                            ? "border-emerald-600 bg-emerald-100/70 ring-2 ring-emerald-400"
-                            : "border-emerald-500/80 hover:bg-emerald-50/50 cursor-move"
-                          : "border-emerald-500/60"
-                      }`}
-                    >
-                      {activeTemplate.fields.crossing.style === "parallel_lines" && (
-                        <div className="border-t border-b border-slate-900 py-0.5">
+                  {/* 5. Crossing (A/C Payee Only) - Unified Group Rotation */}
+                  {activeTemplate.fields.crossing && (
+                    activeTemplate.fields.crossing.isVisible ? (
+                      <div
+                        onMouseDown={(e) => handleMouseDownField("crossing", e)}
+                        style={{
+                          position: "absolute",
+                          left: `${activeTemplate.fields.crossing.x * displayScale}px`,
+                          top: `${activeTemplate.fields.crossing.y * displayScale}px`,
+                          width: `${(activeTemplate.fields.crossing.lineLength || activeTemplate.fields.crossing.width || 34) * displayScale}px`,
+                          height: `${(activeTemplate.fields.crossing.lineSpacing || 7.5) * displayScale}px`,
+                          transform: `rotate(${activeTemplate.fields.crossing.angle || 0}deg)`,
+                          transformOrigin: "center center",
+                          cursor: isMoveTextFields ? "move" : "inherit",
+                        }}
+                        className={`flex flex-col justify-between items-center text-center select-none transition ${
+                          isMoveTextFields
+                            ? selectedFieldKey === "crossing"
+                              ? "ring-2 ring-emerald-400 bg-emerald-500/10 rounded"
+                              : "hover:bg-slate-100/30 cursor-move"
+                            : ""
+                        }`}
+                        title="A/C Payee Only Crossing"
+                      >
+                        {/* Top Parallel Line */}
+                        {activeTemplate.fields.crossing.showLines !== false && (
+                          <div
+                            style={{
+                              width: "100%",
+                              height: "0px",
+                              borderTop: `${Math.max(1, (activeTemplate.fields.crossing.lineThickness || 0.35) * (displayScale / 0.8))}px solid ${
+                                activeTemplate.fields.crossing.lineColor || activeTemplate.fields.crossing.textColor || "#B3262D"
+                              }`,
+                            }}
+                          />
+                        )}
+
+                        {/* Middle Text */}
+                        <div
+                          style={{
+                            color: activeTemplate.fields.crossing.textColor || "#B3262D",
+                            fontSize: `${(activeTemplate.fields.crossing.fontSize || 8.5) * 1.2}px`,
+                            fontFamily: activeTemplate.fields.crossing.fontFamily || "Inter, sans-serif",
+                            fontWeight: activeTemplate.fields.crossing.fontWeight || "bold",
+                            textAlign: activeTemplate.fields.crossing.textAlign || "center",
+                            lineHeight: 1,
+                            padding: "1px 2px",
+                            width: "100%",
+                          }}
+                          className="tracking-wider uppercase whitespace-nowrap overflow-hidden text-ellipsis"
+                        >
                           {activeTemplate.fields.crossing.text || "A/C PAYEE ONLY"}
                         </div>
-                      )}
-                      {activeTemplate.fields.crossing.style !== "parallel_lines" && (
-                        <div>{activeTemplate.fields.crossing.text || "A/C PAYEE ONLY"}</div>
-                      )}
-                    </div>
+
+                        {/* Bottom Parallel Line */}
+                        {activeTemplate.fields.crossing.showLines !== false && (
+                          <div
+                            style={{
+                              width: "100%",
+                              height: "0px",
+                              borderBottom: `${Math.max(1, (activeTemplate.fields.crossing.lineThickness || 0.35) * (displayScale / 0.8))}px solid ${
+                                activeTemplate.fields.crossing.lineColor || activeTemplate.fields.crossing.textColor || "#B3262D"
+                              }`,
+                            }}
+                          />
+                        )}
+                      </div>
+                    ) : isMoveTextFields && selectedFieldKey === "crossing" ? (
+                      /* Ghost outline when disabled but selected in editor */
+                      <div
+                        onMouseDown={(e) => handleMouseDownField("crossing", e)}
+                        style={{
+                          position: "absolute",
+                          left: `${activeTemplate.fields.crossing.x * displayScale}px`,
+                          top: `${activeTemplate.fields.crossing.y * displayScale}px`,
+                          width: `${(activeTemplate.fields.crossing.lineLength || activeTemplate.fields.crossing.width || 34) * displayScale}px`,
+                          height: `${(activeTemplate.fields.crossing.lineSpacing || 7.5) * displayScale}px`,
+                          transform: `rotate(${activeTemplate.fields.crossing.angle || 0}deg)`,
+                          transformOrigin: "center center",
+                        }}
+                        className="border border-dashed border-amber-400 bg-amber-100/40 rounded flex items-center justify-center text-[9px] font-mono text-amber-700 p-1 cursor-move"
+                      >
+                        Crossing (Disabled - Turn ON to print)
+                      </div>
+                    ) : null
                   )}
                 </div>
               </div>
@@ -1159,7 +1312,7 @@ export function ChequePrintStudio({ isOpen, onClose, cheque, onSaved }: ChequePr
               <span className="text-slate-500">|</span>
               <span className="text-[11px] text-slate-300">
                 {isMoveTextFields
-                  ? `Editing text field: ${selectedFieldKey ? selectedFieldKey.toUpperCase() : "Click any field inside the cheque to select"}`
+                  ? `Editing field: ${selectedFieldKey ? selectedFieldKey.toUpperCase() : "Click any field inside the cheque to select"}`
                   : "Drag the cheque to position it on the A4 page. Enable 'Move text fields' to drag individual fields."}
               </span>
             </div>
@@ -1190,17 +1343,576 @@ export function ChequePrintStudio({ isOpen, onClose, cheque, onSaved }: ChequePr
 
           <div className="p-4 space-y-4">
             {selectedFieldKey ? (
-              // ---------------- Field Properties Inspector ----------------
-              (() => {
-                const field = activeTemplate.fields[selectedFieldKey];
-                if (!field) return <p className="text-slate-400">Field not found</p>;
+              // ---------------- DEDICATED CROSSING INSPECTOR ----------------
+              selectedFieldKey === "crossing" ? (
+                (() => {
+                  const crossing = activeTemplate.fields.crossing || {
+                    id: "crossing",
+                    name: "A/C Payee Crossing",
+                    x: 16,
+                    y: 10,
+                    width: 34,
+                    height: 10,
+                    fontSize: 8.5,
+                    fontFamily: "Inter",
+                    fontWeight: "bold",
+                    textAlign: "center",
+                    text: "A/C PAYEE ONLY",
+                    style: "parallel_lines",
+                    angle: 0,
+                    showLines: true,
+                    lineColor: "#B3262D",
+                    lineThickness: 0.35,
+                    lineLength: 34,
+                    lineSpacing: 7.5,
+                    textColor: "#B3262D",
+                    textLineGap: 1.0,
+                    isVisible: false,
+                    isLocked: false,
+                  };
 
-                return (
-                  <div className="space-y-4">
-                    <div className="flex items-center justify-between">
-                      <span className="font-bold text-sm text-white">
-                        {field.name || selectedFieldKey}
-                      </span>
+                  const updateCrossing = (patch: Partial<ChequeCrossingConfig>) => {
+                    updateTemplate((prev) => ({
+                      ...prev,
+                      fields: {
+                        ...prev.fields,
+                        crossing: {
+                          ...crossing,
+                          ...patch,
+                        },
+                      },
+                    }));
+                  };
+
+                  return (
+                    <div className="space-y-4">
+                      {/* Primary Toggle Switch */}
+                      <div className="p-3 bg-navy-900/80 rounded-xl border border-navy-800 space-y-2">
+                        <div className="flex items-center justify-between">
+                          <div>
+                            <span className="font-bold text-sm text-white block">A/C Payee Crossing</span>
+                            <span className="text-[10px] text-slate-400">Optional Bank Cheque Crossing</span>
+                          </div>
+                          <label className="relative inline-flex items-center cursor-pointer">
+                            <input
+                              type="checkbox"
+                              checked={Boolean(crossing.isVisible)}
+                              onChange={(e) => updateCrossing({ isVisible: e.target.checked })}
+                              className="sr-only peer"
+                            />
+                            <div className="w-9 h-5 bg-slate-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-emerald-600"></div>
+                          </label>
+                        </div>
+
+                        <div className="flex items-center space-x-2 text-xs">
+                          <span
+                            className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider ${
+                              crossing.isVisible ? "bg-emerald-500/20 text-emerald-300" : "bg-slate-800 text-slate-400"
+                            }`}
+                          >
+                            {crossing.isVisible ? "Print Crossing: ON" : "Print Crossing: OFF"}
+                          </span>
+                        </div>
+                      </div>
+
+                      {/* Physical Cheque Warning Notice */}
+                      <div className="p-3 bg-amber-500/10 border border-amber-500/30 rounded-xl text-amber-200 text-xs space-y-1">
+                        <div className="flex items-center space-x-1.5 font-bold text-amber-300">
+                          <AlertCircle className="w-4 h-4 shrink-0 text-amber-400" />
+                          <span>Physical Cheque Notice</span>
+                        </div>
+                        <p className="text-[11px] leading-relaxed text-amber-200/90">
+                          Check whether your physical cheque already has a crossing before enabling this option. Many bank cheques (e.g. Nations Trust Bank) already feature preprinted A/C PAYEE ONLY lines.
+                        </p>
+                      </div>
+
+                      {/* Custom Crossing Text */}
+                      <div>
+                        <label className="text-[10px] text-slate-400 block mb-1">Crossing Text</label>
+                        <input
+                          type="text"
+                          value={crossing.text || "A/C PAYEE ONLY"}
+                          onChange={(e) => updateCrossing({ text: e.target.value.toUpperCase() })}
+                          className="w-full bg-slate-900 border border-slate-700 text-slate-200 rounded px-2.5 py-1.5 text-xs font-bold tracking-wider uppercase font-mono"
+                          placeholder="A/C PAYEE ONLY"
+                        />
+                      </div>
+
+                      {/* Group Rotation (Degrees Slider & Quick Buttons) */}
+                      <div className="space-y-2">
+                        <div className="flex items-center justify-between">
+                          <label className="text-[10px] text-slate-400 flex items-center space-x-1">
+                            <Compass className="w-3 h-3 text-emerald-400" />
+                            <span>Rotation Angle</span>
+                          </label>
+                          <span className="text-xs font-mono font-bold text-emerald-400">{crossing.angle || 0}°</span>
+                        </div>
+                        <div className="flex items-center space-x-2">
+                          <input
+                            type="range"
+                            min="-180"
+                            max="180"
+                            step="1"
+                            value={crossing.angle || 0}
+                            onChange={(e) => updateCrossing({ angle: Number(e.target.value) })}
+                            className="flex-1 accent-emerald-500 cursor-pointer"
+                          />
+                          <input
+                            type="number"
+                            min="-180"
+                            max="180"
+                            value={crossing.angle || 0}
+                            onChange={(e) => updateCrossing({ angle: Number(e.target.value) || 0 })}
+                            className="w-14 bg-slate-900 border border-slate-700 text-slate-200 rounded px-1.5 py-0.5 text-xs font-mono text-center"
+                          />
+                        </div>
+                        {/* Quick Angle Buttons */}
+                        <div className="grid grid-cols-4 gap-1 pt-1">
+                          {[
+                            { label: "0°", val: 0 },
+                            { label: "45° ↗", val: 45 },
+                            { label: "-45° ↘", val: -45 },
+                            { label: "90° ⬆", val: 90 },
+                          ].map((btn) => (
+                            <button
+                              key={btn.label}
+                              onClick={() => updateCrossing({ angle: btn.val })}
+                              className={`py-1 text-[11px] rounded font-mono transition ${
+                                crossing.angle === btn.val
+                                  ? "bg-emerald-600 text-white font-bold"
+                                  : "bg-slate-900 text-slate-300 hover:bg-slate-800"
+                              }`}
+                            >
+                              {btn.label}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+
+                      {/* Color Palette (Dark Red, Black, Navy, Custom) */}
+                      <div className="space-y-2">
+                        <label className="text-[10px] text-slate-400 block flex items-center space-x-1">
+                          <Palette className="w-3 h-3 text-emerald-400" />
+                          <span>Crossing Color</span>
+                        </label>
+                        <div className="grid grid-cols-3 gap-1.5">
+                          {[
+                            { name: "Dark Red", hex: "#B3262D" },
+                            { name: "Pure Black", hex: "#000000" },
+                            { name: "Navy Blue", hex: "#1E3A8A" },
+                          ].map((c) => (
+                            <button
+                              key={c.hex}
+                              onClick={() => updateCrossing({ textColor: c.hex, lineColor: c.hex })}
+                              className={`flex items-center space-x-1.5 px-2 py-1.5 rounded-lg border text-left transition ${
+                                (crossing.textColor || "#B3262D").toUpperCase() === c.hex.toUpperCase()
+                                  ? "border-emerald-500 bg-slate-800"
+                                  : "border-slate-800 bg-slate-900 hover:bg-slate-800/60"
+                              }`}
+                            >
+                              <span
+                                className="w-3.5 h-3.5 rounded-full border border-white/20 shrink-0"
+                                style={{ backgroundColor: c.hex }}
+                              />
+                              <span className="text-[11px] text-slate-200 truncate">{c.name}</span>
+                            </button>
+                          ))}
+                        </div>
+
+                        <div className="flex items-center space-x-2 pt-1">
+                          <input
+                            type="color"
+                            value={crossing.textColor || "#B3262D"}
+                            onChange={(e) => updateCrossing({ textColor: e.target.value, lineColor: e.target.value })}
+                            className="w-7 h-7 rounded border border-slate-700 bg-slate-900 cursor-pointer p-0.5"
+                          />
+                          <input
+                            type="text"
+                            value={crossing.textColor || "#B3262D"}
+                            onChange={(e) => updateCrossing({ textColor: e.target.value, lineColor: e.target.value })}
+                            className="flex-1 bg-slate-900 border border-slate-700 text-slate-200 rounded px-2 py-1 text-xs font-mono uppercase"
+                            placeholder="#B3262D"
+                          />
+                        </div>
+                      </div>
+
+                      {/* Parallel Lines Geometry */}
+                      <div className="p-2.5 rounded-lg bg-navy-900/60 border border-navy-800 space-y-2.5">
+                        <div className="flex items-center justify-between">
+                          <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
+                            Parallel Lines
+                          </span>
+                          <label className="flex items-center space-x-1.5 cursor-pointer text-xs text-slate-300">
+                            <input
+                              type="checkbox"
+                              checked={crossing.showLines !== false}
+                              onChange={(e) => updateCrossing({ showLines: e.target.checked })}
+                              className="w-3.5 h-3.5 rounded text-emerald-600 bg-slate-900"
+                            />
+                            <span>Show Lines</span>
+                          </label>
+                        </div>
+
+                        <div className="grid grid-cols-2 gap-2">
+                          <div>
+                            <label className="text-[10px] text-slate-400">Line Length (mm)</label>
+                            <input
+                              type="number"
+                              step="1"
+                              min="15"
+                              max="60"
+                              value={crossing.lineLength || 34}
+                              onChange={(e) =>
+                                updateCrossing({
+                                  lineLength: Number(e.target.value) || 34,
+                                  width: Number(e.target.value) || 34,
+                                })
+                              }
+                              className="w-full bg-slate-900 border border-slate-700 text-slate-200 rounded px-2 py-1 text-xs font-mono"
+                            />
+                          </div>
+                          <div>
+                            <label className="text-[10px] text-slate-400">Line Spacing (mm)</label>
+                            <input
+                              type="number"
+                              step="0.5"
+                              min="4"
+                              max="16"
+                              value={crossing.lineSpacing || 7.5}
+                              onChange={(e) =>
+                                updateCrossing({
+                                  lineSpacing: Number(e.target.value) || 7.5,
+                                  height: Number(e.target.value) || 7.5,
+                                })
+                              }
+                              className="w-full bg-slate-900 border border-slate-700 text-slate-200 rounded px-2 py-1 text-xs font-mono"
+                            />
+                          </div>
+                        </div>
+
+                        <div>
+                          <label className="text-[10px] text-slate-400">Line Thickness</label>
+                          <div className="flex items-center space-x-1.5 pt-1">
+                            {[0.25, 0.35, 0.5, 0.8].map((th) => (
+                              <button
+                                key={th}
+                                onClick={() => updateCrossing({ lineThickness: th })}
+                                className={`flex-1 py-1 text-[10px] rounded font-mono ${
+                                  crossing.lineThickness === th
+                                    ? "bg-emerald-600 text-white font-bold"
+                                    : "bg-slate-900 text-slate-300 hover:bg-slate-800"
+                                }`}
+                              >
+                                {th}mm
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Font & Typography */}
+                      <div className="grid grid-cols-2 gap-2">
+                        <div>
+                          <label className="text-[10px] text-slate-400">Font Size (pt)</label>
+                          <input
+                            type="number"
+                            step="0.5"
+                            min="6"
+                            max="14"
+                            value={crossing.fontSize || 8.5}
+                            onChange={(e) => updateCrossing({ fontSize: Number(e.target.value) || 8.5 })}
+                            className="w-full bg-slate-900 border border-slate-700 text-slate-200 rounded px-2 py-1 text-xs font-mono"
+                          />
+                        </div>
+                        <div>
+                          <label className="text-[10px] text-slate-400">Font Family</label>
+                          <select
+                            value={crossing.fontFamily || "Inter"}
+                            onChange={(e) => updateCrossing({ fontFamily: e.target.value })}
+                            className="w-full bg-slate-900 border border-slate-700 text-slate-200 rounded px-2 py-1 text-xs"
+                          >
+                            <option value="Inter">Helvetica / Inter</option>
+                            <option value="Courier">Courier</option>
+                            <option value="Times">Times Roman</option>
+                          </select>
+                        </div>
+                      </div>
+
+                      {/* Position on Cheque */}
+                      <div className="grid grid-cols-2 gap-2">
+                        <div>
+                          <label className="text-[10px] text-slate-400">X Position (mm)</label>
+                          <input
+                            type="number"
+                            step="0.5"
+                            value={crossing.x}
+                            onChange={(e) => updateCrossing({ x: Number(e.target.value) || 0 })}
+                            className="w-full bg-slate-900 border border-slate-700 text-slate-200 rounded px-2 py-1 text-xs font-mono"
+                          />
+                        </div>
+                        <div>
+                          <label className="text-[10px] text-slate-400">Y Position (mm)</label>
+                          <input
+                            type="number"
+                            step="0.5"
+                            value={crossing.y}
+                            onChange={(e) => updateCrossing({ y: Number(e.target.value) || 0 })}
+                            className="w-full bg-slate-900 border border-slate-700 text-slate-200 rounded px-2 py-1 text-xs font-mono"
+                          />
+                        </div>
+                      </div>
+
+                      {/* Lock Button */}
+                      <button
+                        onClick={() => updateCrossing({ isLocked: !crossing.isLocked })}
+                        className="w-full py-1.5 px-3 bg-slate-900 hover:bg-slate-800 rounded border border-slate-700 text-slate-300 flex items-center justify-center space-x-1.5"
+                      >
+                        {crossing.isLocked ? <Lock className="w-3.5 h-3.5 text-amber-400" /> : <Unlock className="w-3.5 h-3.5" />}
+                        <span>{crossing.isLocked ? "Crossing Locked from Dragging" : "Lock Crossing Position"}</span>
+                      </button>
+                    </div>
+                  );
+                })()
+              ) : (
+                // ---------------- STANDARD FIELD PROPERTIES INSPECTOR ----------------
+                (() => {
+                  const field = activeTemplate.fields[selectedFieldKey];
+                  if (!field) return <p className="text-slate-400">Field not found</p>;
+
+                  return (
+                    <div className="space-y-4">
+                      <div className="flex items-center justify-between">
+                        <span className="font-bold text-sm text-white">
+                          {field.name || selectedFieldKey}
+                        </span>
+                        <button
+                          onClick={() =>
+                            updateTemplate((prev) => ({
+                              ...prev,
+                              fields: {
+                                ...prev.fields,
+                                [selectedFieldKey]: {
+                                  ...field,
+                                  isVisible: !field.isVisible,
+                                },
+                              },
+                            }))
+                          }
+                          className={`p-1 rounded ${
+                            field.isVisible ? "text-emerald-400 hover:bg-slate-800" : "text-slate-500"
+                          }`}
+                          title={field.isVisible ? "Hide element" : "Show element"}
+                        >
+                          {field.isVisible ? <Eye className="w-4 h-4" /> : <EyeOff className="w-4 h-4" />}
+                        </button>
+                      </div>
+
+                      {/* Special Note for Amount in Words */}
+                      {selectedFieldKey === "amountWords" && (
+                        <div className="p-2.5 bg-sky-500/10 border border-sky-500/30 rounded-lg text-sky-200/90 text-[11px] space-y-1">
+                          <p className="font-medium text-sky-300">
+                            ✓ Sri Lankan Rupee words are automatically formatted and deduplicated.
+                          </p>
+                          <p className="text-[10px] text-sky-300/80">
+                            Words wrap neatly across lines without cutting text or repeating &quot;Rupees Only&quot;.
+                          </p>
+                        </div>
+                      )}
+
+                      {/* Coordinates in mm */}
+                      <div className="grid grid-cols-2 gap-2">
+                        <div>
+                          <label className="text-[10px] text-slate-400">X (mm from cheque)</label>
+                          <input
+                            type="number"
+                            step="0.5"
+                            value={field.x}
+                            onChange={(e) =>
+                              updateTemplate((prev) => ({
+                                ...prev,
+                                fields: {
+                                  ...prev.fields,
+                                  [selectedFieldKey]: {
+                                    ...field,
+                                    x: Number(e.target.value) || 0,
+                                  },
+                                },
+                              }))
+                            }
+                            className="w-full bg-slate-900 border border-slate-700 text-slate-200 rounded px-2 py-1 text-xs font-mono"
+                          />
+                        </div>
+                        <div>
+                          <label className="text-[10px] text-slate-400">Y (mm from cheque)</label>
+                          <input
+                            type="number"
+                            step="0.5"
+                            value={field.y}
+                            onChange={(e) =>
+                              updateTemplate((prev) => ({
+                                ...prev,
+                                fields: {
+                                  ...prev.fields,
+                                  [selectedFieldKey]: {
+                                    ...field,
+                                    y: Number(e.target.value) || 0,
+                                  },
+                                },
+                              }))
+                            }
+                            className="w-full bg-slate-900 border border-slate-700 text-slate-200 rounded px-2 py-1 text-xs font-mono"
+                          />
+                        </div>
+                      </div>
+
+                      {/* Width & Font Size */}
+                      <div className="grid grid-cols-2 gap-2">
+                        <div>
+                          <label className="text-[10px] text-slate-400">Width (mm)</label>
+                          <input
+                            type="number"
+                            value={field.width}
+                            onChange={(e) =>
+                              updateTemplate((prev) => ({
+                                ...prev,
+                                fields: {
+                                  ...prev.fields,
+                                  [selectedFieldKey]: {
+                                    ...field,
+                                    width: Number(e.target.value) || 10,
+                                  },
+                                },
+                              }))
+                            }
+                            className="w-full bg-slate-900 border border-slate-700 text-slate-200 rounded px-2 py-1 text-xs font-mono"
+                          />
+                        </div>
+                        <div>
+                          <label className="text-[10px] text-slate-400">Font Size (pt)</label>
+                          <input
+                            type="number"
+                            step="0.5"
+                            value={field.fontSize}
+                            onChange={(e) =>
+                              updateTemplate((prev) => ({
+                                ...prev,
+                                fields: {
+                                  ...prev.fields,
+                                  [selectedFieldKey]: {
+                                    ...field,
+                                    fontSize: Number(e.target.value) || 10,
+                                  },
+                                },
+                              }))
+                            }
+                            className="w-full bg-slate-900 border border-slate-700 text-slate-200 rounded px-2 py-1 text-xs font-mono"
+                          />
+                        </div>
+                      </div>
+
+                      {/* Font & Style */}
+                      <div className="space-y-2">
+                        <label className="text-[10px] text-slate-400">Font Family</label>
+                        <select
+                          value={field.fontFamily || "Inter"}
+                          onChange={(e) =>
+                            updateTemplate((prev) => ({
+                              ...prev,
+                              fields: {
+                                ...prev.fields,
+                                [selectedFieldKey]: {
+                                  ...field,
+                                  fontFamily: e.target.value,
+                                },
+                              },
+                            }))
+                          }
+                          className="w-full bg-slate-900 border border-slate-700 text-slate-200 rounded px-2 py-1 text-xs"
+                        >
+                          <option value="Inter">Helvetica / Inter (Clean Modern)</option>
+                          <option value="Courier">Courier / Monospace (Typewriter)</option>
+                          <option value="Times">Times Roman (Traditional Serif)</option>
+                        </select>
+                      </div>
+
+                      {/* Text Alignment */}
+                      <div>
+                        <label className="text-[10px] text-slate-400 block mb-1">Text Alignment</label>
+                        <div className="grid grid-cols-3 gap-1">
+                          {(["left", "center", "right"] as const).map((align) => (
+                            <button
+                              key={align}
+                              onClick={() =>
+                                updateTemplate((prev) => ({
+                                  ...prev,
+                                  fields: {
+                                    ...prev.fields,
+                                    [selectedFieldKey]: {
+                                      ...field,
+                                      textAlign: align,
+                                    },
+                                  },
+                                }))
+                              }
+                              className={`py-1 text-center capitalize rounded ${
+                                field.textAlign === align
+                                  ? "bg-emerald-600 text-white font-bold"
+                                  : "bg-slate-900 text-slate-300 hover:bg-slate-800"
+                              }`}
+                            >
+                              {align}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+
+                      {/* Prefix & Suffix */}
+                      <div className="grid grid-cols-2 gap-2">
+                        <div>
+                          <label className="text-[10px] text-slate-400">Prefix text</label>
+                          <input
+                            type="text"
+                            value={field.prefix || ""}
+                            onChange={(e) =>
+                              updateTemplate((prev) => ({
+                                ...prev,
+                                fields: {
+                                  ...prev.fields,
+                                  [selectedFieldKey]: {
+                                    ...field,
+                                    prefix: e.target.value,
+                                  },
+                                },
+                              }))
+                            }
+                            className="w-full bg-slate-900 border border-slate-700 text-slate-200 rounded px-2 py-1 text-xs"
+                            placeholder="e.g. ***"
+                          />
+                        </div>
+                        <div>
+                          <label className="text-[10px] text-slate-400">Suffix text</label>
+                          <input
+                            type="text"
+                            value={field.suffix || ""}
+                            onChange={(e) =>
+                              updateTemplate((prev) => ({
+                                ...prev,
+                                fields: {
+                                  ...prev.fields,
+                                  [selectedFieldKey]: {
+                                    ...field,
+                                    suffix: e.target.value,
+                                  },
+                                },
+                              }))
+                            }
+                            className="w-full bg-slate-900 border border-slate-700 text-slate-200 rounded px-2 py-1 text-xs"
+                            placeholder="e.g. ***"
+                          />
+                        </div>
+                      </div>
+
+                      {/* Lock from accidental drag */}
                       <button
                         onClick={() =>
                           updateTemplate((prev) => ({
@@ -1209,234 +1921,20 @@ export function ChequePrintStudio({ isOpen, onClose, cheque, onSaved }: ChequePr
                               ...prev.fields,
                               [selectedFieldKey]: {
                                 ...field,
-                                isVisible: !field.isVisible,
+                                isLocked: !field.isLocked,
                               },
                             },
                           }))
                         }
-                        className={`p-1 rounded ${
-                          field.isVisible ? "text-emerald-400 hover:bg-slate-800" : "text-slate-500"
-                        }`}
-                        title={field.isVisible ? "Hide element" : "Show element"}
+                        className="w-full py-1.5 px-3 bg-slate-900 hover:bg-slate-800 rounded border border-slate-700 text-slate-300 flex items-center justify-center space-x-1.5"
                       >
-                        {field.isVisible ? <Eye className="w-4 h-4" /> : <EyeOff className="w-4 h-4" />}
+                        {field.isLocked ? <Lock className="w-3.5 h-3.5 text-amber-400" /> : <Unlock className="w-3.5 h-3.5" />}
+                        <span>{field.isLocked ? "Field Locked from Dragging" : "Lock Field Position"}</span>
                       </button>
                     </div>
-
-                    {/* Coordinates in mm */}
-                    <div className="grid grid-cols-2 gap-2">
-                      <div>
-                        <label className="text-[10px] text-slate-400">X (mm from cheque)</label>
-                        <input
-                          type="number"
-                          step="0.5"
-                          value={field.x}
-                          onChange={(e) =>
-                            updateTemplate((prev) => ({
-                              ...prev,
-                              fields: {
-                                ...prev.fields,
-                                [selectedFieldKey]: {
-                                  ...field,
-                                  x: Number(e.target.value) || 0,
-                                },
-                              },
-                            }))
-                          }
-                          className="w-full bg-slate-900 border border-slate-700 text-slate-200 rounded px-2 py-1 text-xs font-mono"
-                        />
-                      </div>
-                      <div>
-                        <label className="text-[10px] text-slate-400">Y (mm from cheque)</label>
-                        <input
-                          type="number"
-                          step="0.5"
-                          value={field.y}
-                          onChange={(e) =>
-                            updateTemplate((prev) => ({
-                              ...prev,
-                              fields: {
-                                ...prev.fields,
-                                [selectedFieldKey]: {
-                                  ...field,
-                                  y: Number(e.target.value) || 0,
-                                },
-                              },
-                            }))
-                          }
-                          className="w-full bg-slate-900 border border-slate-700 text-slate-200 rounded px-2 py-1 text-xs font-mono"
-                        />
-                      </div>
-                    </div>
-
-                    {/* Width & Font Size */}
-                    <div className="grid grid-cols-2 gap-2">
-                      <div>
-                        <label className="text-[10px] text-slate-400">Width (mm)</label>
-                        <input
-                          type="number"
-                          value={field.width}
-                          onChange={(e) =>
-                            updateTemplate((prev) => ({
-                              ...prev,
-                              fields: {
-                                ...prev.fields,
-                                [selectedFieldKey]: {
-                                  ...field,
-                                  width: Number(e.target.value) || 10,
-                                },
-                              },
-                            }))
-                          }
-                          className="w-full bg-slate-900 border border-slate-700 text-slate-200 rounded px-2 py-1 text-xs"
-                        />
-                      </div>
-                      <div>
-                        <label className="text-[10px] text-slate-400">Font Size (pt)</label>
-                        <input
-                          type="number"
-                          value={field.fontSize}
-                          onChange={(e) =>
-                            updateTemplate((prev) => ({
-                              ...prev,
-                              fields: {
-                                ...prev.fields,
-                                [selectedFieldKey]: {
-                                  ...field,
-                                  fontSize: Number(e.target.value) || 10,
-                                },
-                              },
-                            }))
-                          }
-                          className="w-full bg-slate-900 border border-slate-700 text-slate-200 rounded px-2 py-1 text-xs"
-                        />
-                      </div>
-                    </div>
-
-                    {/* Font & Style */}
-                    <div className="space-y-2">
-                      <label className="text-[10px] text-slate-400">Font Family</label>
-                      <select
-                        value={field.fontFamily || "Inter"}
-                        onChange={(e) =>
-                          updateTemplate((prev) => ({
-                            ...prev,
-                            fields: {
-                              ...prev.fields,
-                              [selectedFieldKey]: {
-                                ...field,
-                                fontFamily: e.target.value,
-                              },
-                            },
-                          }))
-                        }
-                        className="w-full bg-slate-900 border border-slate-700 text-slate-200 rounded px-2 py-1 text-xs"
-                      >
-                        <option value="Inter">Helvetica / Inter (Clean Modern)</option>
-                        <option value="Courier">Courier / Monospace (Typewriter)</option>
-                        <option value="Times">Times Roman (Traditional Serif)</option>
-                      </select>
-                    </div>
-
-                    {/* Text Alignment */}
-                    <div>
-                      <label className="text-[10px] text-slate-400 block mb-1">Text Alignment</label>
-                      <div className="grid grid-cols-3 gap-1">
-                        {(["left", "center", "right"] as const).map((align) => (
-                          <button
-                            key={align}
-                            onClick={() =>
-                              updateTemplate((prev) => ({
-                                ...prev,
-                                fields: {
-                                  ...prev.fields,
-                                  [selectedFieldKey]: {
-                                    ...field,
-                                    textAlign: align,
-                                  },
-                                },
-                              }))
-                            }
-                            className={`py-1 text-center capitalize rounded ${
-                              field.textAlign === align
-                                ? "bg-emerald-600 text-white font-bold"
-                                : "bg-slate-900 text-slate-300 hover:bg-slate-800"
-                            }`}
-                          >
-                            {align}
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-
-                    {/* Prefix & Suffix */}
-                    <div className="grid grid-cols-2 gap-2">
-                      <div>
-                        <label className="text-[10px] text-slate-400">Prefix text</label>
-                        <input
-                          type="text"
-                          value={field.prefix || ""}
-                          onChange={(e) =>
-                            updateTemplate((prev) => ({
-                              ...prev,
-                              fields: {
-                                ...prev.fields,
-                                [selectedFieldKey]: {
-                                  ...field,
-                                  prefix: e.target.value,
-                                },
-                              },
-                            }))
-                          }
-                          className="w-full bg-slate-900 border border-slate-700 text-slate-200 rounded px-2 py-1 text-xs"
-                          placeholder="e.g. ***"
-                        />
-                      </div>
-                      <div>
-                        <label className="text-[10px] text-slate-400">Suffix text</label>
-                        <input
-                          type="text"
-                          value={field.suffix || ""}
-                          onChange={(e) =>
-                            updateTemplate((prev) => ({
-                              ...prev,
-                              fields: {
-                                ...prev.fields,
-                                [selectedFieldKey]: {
-                                  ...field,
-                                  suffix: e.target.value,
-                                },
-                              },
-                            }))
-                          }
-                          className="w-full bg-slate-900 border border-slate-700 text-slate-200 rounded px-2 py-1 text-xs"
-                          placeholder="e.g. /="
-                        />
-                      </div>
-                    </div>
-
-                    {/* Lock from accidental drag */}
-                    <button
-                      onClick={() =>
-                        updateTemplate((prev) => ({
-                          ...prev,
-                          fields: {
-                            ...prev.fields,
-                            [selectedFieldKey]: {
-                              ...field,
-                              isLocked: !field.isLocked,
-                            },
-                          },
-                        }))
-                      }
-                      className="w-full py-1.5 px-3 bg-slate-900 hover:bg-slate-800 rounded border border-slate-700 text-slate-300 flex items-center justify-center space-x-1.5"
-                    >
-                      {field.isLocked ? <Lock className="w-3.5 h-3.5 text-amber-400" /> : <Unlock className="w-3.5 h-3.5" />}
-                      <span>{field.isLocked ? "Field Locked from Dragging" : "Lock Field Position"}</span>
-                    </button>
-                  </div>
-                );
-              })()
+                  );
+                })()
+              )
             ) : (
               // ---------------- Cheque Overview Inspector ----------------
               <div className="space-y-4">
@@ -1454,6 +1952,9 @@ export function ChequePrintStudio({ isOpen, onClose, cheque, onSaved }: ChequePr
                   {(Object.keys(activeTemplate.fields) as (keyof ChequePrintFields)[]).map((key) => {
                     const f = activeTemplate.fields[key];
                     if (!f) return null;
+                    const isCrossing = key === "crossing";
+                    const isCrossingOn = isCrossing && activeTemplate.fields.crossing?.isVisible;
+
                     return (
                       <button
                         key={key}
@@ -1461,9 +1962,24 @@ export function ChequePrintStudio({ isOpen, onClose, cheque, onSaved }: ChequePr
                           setIsMoveTextFields(true);
                           setSelectedFieldKey(key);
                         }}
-                        className="w-full p-2 bg-slate-900 hover:bg-slate-800 rounded-lg border border-slate-800 text-left flex items-center justify-between transition"
+                        className={`w-full p-2 rounded-lg border text-left flex items-center justify-between transition ${
+                          selectedFieldKey === key
+                            ? "bg-emerald-950/40 border-emerald-500/60"
+                            : "bg-slate-900 hover:bg-slate-800 border-slate-800"
+                        }`}
                       >
-                        <span className="font-medium text-slate-200">{f.name || key}</span>
+                        <div className="flex items-center space-x-2">
+                          <span className="font-medium text-slate-200">{f.name || key}</span>
+                          {isCrossing && (
+                            <span
+                              className={`text-[9px] font-bold px-1.5 py-0.2 rounded uppercase ${
+                                isCrossingOn ? "bg-emerald-500/20 text-emerald-300" : "bg-slate-800 text-slate-400"
+                              }`}
+                            >
+                              {isCrossingOn ? "ON" : "OFF"}
+                            </span>
+                          )}
+                        </div>
                         <span className="text-[10px] font-mono text-emerald-400">
                           X:{f.x} Y:{f.y} mm
                         </span>
