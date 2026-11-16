@@ -66,6 +66,7 @@ export function InvoiceForm({ initialInvoice }: InvoiceFormProps) {
   const {
     clients: dbClients,
     billingEntities: dbBillingEntities,
+    invoices: dbInvoices,
     services: dbServices,
     mediaChannels: dbMediaChannels,
     branding: dbBranding,
@@ -74,6 +75,7 @@ export function InvoiceForm({ initialInvoice }: InvoiceFormProps) {
 
   const [clients, setClients] = useState<Client[]>([]);
   const [billingEntities, setBillingEntities] = useState<BillingEntity[]>([]);
+  const [invoices, setInvoices] = useState<Invoice[]>([]);
   const [services, setServices] = useState<Service[]>([]);
   const [templates, setTemplates] = useState<InvoiceTemplate[]>([]);
   const [mediaChannels, setMediaChannels] = useState<MediaChannel[]>([]);
@@ -146,6 +148,7 @@ export function InvoiceForm({ initialInvoice }: InvoiceFormProps) {
   useEffect(() => {
     const clis = dbClients.length > 0 ? dbClients : storage.getClients();
     const ents = dbBillingEntities.length > 0 ? dbBillingEntities : storage.getBillingEntities();
+    const invs = dbInvoices.length > 0 ? dbInvoices : storage.getInvoices();
     const servs = dbServices.length > 0 ? dbServices : storage.getServices();
     const tmpls = storage.getTemplates();
     const branding = dbBranding || storage.getBranding();
@@ -153,6 +156,7 @@ export function InvoiceForm({ initialInvoice }: InvoiceFormProps) {
 
     setClients(clis);
     setBillingEntities(ents);
+    setInvoices(invs);
     setServices(servs);
     setTemplates(tmpls);
     setMediaChannels(chans);
@@ -186,15 +190,16 @@ export function InvoiceForm({ initialInvoice }: InvoiceFormProps) {
       const defaultEntity = activeEntities[0] || ents[0];
       if (defaultEntity) {
         setSelectedBillingEntityId(prev => prev || defaultEntity.id);
-        setInvoiceNumber(prev => prev || storage.getNextInvoiceNumber(defaultEntity.id));
+        const nextNum = storage.getNextInvoiceNumber(defaultEntity.id, ents, invs);
+        setInvoiceNumber(prev => prev || nextNum);
         setPaymentInstructions(prev => prev || defaultEntity.paymentInstructions || "");
         setVatApplicable(prev => prev ?? Boolean(defaultEntity.isVatRegistered));
         setTemplateKey(prev => prev || defaultEntity.defaultInvoiceTemplate || (defaultEntity.isVatRegistered ? 'vat' : 'standard'));
       } else {
-        setInvoiceNumber(prev => prev || storage.getNextInvoiceNumber());
+        setInvoiceNumber(prev => prev || storage.getNextInvoiceNumber(undefined, ents, invs));
       }
     }
-  }, [initialInvoice, dbClients, dbBillingEntities, dbServices, dbMediaChannels, dbBranding]);
+  }, [initialInvoice, dbClients, dbBillingEntities, dbInvoices, dbServices, dbMediaChannels, dbBranding]);
 
   // When Client changes, auto-fill client preferences
   const handleClientChange = (clientId: string) => {
@@ -234,7 +239,7 @@ export function InvoiceForm({ initialInvoice }: InvoiceFormProps) {
 
     // Update sequence number for this specific entity if creating new invoice
     if (!initialInvoice) {
-      const nextNum = storage.getNextInvoiceNumber(entityId);
+      const nextNum = storage.getNextInvoiceNumber(entityId, billingEntities, invoices);
       setInvoiceNumber(nextNum);
     }
 

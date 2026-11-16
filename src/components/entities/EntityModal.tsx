@@ -342,6 +342,7 @@ export function EntityModal({ isOpen, onClose, entityToEdit, onSaved }: EntityMo
       paymentInstructions: paymentInstructions.trim() || `Cheques should be drawn in favour of ${chequePayee.trim() || trimmedLegal} and crossed "ACCOUNT PAYEE" only.`,
 
       startingSequence: Number(startingSequence) || 1,
+      currentSequence: Math.max(Number(startingSequence) || 1, entityToEdit?.currentSequence || 1),
       defaultCurrency,
       defaultPaymentTerms,
       defaultDueDays: Number(defaultDueDays) || 7,
@@ -368,6 +369,10 @@ export function EntityModal({ isOpen, onClose, entityToEdit, onSaved }: EntityMo
     setIsSaving(true);
     try {
       const saved = await saveBillingEntity(entityPayload);
+      const pref = (saved.prefix || trimmedPrefix || "SN").toUpperCase().trim();
+      if (typeof window !== "undefined") {
+        localStorage.setItem(`sn_seq_${pref}`, String(saved.currentSequence || saved.startingSequence || startingSequence));
+      }
       onSaved(saved);
       onClose();
     } catch (err: any) {

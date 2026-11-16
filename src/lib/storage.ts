@@ -1676,43 +1676,61 @@ class StorageService {
   }
 
   // Generate next collision-safe running invoice number for a specific billing entity
-  getNextInvoiceNumber(entityId?: string): string {
-    if (!this.isBrowser()) return 'SN-23467';
-    const entities = this.getBillingEntities();
+  getNextInvoiceNumber(entityId?: string, entitiesList?: BillingEntity[], invoicesList?: Invoice[]): string {
+    const entities = (entitiesList && entitiesList.length > 0) ? entitiesList : this.getBillingEntities();
     const entity = (entityId ? entities.find(e => e.id === entityId) : null) || entities[0];
     const prefix = (entity?.prefix || 'SN').toUpperCase().trim();
     const year = new Date().getFullYear();
 
-    const seqKey = `sn_seq_${prefix}`;
-    const storedSeq = localStorage.getItem(seqKey);
+    // 1. Minimum sequence number configured by user for this entity
+    const startingSeq = Math.max(1, Number(entity?.startingSequence) || 1);
+    const entityCurrentSeq = Number(entity?.currentSequence) || 0;
 
-    let nextNum: number;
-    if (storedSeq) {
-      nextNum = parseInt(storedSeq, 10);
-    } else {
-      // Find highest from existing invoices for this entity or prefix
-      const invoices = this.getInvoices();
-      const entityInvs = invoices.filter(i => 
-        i.billingEntityId === entity?.id || 
-        (i.invoiceNumber && i.invoiceNumber.toUpperCase().startsWith(prefix))
-      );
-      
-      const numbers = entityInvs.map(inv => {
-        const parts = inv.invoiceNumber.split('-');
-        const lastPart = parts[parts.length - 1];
-        const num = parseInt(lastPart, 10);
-        return isNaN(num) ? 0 : num;
-      }).filter(n => n > 0);
+    // 2. Scan all existing invoices in memory/storage for this entity or prefix
+    const invoices = (invoicesList && invoicesList.length > 0) ? invoicesList : this.getInvoices();
+    const entityInvs = invoices.filter(i =>
+      i.billingEntityId === entity?.id ||
+      (i.invoiceNumber && i.invoiceNumber.toUpperCase().startsWith(prefix))
+    );
 
-      if (numbers.length > 0) {
-        nextNum = Math.max(...numbers) + 1;
-      } else if (entity?.startingSequence) {
-        nextNum = entity.startingSequence;
-      } else if (prefix === 'SN') {
-        nextNum = 23467;
-      } else {
-        nextNum = 1;
+    let maxInvoiceNum = 0;
+    for (const inv of entityInvs) {
+      if (!inv.invoiceNumber) continue;
+      const match = inv.invoiceNumber.match(/(\d+)$/);
+      if (match) {
+        const num = parseInt(match[1], 10);
+        if (!isNaN(num) && num > maxInvoiceNum) {
+          maxInvoiceNum = num;
+        }
       }
+    }
+
+    // 3. Stored local sequence counter (if any)
+    const seqKey = `sn_seq_${prefix}`;
+    const storedSeq = this.isBrowser() ? localStorage.getItem(seqKey) : null;
+    const storedNum = storedSeq ? parseInt(storedSeq, 10) : 0;
+
+    // The sequence MUST be:
+    // - At least the startingSeq configured on the entity
+    // - If existing invoices have numbers >= startingSeq, it must be maxInvoiceNum + 1
+    // - If entity has currentSequence > startingSeq and > maxInvoiceNum, respect it
+    let nextNum = startingSeq;
+
+    if (maxInvoiceNum >= startingSeq) {
+      nextNum = Math.max(nextNum, maxInvoiceNum + 1);
+    }
+
+    if (entityCurrentSeq > nextNum) {
+      nextNum = entityCurrentSeq;
+    }
+
+    if (storedNum >= startingSeq && storedNum > nextNum) {
+      nextNum = storedNum;
+    }
+
+    // Keep localStorage in sync so stale values (like old "2") are cleared
+    if (this.isBrowser()) {
+      localStorage.setItem(seqKey, String(nextNum));
     }
 
     if (prefix === 'SN') {
@@ -1721,17 +1739,37 @@ class StorageService {
     return `${prefix}-${year}-${String(nextNum).padStart(4, '0')}`;
   }
 
-  incrementInvoiceNumber(entityId?: string): void {
+  incrementInvoiceNumber(entityId?: string, usedInvoiceNumber?: string): void {
     if (!this.isBrowser()) return;
     const entities = this.getBillingEntities();
     const entity = (entityId ? entities.find(e => e.id === entityId) : null) || entities[0];
     const prefix = (entity?.prefix || 'SN').toUpperCase().trim();
     const seqKey = `sn_seq_${prefix}`;
 
-    const nextStr = this.getNextInvoiceNumber(entityId);
-    const parts = nextStr.split('-');
-    const currentNum = parseInt(parts[parts.length - 1], 10) || 1;
-    localStorage.setItem(seqKey, String(currentNum + 1));
+    let nextNum: number;
+    if (usedInvoiceNumber) {
+      const match = usedInvoiceNumber.match(/(\d+)$/);
+      const usedNum = match ? parseInt(match[1], 10) : 0;
+      nextNum = usedNum > 0 ? usedNum + 1 : 1;
+    } else {
+      const nextStr = this.getNextInvoiceNumber(entityId);
+      const match = nextStr.match(/(\d+)$/);
+      const currentNum = match ? parseInt(match[1], 10) : 1;
+      nextNum = currentNum + 1;
+    }
+
+    localStorage.setItem(seqKey, String(nextNum));
+
+    // Also update in-memory and stored entity currentSequence
+    if (entity) {
+      entity.currentSequence = Math.max(entity.currentSequence || 1, nextNum);
+      const list = this.getBillingEntities();
+      const idx = list.findIndex(e => e.id === entity.id);
+      if (idx >= 0) {
+        list[idx].currentSequence = entity.currentSequence;
+        localStorage.setItem(STORAGE_KEYS.BILLING_ENTITIES, JSON.stringify(list));
+      }
+    }
   }
 
   saveInvoice(invoice: Partial<Invoice>): Invoice {
@@ -1817,7 +1855,7 @@ class StorageService {
       }
     } else {
       const invoiceNumber = invoice.invoiceNumber || this.getNextInvoiceNumber(invoice.billingEntityId);
-      this.incrementInvoiceNumber(invoice.billingEntityId);
+      this.incrementInvoiceNumber(invoice.billingEntityId, invoiceNumber);
 
       saved = {
         id: 'inv-' + Date.now(),

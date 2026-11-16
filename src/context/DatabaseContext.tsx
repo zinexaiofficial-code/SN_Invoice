@@ -397,6 +397,26 @@ export function DatabaseProvider({ children }: { children: React.ReactNode }) {
     });
 
     storage.saveInvoiceLocally(saved);
+
+    // Auto-increment sequence for the billing entity so the next invoice gets the incremented number
+    if (saved.billingEntityId && saved.invoiceNumber) {
+      storage.incrementInvoiceNumber(saved.billingEntityId, saved.invoiceNumber);
+
+      const match = saved.invoiceNumber.match(/(\d+)$/);
+      if (match) {
+        const num = parseInt(match[1], 10);
+        if (!isNaN(num)) {
+          setBillingEntities((prev) =>
+            prev.map((e) =>
+              e.id === saved.billingEntityId
+                ? { ...e, currentSequence: Math.max(e.currentSequence || 1, num + 1) }
+                : e
+            )
+          );
+        }
+      }
+    }
+
     return saved;
   };
 

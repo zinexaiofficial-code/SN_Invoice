@@ -247,7 +247,7 @@ export async function saveBillingEntity(entity: BillingEntity): Promise<BillingE
       bank_branch = EXCLUDED.bank_branch,
       bank_account_name = EXCLUDED.bank_account_name,
       invoice_prefix = EXCLUDED.invoice_prefix,
-      invoice_next_number = EXCLUDED.invoice_next_number,
+      invoice_next_number = GREATEST(EXCLUDED.invoice_next_number, EXCLUDED.starting_sequence),
       payee_name = EXCLUDED.payee_name,
       signatory_name = EXCLUDED.signatory_name,
       signatory_designation = EXCLUDED.signatory_designation,
