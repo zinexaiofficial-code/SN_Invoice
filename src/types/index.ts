@@ -590,6 +590,7 @@ export interface Cheque {
   bankAccountNumber?: string;
   payerOrPayeeName: string; // Client name or supplier name
   clientId?: string; // Linked client if incoming
+  vendorId?: string; // Linked vendor if outgoing
   supplierName?: string; // Supplier/Vendor if outgoing
 
   // Billing Entity
@@ -669,6 +670,23 @@ export interface NotificationPreferences {
   alertOnOverdue: boolean;
   alertOnReturned: boolean;
   timezone: string; // 'Asia/Colombo'
+}
+
+export interface Vendor {
+  id: string;
+  name: string;
+  contactPerson?: string;
+  email?: string;
+  phone?: string;
+  address?: string;
+  taxNumber?: string;
+  defaultBank?: string;
+  defaultBranch?: string;
+  defaultAccountNo?: string;
+  notes?: string;
+  isActive: boolean;
+  createdAt: string;
+  updatedAt: string;
 }
 
 export * from './chequePrint';

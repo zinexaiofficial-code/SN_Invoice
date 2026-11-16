@@ -8,6 +8,7 @@ import {
   Service,
   MediaChannel,
   Cheque,
+  Vendor,
   BrandingSettings,
   UserRole,
 } from "@/types";
@@ -20,6 +21,7 @@ interface DatabaseContextType {
   services: Service[];
   mediaChannels: MediaChannel[];
   cheques: Cheque[];
+  vendors: Vendor[];
   branding: BrandingSettings | null;
   userRole: UserRole;
   isSuperAdmin: boolean;
@@ -40,6 +42,8 @@ interface DatabaseContextType {
   deleteInvoicesBatch: (ids: string[]) => Promise<boolean>;
   saveCheque: (cheque: Partial<Cheque>) => Promise<Cheque>;
   deleteCheque: (id: string) => Promise<boolean>;
+  saveVendor: (vendor: Partial<Vendor>) => Promise<Vendor>;
+  deleteVendor: (id: string) => Promise<boolean>;
   saveBranding: (branding: Partial<BrandingSettings>) => Promise<BrandingSettings>;
 }
 
@@ -52,6 +56,7 @@ export function DatabaseProvider({ children }: { children: React.ReactNode }) {
   const [services, setServices] = useState<Service[]>([]);
   const [mediaChannels, setMediaChannels] = useState<MediaChannel[]>([]);
   const [cheques, setCheques] = useState<Cheque[]>([]);
+  const [vendors, setVendors] = useState<Vendor[]>([]);
   const [branding, setBranding] = useState<BrandingSettings | null>(null);
   const [userRole, setUserRoleState] = useState<UserRole>("admin");
   const [isLoading, setIsLoading] = useState<boolean>(true);
@@ -105,6 +110,7 @@ export function DatabaseProvider({ children }: { children: React.ReactNode }) {
       setMediaChannels(data.mediaChannels || []);
       setInvoices(data.invoices || []);
       setCheques(data.cheques || []);
+      setVendors(data.vendors || []);
       setBranding(data.branding || null);
 
       // Cache snapshot into storage for offline PWA fallback
@@ -119,6 +125,7 @@ export function DatabaseProvider({ children }: { children: React.ReactNode }) {
       setMediaChannels(storage.getMediaChannels());
       setInvoices(storage.getInvoices());
       setCheques(storage.getCheques());
+      setVendors(storage.getVendors());
       setBranding(storage.getBranding());
     } finally {
       setIsLoading(false);
@@ -471,6 +478,50 @@ export function DatabaseProvider({ children }: { children: React.ReactNode }) {
     return true;
   };
 
+  const saveVendor = async (vendorData: Partial<Vendor>): Promise<Vendor> => {
+    const res = await fetch("/api/vendors", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(vendorData),
+    });
+
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.error || "Failed to save vendor");
+    }
+
+    const json = await res.json();
+    const saved: Vendor = json.data;
+
+    setVendors((prev) => {
+      const idx = prev.findIndex((v) => v.id === saved.id);
+      if (idx >= 0) {
+        const updated = [...prev];
+        updated[idx] = saved;
+        return updated;
+      }
+      return [...prev, saved];
+    });
+
+    storage.saveVendorLocally(saved);
+    return saved;
+  };
+
+  const deleteVendor = async (id: string): Promise<boolean> => {
+    const res = await fetch(`/api/vendors?id=${encodeURIComponent(id)}`, {
+      method: "DELETE",
+    });
+
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.error || "Failed to delete vendor");
+    }
+
+    setVendors((prev) => prev.filter((v) => v.id !== id));
+    storage.deleteVendorLocally(id);
+    return true;
+  };
+
   const saveBranding = async (brandingData: Partial<BrandingSettings>): Promise<BrandingSettings> => {
     const res = await fetch("/api/branding", {
       method: "PUT",
@@ -499,6 +550,7 @@ export function DatabaseProvider({ children }: { children: React.ReactNode }) {
         services,
         mediaChannels,
         cheques,
+        vendors,
         branding,
         userRole,
         isSuperAdmin,
@@ -519,6 +571,8 @@ export function DatabaseProvider({ children }: { children: React.ReactNode }) {
         deleteInvoicesBatch,
         saveCheque,
         deleteCheque,
+        saveVendor,
+        deleteVendor,
         saveBranding,
       }}
     >

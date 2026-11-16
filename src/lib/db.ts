@@ -291,6 +291,34 @@ export async function initializeDatabase(): Promise<boolean> {
         updated_at TIMESTAMPTZ DEFAULT NOW()
       );
       ALTER TABLE cheques ADD COLUMN IF NOT EXISTS type TEXT DEFAULT 'incoming';
+      ALTER TABLE cheques ADD COLUMN IF NOT EXISTS vendor_id TEXT;
+    `);
+
+    // 8b. Vendors / Suppliers Directory
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS vendors (
+        id TEXT PRIMARY KEY,
+        name TEXT NOT NULL,
+        contact_person TEXT,
+        email TEXT,
+        phone TEXT,
+        address TEXT,
+        tax_number TEXT,
+        default_bank TEXT,
+        default_branch TEXT,
+        default_account_no TEXT,
+        notes TEXT,
+        is_active BOOLEAN DEFAULT true,
+        created_at TIMESTAMPTZ DEFAULT NOW(),
+        updated_at TIMESTAMPTZ DEFAULT NOW()
+      );
+      -- Auto-seed vendors from distinct outgoing cheques if not existing
+      INSERT INTO vendors (id, name, is_active, created_at, updated_at)
+      SELECT gen_random_uuid()::text, payee_name, true, NOW(), NOW()
+      FROM cheques
+      WHERE type = 'outgoing' AND payee_name IS NOT NULL AND TRIM(payee_name) != ''
+        AND NOT EXISTS (SELECT 1 FROM vendors v WHERE LOWER(v.name) = LOWER(cheques.payee_name))
+      GROUP BY payee_name;
     `);
 
     // 9. Branding Settings

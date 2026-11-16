@@ -24,10 +24,12 @@ import {
   BillingEntity,
   Client,
   Invoice,
-  ChequeInvoiceAllocation
+  ChequeInvoiceAllocation,
+  Vendor
 } from "@/types";
 import { storage } from "@/lib/storage";
 import { useDatabase } from "@/context/DatabaseContext";
+import { VendorModal } from "@/components/cheques/VendorModal";
 
 interface ChequeModalProps {
   cheque?: Cheque | null;
@@ -65,13 +67,20 @@ export function ChequeModal({
 }: ChequeModalProps) {
   if (!isOpen) return null;
 
-  const { saveCheque: dbSaveCheque, billingEntities: dbEntities, clients: dbClients, invoices: dbInvoices } = useDatabase();
+  const {
+    saveCheque: dbSaveCheque,
+    billingEntities: dbEntities,
+    clients: dbClients,
+    invoices: dbInvoices,
+    vendors: dbVendors,
+  } = useDatabase();
   const [activeTab, setActiveTab] = useState<"details" | "invoices" | "images" | "reminders">("details");
   const [entities, setEntities] = useState<BillingEntity[]>([]);
   const [clients, setClients] = useState<Client[]>([]);
   const [invoices, setInvoices] = useState<Invoice[]>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [shouldOpenPrint, setShouldOpenPrint] = useState(false);
+  const [isVendorModalOpen, setIsVendorModalOpen] = useState(false);
 
   // Form State
   const [type, setType] = useState<ChequeType>(cheque?.type || defaultType);
@@ -88,6 +97,7 @@ export function ChequeModal({
   const [branch, setBranch] = useState(cheque?.branch || "");
   const [payerOrPayeeName, setPayerOrPayeeName] = useState(cheque?.payerOrPayeeName || "");
   const [clientId, setClientId] = useState(cheque?.clientId || "");
+  const [vendorId, setVendorId] = useState(cheque?.vendorId || "");
   const [supplierName, setSupplierName] = useState(cheque?.supplierName || "");
   
   const [billingEntityId, setBillingEntityId] = useState(cheque?.billingEntityId || "");
@@ -150,6 +160,26 @@ export function ChequeModal({
     const selected = clients.find((c) => c.id === cId);
     if (selected) {
       setPayerOrPayeeName(selected.name);
+    }
+  };
+
+  // When Vendor changes, auto-fill payee name and bank details
+  const handleVendorChange = (vId: string) => {
+    if (vId === "__NEW__") {
+      setIsVendorModalOpen(true);
+      return;
+    }
+    setVendorId(vId);
+    const selected = (dbVendors || []).find((v) => v.id === vId);
+    if (selected) {
+      setSupplierName(selected.name);
+      setPayerOrPayeeName(selected.name);
+      if (selected.defaultBank && !drawerBank) {
+        setDrawerBank(selected.defaultBank);
+      }
+      if (selected.defaultBranch && !branch) {
+        setBranch(selected.defaultBranch);
+      }
     }
   };
 
@@ -272,6 +302,7 @@ export function ChequeModal({
         bankAccountNumber: selectedAcc?.accountNumber || selectedEntity?.accountNumber,
         payerOrPayeeName: type === "incoming" ? payerOrPayeeName.trim() : (supplierName.trim() || payerOrPayeeName.trim()),
         clientId: type === "incoming" ? clientId || undefined : undefined,
+        vendorId: type === "outgoing" ? vendorId || undefined : undefined,
         supplierName: type === "outgoing" ? (supplierName.trim() || payerOrPayeeName.trim()) : undefined,
         billingEntityId,
         billingEntityName: selectedEntity?.displayName || selectedEntity?.name,
@@ -629,34 +660,82 @@ export function ChequeModal({
                   </div>
                 </div>
               ) : (
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  <div>
-                    <label className="block text-xs font-bold text-slate-700 mb-1">
-                      Payee / Vendor Name *
-                    </label>
-                    <input
-                      type="text"
-                      value={supplierName || payerOrPayeeName}
-                      onChange={(e) => {
-                        setSupplierName(e.target.value);
-                        setPayerOrPayeeName(e.target.value);
-                      }}
-                      className="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg text-xs font-medium focus:ring-2 focus:ring-emerald-500 focus:outline-none"
-                      placeholder="e.g. Asia Broadcasting Corporation (Pvt) Ltd"
-                      required
-                    />
+                <div className="space-y-3">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div>
+                      <div className="flex items-center justify-between mb-1">
+                        <label className="block text-xs font-bold text-slate-700">
+                          Registered Payee / Vendor
+                        </label>
+                        <button
+                          type="button"
+                          onClick={() => setIsVendorModalOpen(true)}
+                          className="text-[11px] font-semibold text-indigo-600 hover:text-indigo-800 flex items-center gap-0.5 transition-colors"
+                        >
+                          <Plus className="w-3 h-3" /> New Vendor
+                        </button>
+                      </div>
+                      <select
+                        value={vendorId}
+                        onChange={(e) => handleVendorChange(e.target.value)}
+                        className="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg text-xs font-medium focus:ring-2 focus:ring-emerald-500 focus:outline-none"
+                      >
+                        <option value="">-- Choose Registered Vendor --</option>
+                        {(dbVendors || []).map((v) => (
+                          <option key={v.id} value={v.id}>
+                            {v.name} {v.defaultBank ? `(${v.defaultBank})` : ""}
+                          </option>
+                        ))}
+                        <option value="__NEW__">+ Register New Vendor...</option>
+                      </select>
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-bold text-slate-700 mb-1">
+                        Payee / Vendor Name on Cheque *
+                      </label>
+                      <input
+                        type="text"
+                        value={supplierName || payerOrPayeeName}
+                        onChange={(e) => {
+                          setSupplierName(e.target.value);
+                          setPayerOrPayeeName(e.target.value);
+                        }}
+                        className="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg text-xs font-medium focus:ring-2 focus:ring-emerald-500 focus:outline-none"
+                        placeholder="e.g. Sri Lanka Rupavahini Corporation"
+                        required
+                      />
+                    </div>
                   </div>
-                  <div>
-                    <label className="block text-xs font-bold text-slate-700 mb-1">
-                      Vendor Invoice / Bill Ref
-                    </label>
-                    <input
-                      type="text"
-                      value={billReference}
-                      onChange={(e) => setBillReference(e.target.value)}
-                      className="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg text-xs font-medium focus:ring-2 focus:ring-emerald-500 focus:outline-none"
-                      placeholder="e.g. INV-9042"
-                    />
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-xs font-bold text-slate-700 mb-1">
+                        Vendor Invoice / Bill Ref
+                      </label>
+                      <input
+                        type="text"
+                        value={billReference}
+                        onChange={(e) => setBillReference(e.target.value)}
+                        className="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg text-xs font-medium focus:ring-2 focus:ring-emerald-500 focus:outline-none"
+                        placeholder="e.g. INV-9042 / SLRC-OCT-2026"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-bold text-slate-700 mb-1">
+                        Payment Voucher / Order No
+                      </label>
+                      <input
+                        type="text"
+                        value={notes.startsWith("PV:") ? notes : ""}
+                        onChange={(e) => {
+                          if (e.target.value) setNotes(`PV: ${e.target.value}`);
+                          else setNotes("");
+                        }}
+                        className="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg text-xs font-medium focus:ring-2 focus:ring-emerald-500 focus:outline-none"
+                        placeholder="e.g. PV-2026-088"
+                      />
+                    </div>
                   </div>
                 </div>
               )}
@@ -941,6 +1020,26 @@ export function ChequeModal({
           </div>
         </form>
       </div>
+
+      {/* Quick Add Vendor Modal */}
+      {isVendorModalOpen && (
+        <VendorModal
+          isOpen={isVendorModalOpen}
+          onClose={() => setIsVendorModalOpen(false)}
+          onSaved={(savedVendor) => {
+            setVendorId(savedVendor.id);
+            setSupplierName(savedVendor.name);
+            setPayerOrPayeeName(savedVendor.name);
+            if (savedVendor.defaultBank && !drawerBank) {
+              setDrawerBank(savedVendor.defaultBank);
+            }
+            if (savedVendor.defaultBranch && !branch) {
+              setBranch(savedVendor.defaultBranch);
+            }
+            setIsVendorModalOpen(false);
+          }}
+        />
+      )}
     </div>
   );
 }

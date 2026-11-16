@@ -9,6 +9,7 @@ import {
   ChequeType,
   BrandingSettings,
   MediaChannel,
+  Vendor,
   ChequePrintTemplate,
   ChequePrinterProfile,
   ChequePrintJob,
@@ -33,6 +34,7 @@ interface BootstrapData {
   mediaChannels: MediaChannel[];
   invoices: Invoice[];
   cheques: Cheque[];
+  vendors: Vendor[];
   branding: BrandingSettings;
 }
 
@@ -43,20 +45,26 @@ function getFallbackData(): BootstrapData {
   if (localCache) return localCache;
   const disk = readFallbackDb();
   if (disk) {
-    localCache = disk;
-    return localCache!;
+    const data: BootstrapData = {
+      ...disk,
+      vendors: disk.vendors || [],
+    };
+    localCache = data;
+    return data;
   }
-  localCache = {
+  const defaultData: BootstrapData = {
     billingEntities: [...INITIAL_BILLING_ENTITIES],
     clients: [...INITIAL_CLIENTS],
     services: [...INITIAL_SERVICES],
     mediaChannels: [...INITIAL_MEDIA_CHANNELS],
     invoices: [...INITIAL_INVOICES],
     cheques: [],
+    vendors: [],
     branding: { ...INITIAL_BRANDING },
   };
-  writeFallbackDb(localCache);
-  return localCache!;
+  localCache = defaultData;
+  writeFallbackDb(defaultData);
+  return defaultData;
 }
 
 // -----------------------------------------------------------------------------
@@ -141,7 +149,16 @@ export async function getBootstrapData(): Promise<BootstrapData> {
     const chequesRes = await pool.query('SELECT * FROM cheques ORDER BY cheque_date ASC, created_at DESC');
     const cheques: Cheque[] = chequesRes.rows.map(mapChequeRow);
 
-    // 7. Branding
+    // 7. Vendors
+    let vendors: Vendor[] = [];
+    try {
+      const vendorsRes = await pool.query('SELECT * FROM vendors WHERE is_active = true ORDER BY name ASC');
+      vendors = vendorsRes.rows.map(mapVendorRow);
+    } catch {
+      vendors = [];
+    }
+
+    // 8. Branding
     const brandingRes = await pool.query('SELECT * FROM branding_settings WHERE id = $1', ['default']);
     let branding: BrandingSettings = brandingRes.rows[0] ? mapBrandingRow(brandingRes.rows[0]) : { ...INITIAL_BRANDING };
 
@@ -152,6 +169,7 @@ export async function getBootstrapData(): Promise<BootstrapData> {
       mediaChannels,
       invoices,
       cheques,
+      vendors,
       branding,
     };
   } catch (err) {
@@ -923,14 +941,42 @@ export async function saveCheque(cheque: Cheque): Promise<Cheque> {
     } catch {}
   }
 
+  let validVendorId: string | null = null;
+  if (cheque.vendorId) {
+    try {
+      const vRes = await pool.query('SELECT 1 FROM vendors WHERE id = $1', [cheque.vendorId]);
+      if (vRes.rows.length > 0) validVendorId = cheque.vendorId;
+    } catch {}
+  }
+
+  // If this is an outgoing cheque with a payee name, auto-ensure it exists in vendors directory
+  if (cheque.type === 'outgoing' && cheque.payerOrPayeeName && cheque.payerOrPayeeName.trim()) {
+    try {
+      const vName = cheque.payerOrPayeeName.trim();
+      const existingVendor = await pool.query('SELECT id FROM vendors WHERE LOWER(name) = LOWER($1)', [vName]);
+      if (existingVendor.rows.length > 0) {
+        validVendorId = existingVendor.rows[0].id;
+      } else {
+        const newVId = crypto.randomUUID();
+        await pool.query(
+          'INSERT INTO vendors (id, name, default_bank, default_branch, is_active, created_at, updated_at) VALUES ($1, $2, $3, $4, true, NOW(), NOW()) ON CONFLICT (id) DO NOTHING',
+          [newVId, vName, cheque.drawerBank || '', cheque.branch || '']
+        );
+        validVendorId = newVId;
+      }
+    } catch (vErr) {
+      console.warn('Auto vendor sync non-fatal warning:', vErr);
+    }
+  }
+
   const query = `
     INSERT INTO cheques (
       id, cheque_number, bank_name, bank_branch, amount, issue_date, cheque_date,
       client_id, billing_entity_id, invoice_id, payee_name, status, drawer_name,
       notes, image_url, reminders_enabled, reminder_days_before, last_reminder_sent_at,
-      cleared_date, bounced_date, bounced_reason, type, updated_at
+      cleared_date, bounced_date, bounced_reason, type, vendor_id, updated_at
     ) VALUES (
-      $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, NOW()
+      $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, NOW()
     )
     ON CONFLICT (id) DO UPDATE SET
       cheque_number = EXCLUDED.cheque_number,
@@ -954,6 +1000,7 @@ export async function saveCheque(cheque: Cheque): Promise<Cheque> {
       bounced_date = EXCLUDED.bounced_date,
       bounced_reason = EXCLUDED.bounced_reason,
       type = EXCLUDED.type,
+      vendor_id = EXCLUDED.vendor_id,
       updated_at = NOW()
     RETURNING *;
   `;
@@ -981,6 +1028,7 @@ export async function saveCheque(cheque: Cheque): Promise<Cheque> {
     (cheque as any).bouncedDate || null,
     (cheque as any).bouncedReason || '',
     cheque.type || 'incoming',
+    validVendorId,
   ];
 
   const res = await pool.query(query, values);
@@ -992,6 +1040,116 @@ export async function deleteCheque(id: string): Promise<boolean> {
   if (!pool) return false;
   const res = await pool.query('DELETE FROM cheques WHERE id = $1', [id]);
   return (res.rowCount ?? 0) > 0;
+}
+
+// -----------------------------------------------------------------------------
+// VENDORS / SUPPLIERS
+// -----------------------------------------------------------------------------
+export async function getAllVendors(): Promise<Vendor[]> {
+  const pool = getDbPool();
+  if (!pool) return (getFallbackData() as any).vendors || [];
+
+  try {
+    const res = await pool.query('SELECT * FROM vendors WHERE is_active = true ORDER BY name ASC');
+    return res.rows.map(mapVendorRow);
+  } catch (err) {
+    console.error('Error fetching vendors:', err);
+    return (getFallbackData() as any).vendors || [];
+  }
+}
+
+export async function saveVendor(vendor: Partial<Vendor>): Promise<Vendor> {
+  const pool = getDbPool();
+  const vendorId = (vendor.id && String(vendor.id).trim()) || crypto.randomUUID();
+  const name = (vendor.name && String(vendor.name).trim()) || 'Unnamed Vendor';
+
+  const vendorWithId: Vendor = {
+    id: vendorId,
+    name,
+    contactPerson: vendor.contactPerson || '',
+    email: vendor.email || '',
+    phone: vendor.phone || '',
+    address: vendor.address || '',
+    taxNumber: vendor.taxNumber || '',
+    defaultBank: vendor.defaultBank || '',
+    defaultBranch: vendor.defaultBranch || '',
+    defaultAccountNo: vendor.defaultAccountNo || '',
+    notes: vendor.notes || '',
+    isActive: vendor.isActive !== false,
+    createdAt: vendor.createdAt || new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+  };
+
+  if (!pool) {
+    const data = getFallbackData() as any;
+    if (!data.vendors) data.vendors = [];
+    const idx = data.vendors.findIndex((v: any) => v.id === vendorId);
+    if (idx >= 0) data.vendors[idx] = vendorWithId;
+    else data.vendors.push(vendorWithId);
+    writeFallbackDb(data);
+    return vendorWithId;
+  }
+
+  const query = `
+    INSERT INTO vendors (
+      id, name, contact_person, email, phone, address, tax_number,
+      default_bank, default_branch, default_account_no, notes, is_active, updated_at
+    ) VALUES (
+      $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, NOW()
+    )
+    ON CONFLICT (id) DO UPDATE SET
+      name = EXCLUDED.name,
+      contact_person = EXCLUDED.contact_person,
+      email = EXCLUDED.email,
+      phone = EXCLUDED.phone,
+      address = EXCLUDED.address,
+      tax_number = EXCLUDED.tax_number,
+      default_bank = EXCLUDED.default_bank,
+      default_branch = EXCLUDED.default_branch,
+      default_account_no = EXCLUDED.default_account_no,
+      notes = EXCLUDED.notes,
+      is_active = EXCLUDED.is_active,
+      updated_at = NOW()
+    RETURNING *;
+  `;
+
+  const values = [
+    vendorId,
+    name,
+    vendor.contactPerson || '',
+    vendor.email || '',
+    vendor.phone || '',
+    vendor.address || '',
+    vendor.taxNumber || '',
+    vendor.defaultBank || '',
+    vendor.defaultBranch || '',
+    vendor.defaultAccountNo || '',
+    vendor.notes || '',
+    vendor.isActive !== false,
+  ];
+
+  const res = await pool.query(query, values);
+  return mapVendorRow(res.rows[0]);
+}
+
+export async function deleteVendor(id: string): Promise<boolean> {
+  const pool = getDbPool();
+  if (!pool) {
+    const data = getFallbackData() as any;
+    if (data.vendors) {
+      data.vendors = data.vendors.filter((v: any) => v.id !== id);
+      writeFallbackDb(data);
+    }
+    return true;
+  }
+
+  try {
+    const res = await pool.query('UPDATE vendors SET is_active = false, updated_at = NOW() WHERE id = $1', [id]);
+    return (res.rowCount ?? 0) > 0;
+  } catch (err) {
+    console.error('Failed to delete vendor:', err);
+    throw err;
+  }
 }
 
 // -----------------------------------------------------------------------------
@@ -1331,6 +1489,7 @@ function mapChequeRow(r: any): Cheque {
     expectedActionDate: r.cheque_date ? new Date(r.cheque_date).toISOString().split('T')[0] : '',
     payerOrPayeeName: r.payee_name || r.drawer_name || '',
     clientId: r.client_id || '',
+    vendorId: r.vendor_id || '',
     billingEntityId: r.billing_entity_id || '',
     status: r.status || 'pending',
     statusHistory: [],
@@ -1340,6 +1499,25 @@ function mapChequeRow(r: any): Cheque {
     imageFrontUrl: r.image_url || '',
     attachments: [],
     invoiceAllocations: [],
+    createdAt: r.created_at ? new Date(r.created_at).toISOString() : new Date().toISOString(),
+    updatedAt: r.updated_at ? new Date(r.updated_at).toISOString() : new Date().toISOString(),
+  };
+}
+
+function mapVendorRow(r: any): Vendor {
+  return {
+    id: r.id,
+    name: r.name || '',
+    contactPerson: r.contact_person || '',
+    email: r.email || '',
+    phone: r.phone || '',
+    address: r.address || '',
+    taxNumber: r.tax_number || '',
+    defaultBank: r.default_bank || '',
+    defaultBranch: r.default_branch || '',
+    defaultAccountNo: r.default_account_no || '',
+    notes: r.notes || '',
+    isActive: r.is_active !== false,
     createdAt: r.created_at ? new Date(r.created_at).toISOString() : new Date().toISOString(),
     updatedAt: r.updated_at ? new Date(r.updated_at).toISOString() : new Date().toISOString(),
   };

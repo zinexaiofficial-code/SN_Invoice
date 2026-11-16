@@ -27,7 +27,8 @@ import {
   MediaChannel,
   ServiceCategory,
   AdvertisingReferenceType,
-  UserRole
+  UserRole,
+  Vendor
 } from '@/types';
 import { generateVerificationToken, computeCanonicalInvoiceHash } from '@/lib/crypto';
 import { formatColomboDateTime, formatDate } from '@/lib/utils';
@@ -1223,12 +1224,49 @@ const STORAGE_KEYS = {
   CURRENT_USER_ROLE: 'sn_current_user_role',
   CHEQUES: 'sn_cheques_v1',
   NOTIFICATION_PREFS: 'sn_notification_preferences_v1',
-  MEDIA_CHANNELS: 'sn_media_channels_v1'
+  MEDIA_CHANNELS: 'sn_media_channels_v1',
+  VENDORS: 'sn_vendors_v1'
 };
 
 class StorageService {
   private isBrowser(): boolean {
     return typeof window !== 'undefined';
+  }
+
+  // --- Vendors ---
+  getVendors(): Vendor[] {
+    if (!this.isBrowser()) return [];
+    const data = localStorage.getItem(STORAGE_KEYS.VENDORS);
+    if (!data) return [];
+    try {
+      const parsed: Vendor[] = JSON.parse(data);
+      return Array.isArray(parsed) ? parsed.filter(v => v.isActive !== false) : [];
+    } catch {
+      return [];
+    }
+  }
+
+  getVendorById(id: string): Vendor | undefined {
+    return this.getVendors().find(v => v.id === id);
+  }
+
+  saveVendorLocally(vendor: Vendor): void {
+    if (!this.isBrowser()) return;
+    const list = this.getVendors();
+    const idx = list.findIndex(v => v.id === vendor.id);
+    if (idx >= 0) list[idx] = vendor;
+    else list.push(vendor);
+    localStorage.setItem(STORAGE_KEYS.VENDORS, JSON.stringify(list));
+    window.dispatchEvent(new Event('vendor-updated'));
+    window.dispatchEvent(new Event('storage'));
+  }
+
+  deleteVendorLocally(id: string): void {
+    if (!this.isBrowser()) return;
+    const list = this.getVendors().filter(v => v.id !== id);
+    localStorage.setItem(STORAGE_KEYS.VENDORS, JSON.stringify(list));
+    window.dispatchEvent(new Event('vendor-updated'));
+    window.dispatchEvent(new Event('storage'));
   }
 
   // --- Billing Entities ---
@@ -2770,13 +2808,14 @@ class StorageService {
    */
   updateFromBootstrap(data: any): void {
     if (!this.isBrowser() || !data) return;
-    const { billingEntities, clients, services, mediaChannels, invoices, cheques, branding } = data;
+    const { billingEntities, clients, services, mediaChannels, invoices, cheques, vendors, branding } = data;
     if (billingEntities !== undefined) localStorage.setItem(STORAGE_KEYS.BILLING_ENTITIES, JSON.stringify(billingEntities));
     if (clients !== undefined) localStorage.setItem(STORAGE_KEYS.CLIENTS, JSON.stringify(clients));
     if (services !== undefined) localStorage.setItem(STORAGE_KEYS.SERVICES, JSON.stringify(services));
     if (mediaChannels !== undefined) localStorage.setItem(STORAGE_KEYS.MEDIA_CHANNELS, JSON.stringify(mediaChannels));
     if (invoices !== undefined) localStorage.setItem(STORAGE_KEYS.INVOICES, JSON.stringify(invoices));
     if (cheques !== undefined) localStorage.setItem(STORAGE_KEYS.CHEQUES, JSON.stringify(cheques));
+    if (vendors !== undefined) localStorage.setItem(STORAGE_KEYS.VENDORS, JSON.stringify(vendors));
     if (branding !== undefined) localStorage.setItem(STORAGE_KEYS.BRANDING, JSON.stringify(branding));
 
     window.dispatchEvent(new Event('entity-updated'));
@@ -2784,6 +2823,7 @@ class StorageService {
     window.dispatchEvent(new Event('service-updated'));
     window.dispatchEvent(new Event('invoice-updated'));
     window.dispatchEvent(new Event('cheque-updated'));
+    window.dispatchEvent(new Event('vendor-updated'));
     window.dispatchEvent(new Event('branding-updated'));
   }
 

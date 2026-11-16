@@ -27,12 +27,13 @@ import {
 } from "lucide-react";
 import { storage } from "@/lib/storage";
 import { useDatabase } from "@/context/DatabaseContext";
-import { Cheque, ChequeType, ChequeKPIs, BillingEntity, ChequeReminder } from "@/types";
+import { Cheque, ChequeType, ChequeKPIs, BillingEntity, ChequeReminder, Vendor } from "@/types";
 import { ChequeModal } from "@/components/cheques/ChequeModal";
 import { ChequeStatusModal } from "@/components/cheques/ChequeStatusModal";
 import { ChequeDetailsModal } from "@/components/cheques/ChequeDetailsModal";
 import { ChequeCalendar } from "@/components/cheques/ChequeCalendar";
 import { ChequePrintStudio } from "@/components/cheques/ChequePrintStudio";
+import { VendorModal } from "@/components/cheques/VendorModal";
 import { KpiCurrencyValue } from "@/components/ui/KpiValue";
 import {
   Dialog,
@@ -52,12 +53,28 @@ import { cn } from "@/lib/utils";
 function ChequesPageContent() {
   const searchParams = useSearchParams();
   const initialSearch = searchParams.get("search") || "";
-  const { cheques: dbCheques, billingEntities: dbEntities, isLoading, isSuperAdmin, deleteCheque } = useDatabase();
+  const {
+    cheques: dbCheques,
+    billingEntities: dbEntities,
+    isLoading,
+    isSuperAdmin,
+    deleteCheque,
+    vendors: dbVendors,
+    deleteVendor: dbDeleteVendor,
+  } = useDatabase();
 
   const [cheques, setCheques] = useState<Cheque[]>([]);
+  const [vendors, setVendors] = useState<Vendor[]>([]);
   const [entities, setEntities] = useState<BillingEntity[]>([]);
   const [chequeToDelete, setChequeToDelete] = useState<Cheque | null>(null);
   const [isDeletingCheque, setIsDeletingCheque] = useState(false);
+
+  // Vendor Management state
+  const [isVendorModalOpen, setIsVendorModalOpen] = useState(false);
+  const [editingVendor, setEditingVendor] = useState<Vendor | null>(null);
+  const [vendorSearchQuery, setVendorSearchQuery] = useState("");
+  const [vendorToDelete, setVendorToDelete] = useState<Vendor | null>(null);
+  const [isDeletingVendor, setIsDeletingVendor] = useState(false);
   const [kpis, setKpis] = useState<ChequeKPIs>({
     totalIncomingAmount: 0,
     totalOutgoingAmount: 0,
@@ -74,7 +91,7 @@ function ChequesPageContent() {
   });
 
   // Filters & Tabs
-  const [activeTab, setActiveTab] = useState<"all" | "incoming" | "outgoing" | "action_required" | "calendar">("all");
+  const [activeTab, setActiveTab] = useState<"all" | "incoming" | "outgoing" | "action_required" | "calendar" | "vendors">("all");
   const [selectedEntityId, setSelectedEntityId] = useState<string>("all");
   const [searchQuery, setSearchQuery] = useState(initialSearch);
   const [statusFilter, setStatusFilter] = useState<string>("all");
@@ -103,6 +120,9 @@ function ChequesPageContent() {
       : sourceCheques;
     setCheques(list);
 
+    const vendorList = (dbVendors && dbVendors.length > 0) ? dbVendors : storage.getVendors();
+    setVendors(vendorList);
+
     const calculatedKpis = storage.getChequeKPIs(filterObj);
     setKpis(calculatedKpis);
   };
@@ -112,13 +132,15 @@ function ChequesPageContent() {
 
     const handleChequeUpdate = () => loadData();
     window.addEventListener("cheque-updated", handleChequeUpdate);
+    window.addEventListener("vendor-updated", handleChequeUpdate);
     window.addEventListener("storage", handleChequeUpdate);
 
     return () => {
       window.removeEventListener("cheque-updated", handleChequeUpdate);
+      window.removeEventListener("vendor-updated", handleChequeUpdate);
       window.removeEventListener("storage", handleChequeUpdate);
     };
-  }, [selectedEntityId, dbCheques, dbEntities]);
+  }, [selectedEntityId, dbCheques, dbEntities, dbVendors]);
 
   // Urgent Reminders list
   const urgentReminders = useMemo(() => {
@@ -151,6 +173,44 @@ function ChequesPageContent() {
       return true;
     });
   }, [cheques, activeTab, statusFilter, bankFilter, searchQuery]);
+
+  // Filtered Vendors for Directory tab
+  const filteredVendors = useMemo(() => {
+    return vendors.filter((v) => {
+      if (!vendorSearchQuery.trim()) return true;
+      const q = vendorSearchQuery.toLowerCase().trim();
+      return (
+        v.name?.toLowerCase().includes(q) ||
+        v.contactPerson?.toLowerCase().includes(q) ||
+        v.phone?.toLowerCase().includes(q) ||
+        v.email?.toLowerCase().includes(q) ||
+        v.defaultBank?.toLowerCase().includes(q) ||
+        v.defaultBranch?.toLowerCase().includes(q) ||
+        v.taxNumber?.toLowerCase().includes(q)
+      );
+    });
+  }, [vendors, vendorSearchQuery]);
+
+  // Cheque statistics per vendor
+  const vendorChequeStats = useMemo(() => {
+    const stats: Record<string, { count: number; totalAmount: number }> = {};
+    for (const c of cheques) {
+      if (c.type === "outgoing") {
+        for (const v of vendors) {
+          if (
+            (c.vendorId && c.vendorId === v.id) ||
+            (c.payerOrPayeeName && c.payerOrPayeeName.trim().toLowerCase() === v.name.trim().toLowerCase()) ||
+            (c.supplierName && c.supplierName.trim().toLowerCase() === v.name.trim().toLowerCase())
+          ) {
+            if (!stats[v.id]) stats[v.id] = { count: 0, totalAmount: 0 };
+            stats[v.id].count += 1;
+            stats[v.id].totalAmount += (Number(c.amount) || 0);
+          }
+        }
+      }
+    }
+    return stats;
+  }, [cheques, vendors]);
 
   // Export CSV handler
   const handleExportCSV = () => {
@@ -620,11 +680,24 @@ function ChequesPageContent() {
               <Calendar className="w-4 h-4" />
               <span>Calendar View</span>
             </button>
+
+            <button
+              onClick={() => setActiveTab("vendors")}
+              className={cn(
+                "py-3 px-3.5 border-b-2 font-bold transition-colors flex items-center space-x-1.5",
+                activeTab === "vendors"
+                  ? "border-indigo-600 text-indigo-700 bg-white"
+                  : "border-transparent text-slate-600 hover:text-slate-900"
+              )}
+            >
+              <Building2 className="w-4 h-4 text-indigo-600" />
+              <span>Vendors ({vendors.length})</span>
+            </button>
           </div>
         </div>
 
         {/* Filter Controls (Shown for table tabs) */}
-        {activeTab !== "calendar" && (
+        {activeTab !== "calendar" && activeTab !== "vendors" && (
           <div className="p-4 border-b border-slate-200 bg-white flex flex-col sm:flex-row items-center justify-between gap-3 text-xs">
             {/* Search Input */}
             <div className="relative w-full sm:w-80">
@@ -691,6 +764,181 @@ function ChequesPageContent() {
               cheques={filteredCheques}
               onSelectCheque={(c) => setDetailsTargetCheque(c)}
             />
+          </div>
+        ) : activeTab === "vendors" ? (
+          <div className="p-4 sm:p-6 space-y-4">
+            {/* Vendor Search and Action Header */}
+            <div className="flex flex-col sm:flex-row items-center justify-between gap-3 bg-white">
+              <div className="relative w-full sm:w-80">
+                <Search className="w-4 h-4 text-slate-400 absolute left-3 top-2.5" />
+                <input
+                  type="text"
+                  value={vendorSearchQuery}
+                  onChange={(e) => setVendorSearchQuery(e.target.value)}
+                  placeholder="Search vendors by name, phone, bank..."
+                  className="w-full pl-9 pr-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium focus:bg-white focus:ring-2 focus:ring-indigo-500 focus:outline-none"
+                />
+              </div>
+
+              <div className="flex items-center space-x-2 w-full sm:w-auto justify-end">
+                <button
+                  onClick={() => {
+                    setEditingVendor(null);
+                    setIsVendorModalOpen(true);
+                  }}
+                  className="w-full sm:w-auto px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold transition flex items-center justify-center space-x-1.5 shadow-md shadow-indigo-600/20 active:scale-95"
+                >
+                  <PlusCircle className="w-4 h-4" />
+                  <span>Register New Vendor</span>
+                </button>
+              </div>
+            </div>
+
+            {/* Vendors Table */}
+            <div className="overflow-x-auto rounded-xl border border-slate-200">
+              <table className="w-full text-left text-xs">
+                <thead className="bg-slate-50 border-b border-slate-200 text-slate-500 font-bold uppercase tracking-wider">
+                  <tr>
+                    <th className="py-3 px-4">Vendor / Payee</th>
+                    <th className="py-3 px-4">Contact</th>
+                    <th className="py-3 px-4">Default Bank & Branch</th>
+                    <th className="py-3 px-4">Account Number</th>
+                    <th className="py-3 px-4 text-center">Outgoing Cheques</th>
+                    <th className="py-3 px-4 text-right">Total Paid (LKR)</th>
+                    <th className="py-3 px-4 text-right">Actions</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {filteredVendors.length === 0 ? (
+                    <tr>
+                      <td colSpan={7} className="py-12 text-center text-slate-400">
+                        <Building2 className="w-10 h-10 mx-auto mb-2 text-slate-300" />
+                        <p className="font-semibold text-slate-600">No vendors found</p>
+                        <p className="text-xs text-slate-400 mt-0.5">
+                          {vendorSearchQuery ? "Try a different search query." : "Click \"Register New Vendor\" to add your first supplier or payee."}
+                        </p>
+                      </td>
+                    </tr>
+                  ) : (
+                    filteredVendors.map((vendor) => {
+                      const stat = vendorChequeStats[vendor.id] || { count: 0, totalAmount: 0 };
+                      return (
+                        <tr key={vendor.id} className="hover:bg-slate-50/80 transition-colors">
+                          <td className="py-3 px-4">
+                            <div className="font-bold text-slate-900">{vendor.name}</div>
+                            {vendor.taxNumber && (
+                              <span className="inline-block px-1.5 py-0.5 mt-0.5 rounded text-[10px] font-mono bg-slate-100 text-slate-600">
+                                {vendor.taxNumber}
+                              </span>
+                            )}
+                            {vendor.address && (
+                              <div className="text-[11px] text-slate-400 truncate max-w-xs mt-0.5">{vendor.address}</div>
+                            )}
+                          </td>
+                          <td className="py-3 px-4 text-slate-600">
+                            {vendor.contactPerson && <div className="font-semibold text-slate-800">{vendor.contactPerson}</div>}
+                            {vendor.phone && <div className="text-[11px] text-slate-500">{vendor.phone}</div>}
+                            {vendor.email && <div className="text-[11px] text-indigo-600">{vendor.email}</div>}
+                            {!vendor.contactPerson && !vendor.phone && !vendor.email && (
+                              <span className="text-slate-400 italic">No contact info</span>
+                            )}
+                          </td>
+                          <td className="py-3 px-4">
+                            {vendor.defaultBank ? (
+                              <div>
+                                <span className="font-semibold text-slate-800">{vendor.defaultBank}</span>
+                                {vendor.defaultBranch && (
+                                  <div className="text-[11px] text-slate-500">{vendor.defaultBranch}</div>
+                                )}
+                              </div>
+                            ) : (
+                              <span className="text-slate-400 italic">Not set</span>
+                            )}
+                          </td>
+                          <td className="py-3 px-4 font-mono text-slate-700">
+                            {vendor.defaultAccountNo || <span className="text-slate-400 italic font-sans">—</span>}
+                          </td>
+                          <td className="py-3 px-4 text-center">
+                            <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold bg-blue-50 text-blue-700 border border-blue-200">
+                              {stat.count} {stat.count === 1 ? "cheque" : "cheques"}
+                            </span>
+                          </td>
+                          <td className="py-3 px-4 text-right font-mono font-bold text-slate-900">
+                            Rs. {stat.totalAmount.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                          </td>
+                          <td className="py-3 px-4 text-right">
+                            <div className="flex items-center justify-end space-x-1.5">
+                              <button
+                                onClick={() => {
+                                  setEditingCheque({
+                                    id: "",
+                                    type: "outgoing",
+                                    chequeNumber: "",
+                                    amount: 0,
+                                    currency: "LKR",
+                                    chequeDate: new Date().toISOString().split("T")[0],
+                                    receivedOrIssuedDate: new Date().toISOString().split("T")[0],
+                                    expectedActionDate: new Date().toISOString().split("T")[0],
+                                    drawerBank: vendor.defaultBank || "",
+                                    branch: vendor.defaultBranch || "",
+                                    payerOrPayeeName: vendor.name,
+                                    vendorId: vendor.id,
+                                    supplierName: vendor.name,
+                                    status: "issued",
+                                    isReminderEnabled: true,
+                                    createdAt: new Date().toISOString(),
+                                    updatedAt: new Date().toISOString(),
+                                  } as any);
+                                  setModalChequeType("outgoing");
+                                  setIsNewChequeModalOpen(true);
+                                }}
+                                className="px-2.5 py-1 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 border border-emerald-200 rounded-lg text-[11px] font-bold transition flex items-center space-x-1"
+                                title="Issue new outgoing cheque to this vendor"
+                              >
+                                <PlusCircle className="w-3 h-3 text-emerald-600" />
+                                <span>Issue Cheque</span>
+                              </button>
+
+                              {stat.count > 0 && (
+                                <button
+                                  onClick={() => {
+                                    setActiveTab("outgoing");
+                                    setSearchQuery(vendor.name);
+                                  }}
+                                  className="p-1.5 text-slate-400 hover:text-blue-600 rounded-lg hover:bg-slate-100 transition"
+                                  title="View all outgoing cheques for this vendor"
+                                >
+                                  <Eye className="w-3.5 h-3.5" />
+                                </button>
+                              )}
+
+                              <button
+                                onClick={() => {
+                                  setEditingVendor(vendor);
+                                  setIsVendorModalOpen(true);
+                                }}
+                                className="p-1.5 text-slate-400 hover:text-indigo-600 rounded-lg hover:bg-slate-100 transition"
+                                title="Edit vendor profile"
+                              >
+                                <Edit2 className="w-3.5 h-3.5" />
+                              </button>
+
+                              <button
+                                onClick={() => setVendorToDelete(vendor)}
+                                className="p-1.5 text-slate-400 hover:text-rose-600 rounded-lg hover:bg-rose-50 transition"
+                                title="Delete / Archive vendor"
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })
+                  )}
+                </tbody>
+              </table>
+            </div>
           </div>
         ) : (
           /* Cheque Register Table */
@@ -964,6 +1212,77 @@ function ChequesPageContent() {
             >
               {isDeletingCheque ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
               <span>Delete Cheque</span>
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* 5. Add / Edit Vendor Modal */}
+      <VendorModal
+        isOpen={isVendorModalOpen}
+        vendor={editingVendor}
+        onClose={() => {
+          setIsVendorModalOpen(false);
+          setEditingVendor(null);
+        }}
+        onSaved={() => {
+          loadData();
+          setIsVendorModalOpen(false);
+          setEditingVendor(null);
+        }}
+      />
+
+      {/* 6. Delete Vendor Confirmation Dialog */}
+      <Dialog open={Boolean(vendorToDelete)} onOpenChange={(open) => !open && setVendorToDelete(null)}>
+        <DialogContent className="max-w-md p-6 rounded-2xl">
+          <DialogHeader>
+            <div className="w-10 h-10 rounded-full bg-rose-100 text-rose-600 flex items-center justify-center mb-2">
+              <Trash2 className="w-5 h-5" />
+            </div>
+            <DialogTitle className="text-lg font-black text-navy-950">
+              Delete Vendor {vendorToDelete?.name}?
+            </DialogTitle>
+          </DialogHeader>
+          <div className="text-xs text-slate-600 space-y-2 py-2">
+            <p>
+              Are you sure you want to remove <strong className="text-navy-950 font-bold">{vendorToDelete?.name}</strong> from the vendor directory?
+            </p>
+            <div className="bg-amber-50 border border-amber-200 text-amber-800 p-2.5 rounded-lg">
+              <p className="font-semibold">ℹ️ Note:</p>
+              <p className="text-[11px] mt-0.5">Existing cheques issued to this vendor will retain their history and records.</p>
+            </div>
+          </div>
+          <DialogFooter className="mt-4 flex space-x-2">
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={isDeletingVendor}
+              onClick={() => setVendorToDelete(null)}
+              className="text-slate-600"
+            >
+              Cancel
+            </Button>
+            <Button
+              variant="destructive"
+              size="sm"
+              disabled={isDeletingVendor}
+              onClick={async () => {
+                if (!vendorToDelete) return;
+                setIsDeletingVendor(true);
+                try {
+                  await dbDeleteVendor(vendorToDelete.id);
+                  setVendorToDelete(null);
+                  loadData();
+                } catch (err: any) {
+                  alert("Failed to delete vendor: " + (err.message || "Unknown error"));
+                } finally {
+                  setIsDeletingVendor(false);
+                }
+              }}
+              className="bg-rose-600 hover:bg-rose-700 text-white font-bold flex items-center space-x-1"
+            >
+              {isDeletingVendor ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
+              <span>Delete Vendor</span>
             </Button>
           </DialogFooter>
         </DialogContent>
