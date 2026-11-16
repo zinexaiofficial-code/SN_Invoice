@@ -292,6 +292,11 @@ export async function initializeDatabase(): Promise<boolean> {
       );
       ALTER TABLE cheques ADD COLUMN IF NOT EXISTS type TEXT DEFAULT 'incoming';
       ALTER TABLE cheques ADD COLUMN IF NOT EXISTS vendor_id TEXT;
+      ALTER TABLE cheques ADD COLUMN IF NOT EXISTS purpose_of_payment TEXT;
+      ALTER TABLE cheques ADD COLUMN IF NOT EXISTS bill_reference TEXT;
+      ALTER TABLE cheques ADD COLUMN IF NOT EXISTS bank_account_id TEXT;
+      ALTER TABLE cheques ADD COLUMN IF NOT EXISTS image_back_url TEXT;
+      ALTER TABLE cheques ADD COLUMN IF NOT EXISTS expected_action_date DATE;
     `);
 
     // 8b. Vendors / Suppliers Directory

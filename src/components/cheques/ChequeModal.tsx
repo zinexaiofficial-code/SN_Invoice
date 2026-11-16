@@ -117,9 +117,6 @@ export function ChequeModal({
   useEffect(() => {
     const entList = storage.getBillingEntities().filter((e) => e.isActive);
     setEntities(entList);
-    if (!billingEntityId && entList.length > 0) {
-      setBillingEntityId(entList[0].id);
-    }
 
     const clientList = storage.getClients();
     setClients(clientList);
@@ -127,28 +124,76 @@ export function ChequeModal({
     const invList = storage.getInvoices();
     setInvoices(invList);
 
-    // If defaultInvoiceId provided and creating new cheque
-    if (defaultInvoiceId && !cheque) {
-      const inv = invList.find((i) => i.id === defaultInvoiceId);
-      if (inv) {
-        setClientId(inv.clientId);
-        setPayerOrPayeeName(inv.clientSnapshot?.name || "");
-        setBillingEntityId(inv.billingEntityId || entList[0]?.id || "");
-        setBillReference(inv.invoiceNumber);
-        setAmount(String(inv.outstandingBalance || inv.grandTotal));
-        setAllocations([
-          {
-            id: "alloc-" + Date.now(),
-            chequeId: "",
-            invoiceId: inv.id,
-            invoiceNumber: inv.invoiceNumber,
-            allocatedAmount: inv.outstandingBalance || inv.grandTotal,
-            createdAt: new Date().toISOString()
+    if (isOpen) {
+      if (cheque) {
+        setType(cheque.type || defaultType);
+        setChequeNumber(cheque.chequeNumber || "");
+        setAmount(cheque.amount !== undefined && cheque.amount !== null ? String(cheque.amount) : "");
+        setChequeDate(cheque.chequeDate || todayStr);
+        setReceivedOrIssuedDate(cheque.receivedOrIssuedDate || todayStr);
+        setExpectedActionDate(cheque.expectedActionDate || cheque.chequeDate || todayStr);
+        setDrawerBank(cheque.drawerBank || "");
+        setBranch(cheque.branch || "");
+        setPayerOrPayeeName(cheque.payerOrPayeeName || "");
+        setClientId(cheque.clientId || "");
+        setVendorId(cheque.vendorId || "");
+        setSupplierName(cheque.supplierName || cheque.payerOrPayeeName || "");
+        setBillingEntityId(cheque.billingEntityId || entList[0]?.id || "");
+        setBankAccountId(cheque.bankAccountId || "");
+        setPurposeOfPayment(cheque.purposeOfPayment || "");
+        setBillReference(cheque.billReference || "");
+        setNotes(cheque.notes || "");
+        setIsReminderEnabled(cheque.isReminderEnabled !== false);
+        setImageFrontUrl(cheque.imageFrontUrl || "");
+        setImageBackUrl(cheque.imageBackUrl || "");
+        setAllocations(cheque.invoiceAllocations || []);
+      } else {
+        setType(defaultType);
+        setChequeNumber("");
+        setAmount("");
+        setChequeDate(todayStr);
+        setReceivedOrIssuedDate(todayStr);
+        setExpectedActionDate(todayStr);
+        setDrawerBank("");
+        setBranch("");
+        setPayerOrPayeeName("");
+        setClientId("");
+        setVendorId("");
+        setSupplierName("");
+        setBillingEntityId(entList[0]?.id || "");
+        setBankAccountId("");
+        setPurposeOfPayment("");
+        setBillReference("");
+        setNotes("");
+        setIsReminderEnabled(true);
+        setImageFrontUrl("");
+        setImageBackUrl("");
+        setAllocations([]);
+
+        // If defaultInvoiceId provided and creating new cheque
+        if (defaultInvoiceId) {
+          const inv = invList.find((i) => i.id === defaultInvoiceId);
+          if (inv) {
+            setClientId(inv.clientId);
+            setPayerOrPayeeName(inv.clientSnapshot?.name || "");
+            setBillingEntityId(inv.billingEntityId || entList[0]?.id || "");
+            setBillReference(inv.invoiceNumber);
+            setAmount(String(inv.outstandingBalance || inv.grandTotal));
+            setAllocations([
+              {
+                id: "alloc-" + Date.now(),
+                chequeId: "",
+                invoiceId: inv.id,
+                invoiceNumber: inv.invoiceNumber,
+                allocatedAmount: inv.outstandingBalance || inv.grandTotal,
+                createdAt: new Date().toISOString()
+              }
+            ]);
           }
-        ]);
+        }
       }
     }
-  }, [defaultInvoiceId, cheque]);
+  }, [isOpen, cheque, defaultInvoiceId, defaultType, todayStr]);
 
   // Selected Entity Bank Accounts
   const selectedEntity = entities.find((e) => e.id === billingEntityId);
@@ -723,17 +768,14 @@ export function ChequeModal({
                     </div>
                     <div>
                       <label className="block text-xs font-bold text-slate-700 mb-1">
-                        Payment Voucher / Order No
+                        Purpose of Payment
                       </label>
                       <input
                         type="text"
-                        value={notes.startsWith("PV:") ? notes : ""}
-                        onChange={(e) => {
-                          if (e.target.value) setNotes(`PV: ${e.target.value}`);
-                          else setNotes("");
-                        }}
+                        value={purposeOfPayment}
+                        onChange={(e) => setPurposeOfPayment(e.target.value)}
                         className="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg text-xs font-medium focus:ring-2 focus:ring-emerald-500 focus:outline-none"
-                        placeholder="e.g. PV-2026-088"
+                        placeholder="e.g. TV Commercial Broadcast Airtime"
                       />
                     </div>
                   </div>
@@ -741,19 +783,34 @@ export function ChequeModal({
               )}
 
               {/* Purpose & Internal Notes */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-xs font-bold text-slate-700 mb-1">
-                    Purpose of Payment
-                  </label>
-                  <input
-                    type="text"
-                    value={purposeOfPayment}
-                    onChange={(e) => setPurposeOfPayment(e.target.value)}
-                    className="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg text-xs font-medium focus:ring-2 focus:ring-emerald-500 focus:outline-none"
-                    placeholder="e.g. Video Production 3-Clips Campaign"
-                  />
+              {type === "incoming" ? (
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-xs font-bold text-slate-700 mb-1">
+                      Purpose of Payment
+                    </label>
+                    <input
+                      type="text"
+                      value={purposeOfPayment}
+                      onChange={(e) => setPurposeOfPayment(e.target.value)}
+                      className="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg text-xs font-medium focus:ring-2 focus:ring-emerald-500 focus:outline-none"
+                      placeholder="e.g. Video Production 3-Clips Campaign"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-bold text-slate-700 mb-1">
+                      Internal Notes / Remarks
+                    </label>
+                    <input
+                      type="text"
+                      value={notes}
+                      onChange={(e) => setNotes(e.target.value)}
+                      className="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg text-xs font-medium focus:ring-2 focus:ring-emerald-500 focus:outline-none"
+                      placeholder="e.g. Received by hand at office"
+                    />
+                  </div>
                 </div>
+              ) : (
                 <div>
                   <label className="block text-xs font-bold text-slate-700 mb-1">
                     Internal Notes / Remarks
@@ -763,10 +820,10 @@ export function ChequeModal({
                     value={notes}
                     onChange={(e) => setNotes(e.target.value)}
                     className="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg text-xs font-medium focus:ring-2 focus:ring-emerald-500 focus:outline-none"
-                    placeholder="e.g. Received by hand at office"
+                    placeholder="e.g. Handed over at Colombo office / PV-2026-088"
                   />
                 </div>
-              </div>
+              )}
             </div>
           )}
 

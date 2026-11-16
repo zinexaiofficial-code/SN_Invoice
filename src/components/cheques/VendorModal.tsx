@@ -329,3 +329,4 @@ export function VendorModal({ vendor, isOpen, onClose, onSaved }: VendorModalPro
     </Dialog>
   );
 }
+

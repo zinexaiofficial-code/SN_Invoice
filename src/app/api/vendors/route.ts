@@ -51,3 +51,4 @@ export async function DELETE(req: NextRequest) {
     return NextResponse.json({ error: err.message || 'Database error deleting vendor' }, { status: 500, headers: NO_CACHE_HEADERS });
   }
 }
+

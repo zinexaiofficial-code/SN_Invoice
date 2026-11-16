@@ -974,9 +974,12 @@ export async function saveCheque(cheque: Cheque): Promise<Cheque> {
       id, cheque_number, bank_name, bank_branch, amount, issue_date, cheque_date,
       client_id, billing_entity_id, invoice_id, payee_name, status, drawer_name,
       notes, image_url, reminders_enabled, reminder_days_before, last_reminder_sent_at,
-      cleared_date, bounced_date, bounced_reason, type, vendor_id, updated_at
+      cleared_date, bounced_date, bounced_reason, type, vendor_id,
+      purpose_of_payment, bill_reference, bank_account_id, image_back_url, expected_action_date,
+      updated_at
     ) VALUES (
-      $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, NOW()
+      $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23,
+      $24, $25, $26, $27, $28, NOW()
     )
     ON CONFLICT (id) DO UPDATE SET
       cheque_number = EXCLUDED.cheque_number,
@@ -1001,6 +1004,11 @@ export async function saveCheque(cheque: Cheque): Promise<Cheque> {
       bounced_reason = EXCLUDED.bounced_reason,
       type = EXCLUDED.type,
       vendor_id = EXCLUDED.vendor_id,
+      purpose_of_payment = EXCLUDED.purpose_of_payment,
+      bill_reference = EXCLUDED.bill_reference,
+      bank_account_id = EXCLUDED.bank_account_id,
+      image_back_url = EXCLUDED.image_back_url,
+      expected_action_date = EXCLUDED.expected_action_date,
       updated_at = NOW()
     RETURNING *;
   `;
@@ -1029,6 +1037,11 @@ export async function saveCheque(cheque: Cheque): Promise<Cheque> {
     (cheque as any).bouncedReason || '',
     cheque.type || 'incoming',
     validVendorId,
+    cheque.purposeOfPayment || (cheque as any).purpose || '',
+    cheque.billReference || (cheque as any).billRef || '',
+    cheque.bankAccountId || '',
+    cheque.imageBackUrl || '',
+    cheque.expectedActionDate || cheque.chequeDate || new Date().toISOString().split('T')[0],
   ];
 
   const res = await pool.query(query, values);
@@ -1486,17 +1499,23 @@ function mapChequeRow(r: any): Cheque {
     currency: 'LKR',
     chequeDate: r.cheque_date ? new Date(r.cheque_date).toISOString().split('T')[0] : '',
     receivedOrIssuedDate: r.issue_date ? new Date(r.issue_date).toISOString().split('T')[0] : '',
-    expectedActionDate: r.cheque_date ? new Date(r.cheque_date).toISOString().split('T')[0] : '',
+    expectedActionDate: r.expected_action_date
+      ? new Date(r.expected_action_date).toISOString().split('T')[0]
+      : (r.cheque_date ? new Date(r.cheque_date).toISOString().split('T')[0] : ''),
     payerOrPayeeName: r.payee_name || r.drawer_name || '',
     clientId: r.client_id || '',
     vendorId: r.vendor_id || '',
     billingEntityId: r.billing_entity_id || '',
+    bankAccountId: r.bank_account_id || '',
     status: r.status || 'pending',
+    purposeOfPayment: r.purpose_of_payment || '',
+    billReference: r.bill_reference || '',
+    notes: r.notes || '',
+    imageFrontUrl: r.image_url || '',
+    imageBackUrl: r.image_back_url || '',
     statusHistory: [],
     reminders: [],
     isReminderEnabled: r.reminders_enabled !== false,
-    notes: r.notes || '',
-    imageFrontUrl: r.image_url || '',
     attachments: [],
     invoiceAllocations: [],
     createdAt: r.created_at ? new Date(r.created_at).toISOString() : new Date().toISOString(),
