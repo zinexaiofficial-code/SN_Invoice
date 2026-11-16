@@ -55,8 +55,8 @@ export default function MonthlyHistoryPage() {
 
   // Filter states
   const now = new Date();
-  const [selectedYear, setSelectedYear] = useState<number>(2026); // Default 2026 as per samples
-  const [selectedMonth, setSelectedMonth] = useState<number>(9); // September 2026 (Chamara sample)
+  const [selectedYear, setSelectedYear] = useState<number>(() => now.getFullYear());
+  const [selectedMonth, setSelectedMonth] = useState<number>(() => now.getMonth() + 1);
   const [selectedClientId, setSelectedClientId] = useState<string>("");
   const [selectedBillingEntityId, setSelectedBillingEntityId] = useState<string>("");
   const [dateMode, setDateMode] = useState<ReportingDateMode>("issued");

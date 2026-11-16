@@ -43,9 +43,13 @@ export default function DashboardPage() {
     overdueInvoicesCount: 0,
   });
 
-  // Month, Entity & Client selectors
-  const [selectedYear, setSelectedYear] = useState<number>(2026);
-  const [selectedMonth, setSelectedMonth] = useState<number>(9); // September 2026 (matching sample)
+  // Month, Entity & Client selectors (defaulting dynamically to current month and year)
+  const currentYear = new Date().getFullYear();
+  const currentMonth = new Date().getMonth() + 1;
+  const yearOptions = Array.from(new Set([currentYear + 1, currentYear, currentYear - 1, 2026, 2025])).sort((a, b) => b - a);
+
+  const [selectedYear, setSelectedYear] = useState<number>(() => new Date().getFullYear());
+  const [selectedMonth, setSelectedMonth] = useState<number>(() => new Date().getMonth() + 1);
   const [selectedBillingEntityId, setSelectedBillingEntityId] = useState<string>("");
   const [selectedClientId, setSelectedClientId] = useState<string>("");
 
@@ -133,8 +137,11 @@ export default function DashboardPage() {
               onChange={(e) => setSelectedYear(parseInt(e.target.value, 10))}
               className="h-9 px-3 rounded-xl border border-slate-300 bg-white text-xs font-bold text-navy-950"
             >
-              <option value={2026}>2026</option>
-              <option value={2025}>2025</option>
+              {yearOptions.map((y) => (
+                <option key={y} value={y}>
+                  {y}
+                </option>
+              ))}
             </select>
 
             <select

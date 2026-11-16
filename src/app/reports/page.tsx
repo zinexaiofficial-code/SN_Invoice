@@ -29,8 +29,8 @@ export default function ReportsPage() {
     "monthly" | "client_wise" | "sent_status" | "outstanding" | "paid" | "yearly"
   >("monthly");
 
-  const [selectedYear, setSelectedYear] = useState<number>(2026);
-  const [selectedMonth, setSelectedMonth] = useState<number>(9); // September 2026
+  const [selectedYear, setSelectedYear] = useState<number>(() => new Date().getFullYear());
+  const [selectedMonth, setSelectedMonth] = useState<number>(() => new Date().getMonth() + 1);
   const [selectedBillingEntityId, setSelectedBillingEntityId] = useState<string>("");
 
   const monthNames = [
