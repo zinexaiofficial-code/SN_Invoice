@@ -521,8 +521,11 @@ export function ChequeModal({
                     type="date"
                     value={chequeDate}
                     onChange={(e) => {
-                      setChequeDate(e.target.value);
-                      if (!expectedActionDate) setExpectedActionDate(e.target.value);
+                      const newDate = e.target.value;
+                      setChequeDate(newDate);
+                      if (!expectedActionDate || expectedActionDate === chequeDate) {
+                        setExpectedActionDate(newDate);
+                      }
                     }}
                     className="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg text-xs font-medium focus:ring-2 focus:ring-emerald-500 focus:outline-none"
                     required

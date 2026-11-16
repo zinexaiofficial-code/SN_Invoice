@@ -31,7 +31,8 @@ export async function GET(request: Request) {
         continue;
       }
 
-      const targetDate = c.expectedActionDate || c.chequeDate;
+      // Automated notifications strictly anchor to "Date on Cheque *"
+      const targetDate = c.chequeDate || c.expectedActionDate;
       if (!targetDate) continue;
 
       if (targetDate < todayStr) {

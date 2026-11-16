@@ -679,7 +679,7 @@ export default function InvoiceDetailPage() {
                               </div>
                               <p className="text-slate-500 text-[11px]">
                                 {c.drawerBank} {c.branch && `(${c.branch})`} • Due/Deposit:{" "}
-                                {c.expectedActionDate || c.chequeDate}
+                                {c.chequeDate || c.expectedActionDate}
                               </p>
                               <p className="text-[11px] text-slate-600">
                                 {isCleared ? (

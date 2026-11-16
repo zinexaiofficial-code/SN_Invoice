@@ -503,7 +503,7 @@ function ChequesPageContent() {
                   <div>
                     <div className="flex items-center justify-between mb-1">
                       <span className="text-xs font-bold text-white truncate">{r.title}</span>
-                      <span className="text-[10px] font-mono text-slate-400">{r.reminderDate}</span>
+                      <span className="text-[10px] font-mono text-slate-400">Cheque Date: {r.cheque?.chequeDate || r.reminderDate}</span>
                     </div>
                     <p className="text-[11px] text-slate-300 line-clamp-2 leading-relaxed">
                       {r.message}
@@ -781,10 +781,10 @@ function ChequesPageContent() {
                         {/* Due Date */}
                         <td className="py-3.5 px-4">
                           <p className="font-medium text-slate-800 font-mono">
-                            {chq.expectedActionDate || chq.chequeDate}
+                            {chq.chequeDate || chq.expectedActionDate}
                           </p>
                           <p className="text-[10px] text-slate-400">
-                            {isIncoming ? "Deposit date" : "Pres. date"}
+                            Date on Cheque
                           </p>
                         </td>
 

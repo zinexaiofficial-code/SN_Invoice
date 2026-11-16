@@ -256,7 +256,7 @@ export function NotificationBell() {
                           <div className="flex items-center space-x-3 text-[11px] text-slate-500 pt-0.5">
                             <span className="flex items-center space-x-1">
                               <Calendar className="w-3 h-3 text-slate-400" />
-                              <span>{r.reminderDate}</span>
+                              <span>Date on Cheque: {r.cheque?.chequeDate || r.reminderDate}</span>
                             </span>
                             {r.cheque?.drawerBank && (
                               <span className="font-medium text-slate-600">

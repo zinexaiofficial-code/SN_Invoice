@@ -53,10 +53,10 @@ export function ChequeCalendar({ cheques, onSelectCheque }: ChequeCalendarProps)
   // Map cheques to date strings
   const chequesByDate = new Map<string, Cheque[]>();
   cheques.forEach((c) => {
-    // If returned and has follow up date, use follow-up date; otherwise expectedActionDate or chequeDate
+    // If returned and has follow up date, use follow-up date; otherwise Date on Cheque
     const targetDate = c.status === "returned" && c.followUpDate
       ? c.followUpDate
-      : (c.expectedActionDate || c.chequeDate);
+      : (c.chequeDate || c.expectedActionDate);
 
     if (targetDate) {
       const list = chequesByDate.get(targetDate) || [];
@@ -68,7 +68,7 @@ export function ChequeCalendar({ cheques, onSelectCheque }: ChequeCalendarProps)
   // Calculate monthly stats
   const currentMonthPrefix = `${year}-${String(month + 1).padStart(2, "0")}`;
   const thisMonthCheques = cheques.filter((c) => {
-    const d = c.expectedActionDate || c.chequeDate;
+    const d = c.chequeDate || c.expectedActionDate;
     return d && d.startsWith(currentMonthPrefix);
   });
 
@@ -221,8 +221,9 @@ export function ChequeCalendar({ cheques, onSelectCheque }: ChequeCalendarProps)
                   const isIncoming = chq.type === "incoming";
                   const isReturned = chq.status === "returned";
                   const isCleared = chq.status === "cleared";
+                  const chequeEffectiveDate = chq.chequeDate || chq.expectedActionDate;
                   const isOverdue =
-                    !isCleared && chq.expectedActionDate && chq.expectedActionDate < todayStr;
+                    !isCleared && chequeEffectiveDate && chequeEffectiveDate < todayStr;
 
                   return (
                     <button

@@ -1054,7 +1054,8 @@ export function calculateChequeAlertState(cheque: Cheque): ChequeAlertState {
   const today = new Date();
   today.setHours(0, 0, 0, 0);
 
-  const targetDateStr = cheque.expectedActionDate || cheque.chequeDate;
+  // Notifications and alerts strictly anchor to "Date on Cheque *"
+  const targetDateStr = cheque.chequeDate || cheque.expectedActionDate;
   if (!targetDateStr) return 'normal';
 
   const targetDate = new Date(targetDateStr);
@@ -1075,7 +1076,8 @@ export function generateChequeReminders(cheque: Cheque, existingReminders: Chequ
   if (cheque.status === 'cleared' || cheque.status === 'cancelled' || cheque.status === 'replaced') return [];
 
   const existingMap = new Map(existingReminders.map(r => [r.reminderType, r]));
-  const targetDateStr = cheque.expectedActionDate || cheque.chequeDate;
+  // Notifications and reminders strictly anchor to "Date on Cheque *"
+  const targetDateStr = cheque.chequeDate || cheque.expectedActionDate;
   if (!targetDateStr) return [];
 
   const targetDate = new Date(targetDateStr);
@@ -1085,12 +1087,6 @@ export function generateChequeReminders(cheque: Cheque, existingReminders: Chequ
 
   const diffDays = Math.round((targetDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
   const reminders: ChequeReminder[] = [];
-
-  const formatOffsetDate = (days: number): string => {
-    const d = new Date(targetDate);
-    d.setDate(d.getDate() - days);
-    return d.toISOString().split('T')[0];
-  };
 
   const isIncoming = cheque.type === 'incoming';
   const partyLabel = isIncoming ? `Client: ${cheque.payerOrPayeeName}` : `Payee: ${cheque.payerOrPayeeName}`;
@@ -1102,7 +1098,7 @@ export function generateChequeReminders(cheque: Cheque, existingReminders: Chequ
     reminders.push({
       id: prev?.id || `rem-${cheque.id}-ret`,
       chequeId: cheque.id,
-      reminderDate: cheque.followUpDate || today.toISOString().split('T')[0],
+      reminderDate: cheque.followUpDate || targetDateStr,
       reminderType: 'returned_action',
       title: `🚨 RETURNED CHEQUE ACTION: Cheque #${cheque.chequeNumber}`,
       message: `Cheque #${cheque.chequeNumber} for ${amountStr} (${partyLabel}) was returned. Reason: ${cheque.returnReason || 'Refer to Drawer'}. Follow up required!`,
@@ -1116,16 +1112,16 @@ export function generateChequeReminders(cheque: Cheque, existingReminders: Chequ
     return reminders;
   }
 
-  // 2. Overdue Alert
+  // 2. Overdue Alert (Date on Cheque has passed)
   if (diffDays < 0) {
     const prev = existingMap.get('overdue');
     reminders.push({
       id: prev?.id || `rem-${cheque.id}-od`,
       chequeId: cheque.id,
-      reminderDate: today.toISOString().split('T')[0],
+      reminderDate: targetDateStr,
       reminderType: 'overdue',
       title: `⚠️ OVERDUE: Cheque #${cheque.chequeNumber} (${partyLabel})`,
-      message: `${isIncoming ? 'Incoming cheque' : 'Outgoing cheque'} #${cheque.chequeNumber} of ${amountStr} is overdue by ${Math.abs(diffDays)} day(s)! Please ${isIncoming ? 'deposit' : 'verify account balance'} immediately.`,
+      message: `${isIncoming ? 'Incoming cheque' : 'Outgoing cheque'} #${cheque.chequeNumber} of ${amountStr} is overdue by ${Math.abs(diffDays)} day(s)! Date on Cheque: ${targetDateStr}. Please ${isIncoming ? 'deposit' : 'verify account balance'} immediately.`,
       priority: 'urgent',
       isRead: prev?.isRead || false,
       isDismissed: prev?.isDismissed || false,
@@ -1135,7 +1131,7 @@ export function generateChequeReminders(cheque: Cheque, existingReminders: Chequ
     });
   }
 
-  // 3. Due Today
+  // 3. Due Today (Date on Cheque is today)
   if (diffDays === 0) {
     const prev = existingMap.get('due_today');
     reminders.push({
@@ -1144,7 +1140,7 @@ export function generateChequeReminders(cheque: Cheque, existingReminders: Chequ
       reminderDate: targetDateStr,
       reminderType: 'due_today',
       title: `🔔 DUE TODAY: Cheque #${cheque.chequeNumber}`,
-      message: `${isIncoming ? 'Deposit incoming cheque' : 'Outgoing cheque presentation due today'} #${cheque.chequeNumber} for ${amountStr} (${partyLabel}).`,
+      message: `${isIncoming ? 'Deposit incoming cheque' : 'Outgoing cheque presentation due today'} #${cheque.chequeNumber} for ${amountStr} (${partyLabel}). Date on Cheque: ${targetDateStr}.`,
       priority: 'high',
       isRead: prev?.isRead || false,
       isDismissed: prev?.isDismissed || false,
@@ -1154,13 +1150,13 @@ export function generateChequeReminders(cheque: Cheque, existingReminders: Chequ
     });
   }
 
-  // 4. Due in 1 Day (Tomorrow)
-  if (diffDays === 1 || diffDays > 0) {
+  // 4. Due Tomorrow (Date on Cheque is exactly tomorrow: diffDays === 1)
+  if (diffDays === 1) {
     const prev = existingMap.get('due_1_day');
     reminders.push({
       id: prev?.id || `rem-${cheque.id}-1d`,
       chequeId: cheque.id,
-      reminderDate: formatOffsetDate(1),
+      reminderDate: targetDateStr,
       reminderType: 'due_1_day',
       title: `📅 DUE TOMORROW: Cheque #${cheque.chequeNumber}`,
       message: `Cheque #${cheque.chequeNumber} of ${amountStr} is due tomorrow (${targetDateStr}). ${partyLabel}.`,
@@ -1168,18 +1164,18 @@ export function generateChequeReminders(cheque: Cheque, existingReminders: Chequ
       isRead: prev?.isRead || false,
       isDismissed: prev?.isDismissed || false,
       snoozedUntil: prev?.snoozedUntil,
-      deliveryStatus: diffDays <= 1 ? 'delivered' : 'pending',
+      deliveryStatus: 'delivered',
       createdAt: prev?.createdAt || new Date().toISOString()
     });
   }
 
-  // 5. Due in 3 Days
-  if (diffDays <= 3 && diffDays > 1) {
+  // 5. Due in 3 Days (2 to 3 days before Date on Cheque)
+  if (diffDays === 2 || diffDays === 3) {
     const prev = existingMap.get('due_3_days');
     reminders.push({
       id: prev?.id || `rem-${cheque.id}-3d`,
       chequeId: cheque.id,
-      reminderDate: formatOffsetDate(3),
+      reminderDate: targetDateStr,
       reminderType: 'due_3_days',
       title: `⏳ Due in ${diffDays} days: Cheque #${cheque.chequeNumber}`,
       message: `Cheque #${cheque.chequeNumber} for ${amountStr} is scheduled for ${targetDateStr}. ${partyLabel}.`,
@@ -1192,13 +1188,13 @@ export function generateChequeReminders(cheque: Cheque, existingReminders: Chequ
     });
   }
 
-  // 6. Due in 7 Days
-  if (diffDays <= 7 && diffDays > 3) {
+  // 6. Due in 7 Days (4 to 7 days before Date on Cheque)
+  if (diffDays >= 4 && diffDays <= 7) {
     const prev = existingMap.get('due_7_days');
     reminders.push({
       id: prev?.id || `rem-${cheque.id}-7d`,
       chequeId: cheque.id,
-      reminderDate: formatOffsetDate(7),
+      reminderDate: targetDateStr,
       reminderType: 'due_7_days',
       title: `🗓️ Upcoming Cheque in ${diffDays} days: #${cheque.chequeNumber}`,
       message: `Cheque #${cheque.chequeNumber} of ${amountStr} scheduled on ${targetDateStr}. ${partyLabel}.`,
@@ -1211,6 +1207,8 @@ export function generateChequeReminders(cheque: Cheque, existingReminders: Chequ
     });
   }
 
+  // Note: If diffDays > 7 (e.g. cheque is 44 days away on 2026-12-30),
+  // no premature reminder is emitted until the scheduled interval is reached.
   return reminders;
 }
 
@@ -2391,8 +2389,8 @@ class StorageService {
       if (filter.alertState && filter.alertState !== 'all' && c.alertState !== filter.alertState) return false;
       if (filter.clientId && c.clientId !== filter.clientId) return false;
       if (filter.bank && !c.drawerBank.toLowerCase().includes(filter.bank.toLowerCase())) return false;
-      if (filter.startDate && (c.expectedActionDate || c.chequeDate) < filter.startDate) return false;
-      if (filter.endDate && (c.expectedActionDate || c.chequeDate) > filter.endDate) return false;
+      if (filter.startDate && (c.chequeDate || c.expectedActionDate) < filter.startDate) return false;
+      if (filter.endDate && (c.chequeDate || c.expectedActionDate) > filter.endDate) return false;
       if (filter.searchQuery) {
         const q = filter.searchQuery.toLowerCase().trim();
         const matchesNumber = c.chequeNumber.toLowerCase().includes(q);
@@ -2633,7 +2631,8 @@ class StorageService {
         pendingChequesCount += 1;
         pendingChequesAmount += amt;
 
-        const targetDateStr = c.expectedActionDate || c.chequeDate;
+        // Notifications and KPI alert calculations strictly anchor to "Date on Cheque *"
+        const targetDateStr = c.chequeDate || c.expectedActionDate;
         if (targetDateStr) {
           const targetDate = new Date(targetDateStr);
           targetDate.setHours(0, 0, 0, 0);
@@ -2673,11 +2672,15 @@ class StorageService {
     const now = new Date().toISOString();
 
     for (const c of cheques) {
+      if (!c.isReminderEnabled) continue;
+      if (c.status === 'cleared' || c.status === 'cancelled' || c.status === 'replaced') continue;
       if (!c.reminders || c.reminders.length === 0) continue;
+
       for (const r of c.reminders) {
         if (options?.onlyPending) {
           if (r.isDismissed) continue;
           if (r.snoozedUntil && r.snoozedUntil > now) continue;
+          if (r.deliveryStatus === 'pending') continue;
         }
         allReminders.push({ ...r, cheque: c });
       }
