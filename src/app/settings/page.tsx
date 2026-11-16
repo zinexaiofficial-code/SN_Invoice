@@ -153,10 +153,10 @@ export default function SettingsPage() {
         </div>
 
         {/* Navigation Tabs */}
-        <div className="flex space-x-2 border-b border-slate-200">
+        <div className="flex space-x-2 border-b border-slate-200 overflow-x-auto no-scrollbar touch-pan-x" style={{ WebkitOverflowScrolling: "touch" }}>
           <button
             onClick={() => setActiveTab("entities")}
-            className={`pb-2.5 px-4 text-sm font-bold border-b-2 transition-colors ${
+            className={`pb-2.5 px-4 text-sm font-bold border-b-2 transition-colors shrink-0 whitespace-nowrap ${
               activeTab === "entities"
                 ? "border-navy-950 text-navy-950"
                 : "border-transparent text-slate-500 hover:text-slate-800"
@@ -166,7 +166,7 @@ export default function SettingsPage() {
           </button>
           <button
             onClick={() => setActiveTab("branding")}
-            className={`pb-2.5 px-4 text-sm font-bold border-b-2 transition-colors ${
+            className={`pb-2.5 px-4 text-sm font-bold border-b-2 transition-colors shrink-0 whitespace-nowrap ${
               activeTab === "branding"
                 ? "border-navy-950 text-navy-950"
                 : "border-transparent text-slate-500 hover:text-slate-800"

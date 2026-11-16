@@ -419,17 +419,17 @@ export function ChequeModal({
         </div>
 
         {/* Tab Navigation */}
-        <div className="bg-slate-50 border-b border-slate-200 px-5 flex items-center space-x-2 text-xs">
+        <div className="bg-slate-50 border-b border-slate-200 px-4 sm:px-5 flex items-center space-x-2 text-xs overflow-x-auto no-scrollbar touch-pan-x select-none" style={{ WebkitOverflowScrolling: "touch" }}>
           <button
             type="button"
             onClick={() => setActiveTab("details")}
-            className={`py-3 px-3 border-b-2 font-semibold transition-colors flex items-center space-x-1.5 ${
+            className={`py-3 px-3 border-b-2 font-semibold transition-colors flex items-center space-x-1.5 shrink-0 whitespace-nowrap ${
               activeTab === "details"
                 ? "border-emerald-600 text-emerald-700 bg-white"
                 : "border-transparent text-slate-600 hover:text-slate-900"
             }`}
           >
-            <FileText className="w-3.5 h-3.5" />
+            <FileText className="w-3.5 h-3.5 shrink-0" />
             <span>Cheque Details</span>
           </button>
 
@@ -437,13 +437,13 @@ export function ChequeModal({
             <button
               type="button"
               onClick={() => setActiveTab("invoices")}
-              className={`py-3 px-3 border-b-2 font-semibold transition-colors flex items-center space-x-1.5 ${
+              className={`py-3 px-3 border-b-2 font-semibold transition-colors flex items-center space-x-1.5 shrink-0 whitespace-nowrap ${
                 activeTab === "invoices"
                   ? "border-emerald-600 text-emerald-700 bg-white"
                   : "border-transparent text-slate-600 hover:text-slate-900"
               }`}
             >
-              <Layers className="w-3.5 h-3.5" />
+              <Layers className="w-3.5 h-3.5 shrink-0" />
               <span>Invoice Allocation ({allocations.length})</span>
             </button>
           )}
@@ -451,26 +451,26 @@ export function ChequeModal({
           <button
             type="button"
             onClick={() => setActiveTab("images")}
-            className={`py-3 px-3 border-b-2 font-semibold transition-colors flex items-center space-x-1.5 ${
+            className={`py-3 px-3 border-b-2 font-semibold transition-colors flex items-center space-x-1.5 shrink-0 whitespace-nowrap ${
               activeTab === "images"
                 ? "border-emerald-600 text-emerald-700 bg-white"
                 : "border-transparent text-slate-600 hover:text-slate-900"
             }`}
           >
-            <ImageIcon className="w-3.5 h-3.5" />
+            <ImageIcon className="w-3.5 h-3.5 shrink-0" />
             <span>Front & Back Images {(imageFrontUrl || imageBackUrl) ? "✓" : ""}</span>
           </button>
 
           <button
             type="button"
             onClick={() => setActiveTab("reminders")}
-            className={`py-3 px-3 border-b-2 font-semibold transition-colors flex items-center space-x-1.5 ${
+            className={`py-3 px-3 border-b-2 font-semibold transition-colors flex items-center space-x-1.5 shrink-0 whitespace-nowrap ${
               activeTab === "reminders"
                 ? "border-emerald-600 text-emerald-700 bg-white"
                 : "border-transparent text-slate-600 hover:text-slate-900"
             }`}
           >
-            <Clock className="w-3.5 h-3.5" />
+            <Clock className="w-3.5 h-3.5 shrink-0" />
             <span>Reminder Settings</span>
           </button>
         </div>

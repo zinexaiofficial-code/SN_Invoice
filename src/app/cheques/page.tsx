@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useMemo, Suspense } from "react";
+import React, { useState, useEffect, useMemo, useRef, Suspense } from "react";
 import { useSearchParams } from "next/navigation";
 import {
   CreditCard,
@@ -23,6 +23,8 @@ import {
   Clock4,
   ExternalLink,
   ChevronDown,
+  ChevronLeft,
+  ChevronRight,
   Printer
 } from "lucide-react";
 import { storage } from "@/lib/storage";
@@ -96,6 +98,46 @@ function ChequesPageContent() {
   const [searchQuery, setSearchQuery] = useState(initialSearch);
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [bankFilter, setBankFilter] = useState<string>("all");
+
+  // Tabs Horizontal Scroll & Affordance State (Mobile & Desktop)
+  const tabsContainerRef = useRef<HTMLDivElement>(null);
+  const [canScrollLeft, setCanScrollLeft] = useState(false);
+  const [canScrollRight, setCanScrollRight] = useState(false);
+
+  const checkTabsScroll = () => {
+    const el = tabsContainerRef.current;
+    if (!el) return;
+    setCanScrollLeft(el.scrollLeft > 4);
+    setCanScrollRight(el.scrollLeft < el.scrollWidth - el.clientWidth - 4);
+  };
+
+  useEffect(() => {
+    checkTabsScroll();
+    const el = tabsContainerRef.current;
+    if (!el) return;
+    el.addEventListener("scroll", checkTabsScroll, { passive: true });
+    window.addEventListener("resize", checkTabsScroll);
+    return () => {
+      el.removeEventListener("scroll", checkTabsScroll);
+      window.removeEventListener("resize", checkTabsScroll);
+    };
+  }, [cheques.length, vendors.length]);
+
+  useEffect(() => {
+    if (!tabsContainerRef.current) return;
+    const activeEl = tabsContainerRef.current.querySelector<HTMLElement>(`[data-tab="${activeTab}"]`);
+    if (activeEl) {
+      activeEl.scrollIntoView({ behavior: "smooth", inline: "nearest", block: "nearest" });
+    }
+    const timer = setTimeout(checkTabsScroll, 350);
+    return () => clearTimeout(timer);
+  }, [activeTab]);
+
+  const scrollTabs = (direction: "left" | "right") => {
+    if (!tabsContainerRef.current) return;
+    const amount = direction === "left" ? -220 : 220;
+    tabsContainerRef.current.scrollBy({ left: amount, behavior: "smooth" });
+  };
 
   // Modals state
   const [isNewChequeModalOpen, setIsNewChequeModalOpen] = useState(false);
@@ -613,84 +655,125 @@ function ChequesPageContent() {
 
       {/* Tabs & Search Filter Bar */}
       <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
-        {/* Navigation Tabs */}
-        <div className="px-5 pt-3 border-b border-slate-200 bg-slate-50/70 flex flex-wrap items-center justify-between gap-3 text-xs">
-          <div className="flex items-center space-x-1 sm:space-x-2">
+        {/* Navigation Tabs with Full Mobile Horizontal Scrolling & Edge Controls */}
+        <div className="relative border-b border-slate-200 bg-slate-50/70 group">
+          {/* Left scroll button & gradient fade for mobile/desktop */}
+          {canScrollLeft && (
+            <div className="absolute left-0 top-0 bottom-0 z-10 flex items-center pr-4 pl-1 bg-gradient-to-r from-slate-100 via-slate-100/90 to-transparent pointer-events-none">
+              <button
+                type="button"
+                onClick={() => scrollTabs("left")}
+                className="pointer-events-auto p-1.5 rounded-full bg-white shadow-md border border-slate-200 text-slate-700 hover:text-slate-900 transition-all hover:scale-105 active:scale-95"
+                title="Scroll left"
+                aria-label="Scroll left tabs"
+              >
+                <ChevronLeft className="w-3.5 h-3.5" />
+              </button>
+            </div>
+          )}
+
+          {/* Right scroll button & gradient fade for mobile/desktop */}
+          {canScrollRight && (
+            <div className="absolute right-0 top-0 bottom-0 z-10 flex items-center pl-4 pr-1 bg-gradient-to-l from-slate-100 via-slate-100/90 to-transparent pointer-events-none">
+              <button
+                type="button"
+                onClick={() => scrollTabs("right")}
+                className="pointer-events-auto p-1.5 rounded-full bg-white shadow-md border border-slate-200 text-slate-700 hover:text-slate-900 transition-all hover:scale-105 active:scale-95"
+                title="Scroll right"
+                aria-label="Scroll right tabs"
+              >
+                <ChevronRight className="w-3.5 h-3.5" />
+              </button>
+            </div>
+          )}
+
+          {/* Horizontally Scrollable Tabs Bar */}
+          <div
+            ref={tabsContainerRef}
+            className="flex items-center space-x-1 sm:space-x-2 px-3 sm:px-5 pt-2 sm:pt-3 text-xs overflow-x-auto no-scrollbar scroll-smooth overscroll-x-contain touch-pan-x select-none"
+            style={{ WebkitOverflowScrolling: "touch" }}
+          >
             <button
+              data-tab="all"
               onClick={() => setActiveTab("all")}
               className={cn(
-                "py-3 px-3.5 border-b-2 font-bold transition-colors flex items-center space-x-1.5",
+                "py-3 px-3.5 border-b-2 font-bold transition-colors flex items-center space-x-1.5 shrink-0 whitespace-nowrap",
                 activeTab === "all"
                   ? "border-emerald-600 text-emerald-700 bg-white"
                   : "border-transparent text-slate-600 hover:text-slate-900"
               )}
             >
-              <CreditCard className="w-4 h-4" />
+              <CreditCard className="w-4 h-4 shrink-0" />
               <span>All Cheques ({cheques.length})</span>
             </button>
 
             <button
+              data-tab="incoming"
               onClick={() => setActiveTab("incoming")}
               className={cn(
-                "py-3 px-3.5 border-b-2 font-bold transition-colors flex items-center space-x-1.5",
+                "py-3 px-3.5 border-b-2 font-bold transition-colors flex items-center space-x-1.5 shrink-0 whitespace-nowrap",
                 activeTab === "incoming"
                   ? "border-emerald-600 text-emerald-700 bg-white"
                   : "border-transparent text-slate-600 hover:text-slate-900"
               )}
             >
-              <ArrowDownLeft className="w-4 h-4 text-emerald-600" />
+              <ArrowDownLeft className="w-4 h-4 text-emerald-600 shrink-0" />
               <span>Incoming Cheques ({cheques.filter((c) => c.type === "incoming").length})</span>
             </button>
 
             <button
+              data-tab="outgoing"
               onClick={() => setActiveTab("outgoing")}
               className={cn(
-                "py-3 px-3.5 border-b-2 font-bold transition-colors flex items-center space-x-1.5",
+                "py-3 px-3.5 border-b-2 font-bold transition-colors flex items-center space-x-1.5 shrink-0 whitespace-nowrap",
                 activeTab === "outgoing"
                   ? "border-emerald-600 text-emerald-700 bg-white"
                   : "border-transparent text-slate-600 hover:text-slate-900"
               )}
             >
-              <ArrowUpRight className="w-4 h-4 text-blue-600" />
+              <ArrowUpRight className="w-4 h-4 text-blue-600 shrink-0" />
               <span>Outgoing Cheques ({cheques.filter((c) => c.type === "outgoing").length})</span>
             </button>
 
             <button
+              data-tab="action_required"
               onClick={() => setActiveTab("action_required")}
               className={cn(
-                "py-3 px-3.5 border-b-2 font-bold transition-colors flex items-center space-x-1.5",
+                "py-3 px-3.5 border-b-2 font-bold transition-colors flex items-center space-x-1.5 shrink-0 whitespace-nowrap",
                 activeTab === "action_required"
                   ? "border-rose-600 text-rose-700 bg-white"
                   : "border-transparent text-slate-600 hover:text-slate-900"
               )}
             >
-              <AlertTriangle className="w-4 h-4 text-rose-600" />
+              <AlertTriangle className="w-4 h-4 text-rose-600 shrink-0" />
               <span>Action Required ({kpis.overdueCount + kpis.returnedCount})</span>
             </button>
 
             <button
+              data-tab="calendar"
               onClick={() => setActiveTab("calendar")}
               className={cn(
-                "py-3 px-3.5 border-b-2 font-bold transition-colors flex items-center space-x-1.5",
+                "py-3 px-3.5 border-b-2 font-bold transition-colors flex items-center space-x-1.5 shrink-0 whitespace-nowrap",
                 activeTab === "calendar"
                   ? "border-emerald-600 text-emerald-700 bg-white"
                   : "border-transparent text-slate-600 hover:text-slate-900"
               )}
             >
-              <Calendar className="w-4 h-4" />
+              <Calendar className="w-4 h-4 shrink-0" />
               <span>Calendar View</span>
             </button>
 
             <button
+              data-tab="vendors"
               onClick={() => setActiveTab("vendors")}
               className={cn(
-                "py-3 px-3.5 border-b-2 font-bold transition-colors flex items-center space-x-1.5",
+                "py-3 px-3.5 border-b-2 font-bold transition-colors flex items-center space-x-1.5 shrink-0 whitespace-nowrap",
                 activeTab === "vendors"
                   ? "border-indigo-600 text-indigo-700 bg-white"
                   : "border-transparent text-slate-600 hover:text-slate-900"
               )}
             >
-              <Building2 className="w-4 h-4 text-indigo-600" />
+              <Building2 className="w-4 h-4 text-indigo-600 shrink-0" />
               <span>Vendors ({vendors.length})</span>
             </button>
           </div>
