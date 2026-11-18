@@ -13,6 +13,14 @@ import {
   ChequePrintTemplate,
   ChequePrinterProfile,
   ChequePrintJob,
+  MediaSchedule,
+  MediaScheduleItem,
+  MediaScheduleAllocation,
+  MediaType,
+  MediaScheduleStatus,
+  MediaPricingMode,
+  MediaPdfOrientation,
+  MediaPdfPaperSize,
 } from '@/types';
 import {
   DEFAULT_CHEQUE_TEMPLATES,
@@ -36,6 +44,7 @@ interface BootstrapData {
   cheques: Cheque[];
   vendors: Vendor[];
   branding: BrandingSettings;
+  mediaSchedules?: MediaSchedule[];
 }
 
 // In-memory fallback cache for development/build when Postgres is not directly reachable
@@ -162,6 +171,15 @@ export async function getBootstrapData(): Promise<BootstrapData> {
     const brandingRes = await pool.query('SELECT * FROM branding_settings WHERE id = $1', ['default']);
     let branding: BrandingSettings = brandingRes.rows[0] ? mapBrandingRow(brandingRes.rows[0]) : { ...INITIAL_BRANDING };
 
+    // 9. Media Schedules
+    let mediaSchedules: MediaSchedule[] = [];
+    try {
+      mediaSchedules = await getAllMediaSchedules();
+    } catch (e) {
+      console.error('Failed to get media schedules in bootstrap:', e);
+      mediaSchedules = [];
+    }
+
     return {
       billingEntities,
       clients,
@@ -171,6 +189,7 @@ export async function getBootstrapData(): Promise<BootstrapData> {
       cheques,
       vendors,
       branding,
+      mediaSchedules,
     };
   } catch (err) {
     console.error('Failed to get bootstrap data from Postgres:', err);
@@ -691,9 +710,9 @@ export async function saveInvoice(invoice: Invoice): Promise<Invoice> {
         delivery_confirmed_at, subject_to_vat, vat_rate, subtotal, vat_amount, grand_total,
         paid_amount, outstanding_balance, advance_percentage, advance_amount, notes,
         client_snapshot, billing_entity_snapshot, verification_token, verification_status,
-        approval_snapshot, pdf_layout, updated_at
+        approval_snapshot, pdf_layout, media_schedule_id, media_schedule_number, updated_at
       ) VALUES (
-        $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28, $29, NOW()
+        $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28, $29, $30, $31, NOW()
       )
       ON CONFLICT (id) DO UPDATE SET
         invoice_number = EXCLUDED.invoice_number,
@@ -724,6 +743,8 @@ export async function saveInvoice(invoice: Invoice): Promise<Invoice> {
         verification_status = EXCLUDED.verification_status,
         approval_snapshot = EXCLUDED.approval_snapshot,
         pdf_layout = EXCLUDED.pdf_layout,
+        media_schedule_id = EXCLUDED.media_schedule_id,
+        media_schedule_number = EXCLUDED.media_schedule_number,
         updated_at = NOW()
       RETURNING *;
     `;
@@ -758,6 +779,8 @@ export async function saveInvoice(invoice: Invoice): Promise<Invoice> {
       invoice.verificationStatus || 'valid',
       invoice.approval ? JSON.stringify(invoice.approval) : (invoice as any).approvalSnapshot ? JSON.stringify((invoice as any).approvalSnapshot) : null,
       invoice.pdfLayout ? JSON.stringify(invoice.pdfLayout) : null,
+      invoice.mediaScheduleId || null,
+      invoice.mediaScheduleNumber || null,
     ];
 
     await client.query(invQuery, invValues);
@@ -1448,6 +1471,8 @@ function mapInvoiceRow(r: any, items: InvoiceItem[], payments: any[]): Invoice {
     verificationStatus: r.verification_status || 'valid',
     approval: r.approval_snapshot || undefined,
     pdfLayout: r.pdf_layout || undefined,
+    mediaScheduleId: r.media_schedule_id || undefined,
+    mediaScheduleNumber: r.media_schedule_number || undefined,
     items,
     payments,
     shareHistory: [],
@@ -1830,4 +1855,551 @@ export async function getChequePrintJobs(chequeId?: string): Promise<ChequePrint
     console.error('Error fetching print jobs:', err);
     return [];
   }
+}
+
+// -----------------------------------------------------------------------------
+// MEDIA SCHEDULING MANAGEMENT MODULE
+// -----------------------------------------------------------------------------
+
+function mapMediaScheduleRow(r: any, items: MediaScheduleItem[] = []): MediaSchedule {
+  return {
+    id: r.id,
+    scheduleNumber: r.schedule_number,
+    billingEntityId: r.billing_entity_id,
+    clientId: r.client_id,
+    mediaChannelId: r.media_channel_id || undefined,
+    mediaChannelName: r.media_channel_name,
+    mediaType: (r.media_type || 'tv') as MediaType,
+    campaignName: r.campaign_name,
+    startDate: r.start_date ? new Date(r.start_date).toISOString().split('T')[0] : '',
+    endDate: r.end_date ? new Date(r.end_date).toISOString().split('T')[0] : '',
+    status: (r.status || 'draft') as MediaScheduleStatus,
+    pricingMode: (r.pricing_mode || 'package') as MediaPricingMode,
+    totalSpots: Number(r.total_spots) || 0,
+    packageAmount: Number(r.package_amount) || 0,
+    ratePerSpot: Number(r.rate_per_spot) || 0,
+    grossAmount: Number(r.gross_amount) || 0,
+    discountAmount: Number(r.discount_amount) || 0,
+    taxApplicable: Boolean(r.tax_applicable),
+    taxRate: Number(r.tax_rate) || 0,
+    taxAmount: Number(r.tax_amount) || 0,
+    netTotal: Number(r.net_total) || 0,
+    currency: r.currency || 'LKR',
+    specialNotes: r.special_notes || '',
+    termsAndConditions: r.terms_and_conditions || '',
+    pdfOrientation: (r.pdf_orientation || 'landscape') as MediaPdfOrientation,
+    pdfPaperSize: (r.pdf_paper_size || 'A4') as MediaPdfPaperSize,
+    pdfTemplateSettings: typeof r.pdf_template_settings === 'string' ? JSON.parse(r.pdf_template_settings) : (r.pdf_template_settings || {}),
+    convertedToInvoiceId: r.converted_to_invoice_id || undefined,
+    convertedToInvoiceNumber: r.converted_to_invoice_number || undefined,
+    convertedAt: r.converted_at ? new Date(r.converted_at).toISOString() : undefined,
+    clientSnapshot: typeof r.client_snapshot === 'string' ? JSON.parse(r.client_snapshot) : (r.client_snapshot || undefined),
+    billingEntitySnapshot: typeof r.billing_entity_snapshot === 'string' ? JSON.parse(r.billing_entity_snapshot) : (r.billing_entity_snapshot || undefined),
+    items,
+    createdAt: r.created_at ? new Date(r.created_at).toISOString() : new Date().toISOString(),
+    updatedAt: r.updated_at ? new Date(r.updated_at).toISOString() : new Date().toISOString(),
+  };
+}
+
+export async function getAllMediaSchedules(): Promise<MediaSchedule[]> {
+  const pool = getDbPool();
+  if (!pool) return (getFallbackData() as any).mediaSchedules || [];
+
+  try {
+    const schedulesRes = await pool.query('SELECT * FROM media_schedules ORDER BY start_date DESC, created_at DESC');
+    const itemsRes = await pool.query('SELECT * FROM media_schedule_items ORDER BY display_order ASC, created_at ASC');
+    const allocsRes = await pool.query('SELECT * FROM media_schedule_allocations ORDER BY date ASC');
+
+    const allocsByItem: Record<string, Record<string, number>> = {};
+    for (const a of allocsRes.rows) {
+      if (!allocsByItem[a.item_id]) allocsByItem[a.item_id] = {};
+      const d = a.date ? new Date(a.date).toISOString().split('T')[0] : '';
+      if (d) allocsByItem[a.item_id][d] = Number(a.spots) || 0;
+    }
+
+    const itemsBySchedule: Record<string, MediaScheduleItem[]> = {};
+    for (const it of itemsRes.rows) {
+      if (!itemsBySchedule[it.schedule_id]) itemsBySchedule[it.schedule_id] = [];
+      const allocs = allocsByItem[it.id] || {};
+      const spotSum = Object.values(allocs).reduce((sum, n) => sum + n, 0);
+      const totalSpots = it.total_spots || spotSum;
+      itemsBySchedule[it.schedule_id].push({
+        id: it.id,
+        scheduleId: it.schedule_id,
+        programmeName: it.programme_name,
+        timeSlot: it.time_slot || '',
+        duration: it.duration || '',
+        adType: it.ad_type || 'Spot',
+        ratePerSpot: Number(it.rate_per_spot) || 0,
+        totalSpots,
+        totalAmount: Number(it.total_amount) || (totalSpots * (Number(it.rate_per_spot) || 0)),
+        displayOrder: it.display_order || 0,
+        allocations: allocs,
+      });
+    }
+
+    return schedulesRes.rows.map((row) =>
+      mapMediaScheduleRow(row, itemsBySchedule[row.id] || [])
+    );
+  } catch (err) {
+    console.error('Error fetching media schedules:', err);
+    return [];
+  }
+}
+
+export async function getMediaScheduleById(id: string): Promise<MediaSchedule | null> {
+  const pool = getDbPool();
+  if (!pool) {
+    const list = (getFallbackData() as any).mediaSchedules || [];
+    return list.find((s: any) => s.id === id) || null;
+  }
+
+  try {
+    const schedRes = await pool.query('SELECT * FROM media_schedules WHERE id = $1', [id]);
+    if (!schedRes.rows.length) return null;
+
+    const itemsRes = await pool.query('SELECT * FROM media_schedule_items WHERE schedule_id = $1 ORDER BY display_order ASC, created_at ASC', [id]);
+    const allocsRes = await pool.query('SELECT * FROM media_schedule_allocations WHERE schedule_id = $1 ORDER BY date ASC', [id]);
+
+    const allocsByItem: Record<string, Record<string, number>> = {};
+    for (const a of allocsRes.rows) {
+      if (!allocsByItem[a.item_id]) allocsByItem[a.item_id] = {};
+      const d = a.date ? new Date(a.date).toISOString().split('T')[0] : '';
+      if (d) allocsByItem[a.item_id][d] = Number(a.spots) || 0;
+    }
+
+    const items: MediaScheduleItem[] = itemsRes.rows.map((it) => {
+      const allocs = allocsByItem[it.id] || {};
+      const spotSum = Object.values(allocs).reduce((sum, n) => sum + n, 0);
+      const totalSpots = it.total_spots || spotSum;
+      return {
+        id: it.id,
+        scheduleId: it.schedule_id,
+        programmeName: it.programme_name,
+        timeSlot: it.time_slot || '',
+        duration: it.duration || '',
+        adType: it.ad_type || 'Spot',
+        ratePerSpot: Number(it.rate_per_spot) || 0,
+        totalSpots,
+        totalAmount: Number(it.total_amount) || (totalSpots * (Number(it.rate_per_spot) || 0)),
+        displayOrder: it.display_order || 0,
+        allocations: allocs,
+      };
+    });
+
+    return mapMediaScheduleRow(schedRes.rows[0], items);
+  } catch (err) {
+    console.error('Error fetching media schedule by id:', err);
+    return null;
+  }
+}
+
+export async function saveMediaSchedule(schedule: MediaSchedule): Promise<MediaSchedule> {
+  const pool = getDbPool();
+  const scheduleId = (schedule.id && String(schedule.id).trim()) || crypto.randomUUID();
+
+  // Calculate spots and amounts
+  const items = (schedule.items || []).map((it, idx) => {
+    const allocs = it.allocations || {};
+    const totalSpots = Object.values(allocs).reduce((sum, n) => sum + (Number(n) || 0), 0) || it.totalSpots || 0;
+    const rate = Number(it.ratePerSpot) || 0;
+    const totalAmount = it.totalAmount || (totalSpots * rate);
+    return {
+      ...it,
+      id: it.id || crypto.randomUUID(),
+      scheduleId,
+      totalSpots,
+      totalAmount,
+      displayOrder: it.displayOrder ?? idx,
+      allocations: allocs,
+    };
+  });
+
+  const grandTotalSpots = items.reduce((acc, it) => acc + it.totalSpots, 0);
+
+  let grossAmount = 0;
+  if (schedule.pricingMode === 'package') {
+    grossAmount = Number(schedule.packageAmount) || Number(schedule.grossAmount) || 0;
+  } else if (schedule.pricingMode === 'spot_rate') {
+    grossAmount = items.reduce((acc, it) => acc + (it.totalAmount || (it.totalSpots * (it.ratePerSpot || schedule.ratePerSpot || 0))), 0);
+  } else {
+    grossAmount = 0;
+  }
+
+  const discountAmount = Number(schedule.discountAmount) || 0;
+  const taxableBase = Math.max(0, grossAmount - discountAmount);
+  const taxApplicable = Boolean(schedule.taxApplicable);
+  const taxRate = taxApplicable ? (Number(schedule.taxRate) || 18) : 0;
+  const taxAmount = taxApplicable ? Math.round(taxableBase * (taxRate / 100)) : 0;
+  const netTotal = taxableBase + taxAmount;
+
+  if (!pool) {
+    const data = getFallbackData() as any;
+    if (!data.mediaSchedules) data.mediaSchedules = [];
+    const updated: MediaSchedule = {
+      ...schedule,
+      id: scheduleId,
+      totalSpots: grandTotalSpots,
+      grossAmount,
+      taxAmount,
+      netTotal,
+      items,
+      updatedAt: new Date().toISOString(),
+    };
+    const idx = data.mediaSchedules.findIndex((s: any) => s.id === scheduleId);
+    if (idx >= 0) data.mediaSchedules[idx] = updated;
+    else data.mediaSchedules.push(updated);
+    writeFallbackDb(data);
+    return updated;
+  }
+
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+
+    // Generate schedule number if missing
+    let scheduleNumber = schedule.scheduleNumber?.trim();
+    if (!scheduleNumber) {
+      const year = new Date().getFullYear();
+      const countRes = await client.query('SELECT COUNT(*) FROM media_schedules');
+      const seq = Number(countRes.rows[0].count) + 1;
+      scheduleNumber = `SCH-${year}-${String(seq).padStart(4, '0')}`;
+    }
+
+    const schedQuery = `
+      INSERT INTO media_schedules (
+        id, schedule_number, billing_entity_id, client_id, media_channel_id,
+        media_channel_name, media_type, campaign_name, start_date, end_date,
+        status, pricing_mode, total_spots, package_amount, rate_per_spot,
+        gross_amount, discount_amount, tax_applicable, tax_rate, tax_amount,
+        net_total, currency, special_notes, terms_and_conditions, pdf_orientation,
+        pdf_paper_size, pdf_template_settings, converted_to_invoice_id,
+        converted_to_invoice_number, converted_at, client_snapshot,
+        billing_entity_snapshot, updated_at
+      ) VALUES (
+        $1, $2, $3, $4, $5, $6, $7, $8, $9, $10,
+        $11, $12, $13, $14, $15, $16, $17, $18, $19, $20,
+        $21, $22, $23, $24, $25, $26, $27, $28, $29, $30,
+        $31, $32, NOW()
+      )
+      ON CONFLICT (id) DO UPDATE SET
+        schedule_number = EXCLUDED.schedule_number,
+        billing_entity_id = EXCLUDED.billing_entity_id,
+        client_id = EXCLUDED.client_id,
+        media_channel_id = EXCLUDED.media_channel_id,
+        media_channel_name = EXCLUDED.media_channel_name,
+        media_type = EXCLUDED.media_type,
+        campaign_name = EXCLUDED.campaign_name,
+        start_date = EXCLUDED.start_date,
+        end_date = EXCLUDED.end_date,
+        status = EXCLUDED.status,
+        pricing_mode = EXCLUDED.pricing_mode,
+        total_spots = EXCLUDED.total_spots,
+        package_amount = EXCLUDED.package_amount,
+        rate_per_spot = EXCLUDED.rate_per_spot,
+        gross_amount = EXCLUDED.gross_amount,
+        discount_amount = EXCLUDED.discount_amount,
+        tax_applicable = EXCLUDED.tax_applicable,
+        tax_rate = EXCLUDED.tax_rate,
+        tax_amount = EXCLUDED.tax_amount,
+        net_total = EXCLUDED.net_total,
+        currency = EXCLUDED.currency,
+        special_notes = EXCLUDED.special_notes,
+        terms_and_conditions = EXCLUDED.terms_and_conditions,
+        pdf_orientation = EXCLUDED.pdf_orientation,
+        pdf_paper_size = EXCLUDED.pdf_paper_size,
+        pdf_template_settings = EXCLUDED.pdf_template_settings,
+        converted_to_invoice_id = EXCLUDED.converted_to_invoice_id,
+        converted_to_invoice_number = EXCLUDED.converted_to_invoice_number,
+        converted_at = EXCLUDED.converted_at,
+        client_snapshot = EXCLUDED.client_snapshot,
+        billing_entity_snapshot = EXCLUDED.billing_entity_snapshot,
+        updated_at = NOW()
+      RETURNING *;
+    `;
+
+    const schedValues = [
+      scheduleId,
+      scheduleNumber,
+      schedule.billingEntityId,
+      schedule.clientId,
+      schedule.mediaChannelId || null,
+      schedule.mediaChannelName || 'General Broadcast',
+      schedule.mediaType || 'tv',
+      schedule.campaignName || 'Campaign Schedule',
+      schedule.startDate,
+      schedule.endDate,
+      schedule.status || 'draft',
+      schedule.pricingMode || 'package',
+      grandTotalSpots,
+      Number(schedule.packageAmount) || 0,
+      Number(schedule.ratePerSpot) || 0,
+      grossAmount,
+      discountAmount,
+      taxApplicable,
+      taxRate,
+      taxAmount,
+      netTotal,
+      schedule.currency || 'LKR',
+      schedule.specialNotes || '',
+      schedule.termsAndConditions || '',
+      schedule.pdfOrientation || 'landscape',
+      schedule.pdfPaperSize || 'A4',
+      JSON.stringify(schedule.pdfTemplateSettings || {}),
+      schedule.convertedToInvoiceId || null,
+      schedule.convertedToInvoiceNumber || null,
+      schedule.convertedAt ? new Date(schedule.convertedAt) : null,
+      JSON.stringify(schedule.clientSnapshot || {}),
+      JSON.stringify(schedule.billingEntitySnapshot || {}),
+    ];
+
+    await client.query(schedQuery, schedValues);
+
+    // Atomic replace of items and allocations
+    await client.query('DELETE FROM media_schedule_items WHERE schedule_id = $1', [scheduleId]);
+
+    for (let i = 0; i < items.length; i++) {
+      const it = items[i];
+      await client.query(
+        `INSERT INTO media_schedule_items (
+          id, schedule_id, programme_name, time_slot, duration, ad_type,
+          rate_per_spot, total_spots, total_amount, display_order, created_at
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, NOW())`,
+        [
+          it.id,
+          scheduleId,
+          it.programmeName,
+          it.timeSlot || '',
+          it.duration || '',
+          it.adType || 'Spot',
+          it.ratePerSpot || 0,
+          it.totalSpots || 0,
+          it.totalAmount || 0,
+          i,
+        ]
+      );
+
+      const dates = Object.keys(it.allocations || {});
+      for (const d of dates) {
+        const spotCount = Number(it.allocations![d]) || 0;
+        if (spotCount > 0) {
+          await client.query(
+            `INSERT INTO media_schedule_allocations (
+              id, schedule_id, item_id, date, spots, created_at
+            ) VALUES ($1, $2, $3, $4, $5, NOW())`,
+            [
+              crypto.randomUUID(),
+              scheduleId,
+              it.id,
+              d,
+              spotCount,
+            ]
+          );
+        }
+      }
+    }
+
+    await client.query('COMMIT');
+
+    return {
+      ...schedule,
+      id: scheduleId,
+      scheduleNumber,
+      totalSpots: grandTotalSpots,
+      grossAmount,
+      taxAmount,
+      netTotal,
+      items,
+      updatedAt: new Date().toISOString(),
+    };
+  } catch (err) {
+    await client.query('ROLLBACK');
+    console.error('Failed to save media schedule transactionally:', err);
+    throw err;
+  } finally {
+    client.release();
+  }
+}
+
+export async function deleteMediaSchedule(id: string): Promise<boolean> {
+  const pool = getDbPool();
+  if (!pool) {
+    const data = getFallbackData() as any;
+    if (data.mediaSchedules) {
+      data.mediaSchedules = data.mediaSchedules.filter((s: any) => s.id !== id);
+      writeFallbackDb(data);
+    }
+    return true;
+  }
+
+  try {
+    await pool.query('DELETE FROM media_schedules WHERE id = $1', [id]);
+    return true;
+  } catch (err) {
+    console.error('Failed to delete media schedule:', err);
+    return false;
+  }
+}
+
+export async function convertScheduleToInvoice(
+  scheduleId: string,
+  mode: 'itemized' | 'package' = 'package',
+  options?: {
+    invoiceDate?: string;
+    dueDate?: string;
+    notes?: string;
+  }
+): Promise<Invoice> {
+  const schedule = await getMediaScheduleById(scheduleId);
+  if (!schedule) {
+    throw new Error('Schedule not found');
+  }
+
+  if (schedule.convertedToInvoiceId) {
+    const allInvoices = await getAllInvoices();
+    const existing = allInvoices.find(i => i.id === schedule.convertedToInvoiceId);
+    if (existing) {
+      return existing;
+    }
+  }
+
+  const [entities, clients] = await Promise.all([
+    getAllBillingEntities(),
+    getAllClients(),
+  ]);
+
+  const entity = entities.find(e => e.id === schedule.billingEntityId) || entities[0];
+  const client = clients.find(c => c.id === schedule.clientId) || clients[0];
+
+  if (!entity || !client) {
+    throw new Error('Billing Entity or Client not found for schedule conversion');
+  }
+
+  const prefix = entity.prefix || (entity as any).invoicePrefix || 'INV';
+  const nextSeq = entity.currentSequence || entity.startingSequence || (entity as any).invoiceNextNumber || 1;
+  const invNumber = `${prefix}-${nextSeq}`;
+
+  const invDate = options?.invoiceDate || new Date().toISOString().split('T')[0];
+  const dueDays = entity.defaultDueDays || 7;
+  const dueDateObj = new Date(invDate);
+  dueDateObj.setDate(dueDateObj.getDate() + dueDays);
+  const invDueDate = options?.dueDate || dueDateObj.toISOString().split('T')[0];
+
+  const invoiceItems: InvoiceItem[] = [];
+
+  if (mode === 'package') {
+    const packageAmount = schedule.packageAmount || schedule.grossAmount || 0;
+    invoiceItems.push({
+      id: crypto.randomUUID(),
+      invoiceId: '',
+      serviceName: `${schedule.mediaType.toUpperCase()} Advertising Broadcast Package - ${schedule.mediaChannelName}`,
+      description: `Campaign: ${schedule.campaignName} | Media Channel: ${schedule.mediaChannelName} | Broadcast Period: ${schedule.startDate} to ${schedule.endDate} | Total Transmissions: ${schedule.totalSpots} spots. ${schedule.specialNotes ? `(${schedule.specialNotes})` : ''}`.trim(),
+      quantity: 1,
+      unitPrice: packageAmount,
+      lineTotal: packageAmount,
+      mediaChannel: schedule.mediaChannelName,
+      servicePeriod: `${schedule.startDate} to ${schedule.endDate}`,
+      advertisingPeriod: `${schedule.startDate} to ${schedule.endDate}`,
+      referenceType: 'schedule' as any,
+      referenceNumber: schedule.scheduleNumber,
+      sortOrder: 0,
+    });
+  } else {
+    schedule.items.forEach((item, index) => {
+      const spots = item.totalSpots || 0;
+      const rate = item.ratePerSpot || (schedule.totalSpots > 0 ? (schedule.grossAmount / schedule.totalSpots) : 0);
+      const amount = item.totalAmount || (spots * rate);
+
+      invoiceItems.push({
+        id: crypto.randomUUID(),
+        invoiceId: '',
+        serviceName: `${schedule.mediaChannelName} - ${item.programmeName}`,
+        description: `Time: ${item.timeSlot || 'Standard'} | Duration: ${item.duration || 'Standard'} | Type: ${item.adType || 'Commercial Spot'} | Scheduled Transmissions: ${spots} spots | Broadcast Period: ${schedule.startDate} to ${schedule.endDate}`,
+        quantity: spots,
+        unitPrice: rate,
+        lineTotal: amount,
+        mediaChannel: schedule.mediaChannelName,
+        servicePeriod: `${schedule.startDate} to ${schedule.endDate}`,
+        advertisingPeriod: `${schedule.startDate} to ${schedule.endDate}`,
+        referenceType: 'schedule' as any,
+        referenceNumber: schedule.scheduleNumber,
+        sortOrder: index,
+      });
+    });
+  }
+
+  const subtotal = invoiceItems.reduce((acc, it) => acc + (it.lineTotal || 0), 0);
+  const vatRate = schedule.taxApplicable ? (schedule.taxRate || 18) : 0;
+  const vatAmount = schedule.taxApplicable ? Math.round(subtotal * (vatRate / 100)) : 0;
+  const grandTotal = subtotal + vatAmount;
+
+  const newInvoice: Invoice = {
+    id: crypto.randomUUID(),
+    invoiceNumber: invNumber,
+    clientId: client.id,
+    billingEntityId: entity.id,
+    templateKey: (entity.defaultInvoiceTemplate as any) || 'standard',
+    status: 'draft',
+    sentStatus: 'not_sent',
+    paymentStatus: 'unpaid',
+    invoiceDate: invDate,
+    dueDate: invDueDate,
+    subtotal,
+    vatApplicable: schedule.taxApplicable,
+    vatRate,
+    vatAmount,
+    grandTotal,
+    totalPaid: 0,
+    outstandingBalance: grandTotal,
+    advancePercentage: 0,
+    advanceAmount: 0,
+    specialNotes: options?.notes || schedule.specialNotes || entity.invoiceNotes || '',
+    mediaScheduleId: schedule.id,
+    mediaScheduleNumber: schedule.scheduleNumber,
+    clientSnapshot: {
+      id: client.id,
+      companyName: client.name || (client as any).companyName,
+      address: client.address || '',
+      email: client.email || '',
+      phone: client.mobile || (client as any).phone || '',
+      vatNumber: client.vatNumber || '',
+    } as any,
+    billingSnapshot: {
+      id: entity.id,
+      name: entity.name,
+      legalName: entity.legalName || entity.name,
+      address: entity.address || '',
+      phone: entity.phone || '',
+      email: entity.email || '',
+      vatNumber: entity.vatNumber || '',
+      logoUrl: entity.logoUrl || '',
+      bankName: entity.bankName || '',
+      bankAccountNumber: entity.accountNumber || (entity as any).bankAccountNumber || '',
+      bankBranch: entity.branch || (entity as any).bankBranch || '',
+      bankAccountName: entity.accountName || (entity as any).bankAccountName || '',
+    } as any,
+    items: invoiceItems,
+    payments: [],
+    shareHistory: [],
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+  };
+
+  const savedInvoice = await saveInvoice(newInvoice);
+
+  const poolUpdate = getDbPool();
+  if (poolUpdate) {
+    await poolUpdate.query(
+      `UPDATE media_schedules
+       SET status = 'converted',
+           converted_to_invoice_id = $1,
+           converted_to_invoice_number = $2,
+           converted_at = NOW(),
+           updated_at = NOW()
+       WHERE id = $3`,
+      [savedInvoice.id, savedInvoice.invoiceNumber, schedule.id]
+    );
+  }
+
+  return savedInvoice;
 }

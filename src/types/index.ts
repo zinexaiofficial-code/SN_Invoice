@@ -115,6 +115,7 @@ export interface BillingEntity {
   id: string;
   name: string; // Legal registered business name
   displayName?: string; // Trading / brand display name
+  legalName?: string;
   address: string;
   addressLine1?: string;
   addressLine2?: string;
@@ -180,10 +181,13 @@ export interface BillingEntity {
 export interface Client {
   id: string;
   name: string;
+  companyName?: string; // Optional alias for name
   code: string;
+  clientCode?: string;
   address: string;
   contactPerson?: string;
   mobile?: string;
+  phone?: string; // Optional alias for mobile
   whatsapp?: string;
   email?: string;
   vatNumber?: string;
@@ -291,6 +295,7 @@ export interface InvoiceItem {
   referenceNumber?: string;
   description: string;
   servicePeriod?: string;
+  advertisingPeriod?: string;
   quantity: number;
   unitPrice: number;
   lineTotal: number;
@@ -328,6 +333,7 @@ export interface ClientSnapshot {
   vatNumber?: string;
   contactPerson?: string;
   mobile?: string;
+  phone?: string; // Optional alias for mobile
   whatsapp?: string;
   email?: string;
 }
@@ -428,6 +434,10 @@ export interface Invoice {
   mediaRefDisplay?: 'separate' | 'inline';
   payments: Payment[];
   shareHistory: InvoiceShareRecord[];
+
+  // Media Schedule link
+  mediaScheduleId?: string;
+  mediaScheduleNumber?: string;
 
   // Digital Approval & Verification
   signatureFormat?: InvoicePdfFormat;
@@ -690,5 +700,117 @@ export interface Vendor {
 }
 
 export * from './chequePrint';
+
+// ==========================================
+// MEDIA SCHEDULING MANAGEMENT MODULE TYPES
+// ==========================================
+
+export type MediaScheduleStatus = 'draft' | 'confirmed' | 'active' | 'completed' | 'converted' | 'cancelled';
+export type MediaPricingMode = 'package' | 'spot_rate' | 'not_set';
+export type MediaType = 'tv' | 'radio' | 'digital' | 'print' | 'outdoor';
+export type MediaPdfOrientation = 'landscape' | 'portrait';
+export type MediaPdfPaperSize = 'A4' | 'A3';
+
+export interface MediaScheduleAllocation {
+  id?: string;
+  scheduleId?: string;
+  itemId?: string;
+  date: string; // YYYY-MM-DD
+  spots: number;
+  remarks?: string;
+}
+
+export interface MediaScheduleItem {
+  id: string;
+  scheduleId?: string;
+  programmeName: string;
+  timeSlot?: string;
+  duration?: string;
+  adType?: string;
+  ratePerSpot?: number;
+  totalSpots: number;
+  totalAmount?: number;
+  displayOrder?: number;
+  allocations?: Record<string, number>; // date -> spots map
+}
+
+export interface MediaScheduleTemplateSettings {
+  showLogo?: boolean;
+  primaryColor?: string;
+  secondaryColor?: string;
+  headerTitle?: string;
+  agencyName?: string;
+  showSignatures?: boolean;
+  preparedByName?: string;
+  approvedByName?: string;
+  clientContactName?: string;
+  showDailyTotals?: boolean;
+  showWeekDayLetters?: boolean;
+  showNotes?: boolean;
+  fontSize?: 'compact' | 'standard' | 'large';
+  customNotes?: string;
+}
+
+export interface MediaSchedule {
+  id: string;
+  scheduleNumber: string;
+  billingEntityId: string;
+  clientId: string;
+  mediaChannelId?: string;
+  mediaChannelName: string;
+  mediaType: MediaType;
+  campaignName: string;
+  startDate: string; // YYYY-MM-DD
+  endDate: string; // YYYY-MM-DD
+  status: MediaScheduleStatus;
+  pricingMode: MediaPricingMode;
+  totalSpots: number;
+  packageAmount: number;
+  ratePerSpot: number;
+  grossAmount: number;
+  discountAmount: number;
+  taxApplicable: boolean;
+  taxRate: number;
+  taxAmount: number;
+  netTotal: number;
+  currency: string;
+  specialNotes?: string;
+  termsAndConditions?: string;
+  pdfOrientation: MediaPdfOrientation;
+  pdfPaperSize: MediaPdfPaperSize;
+  pdfTemplateSettings?: Partial<MediaScheduleTemplateSettings>;
+  convertedToInvoiceId?: string;
+  convertedToInvoiceNumber?: string;
+  convertedAt?: string;
+  clientSnapshot?: Partial<Client>;
+  billingEntitySnapshot?: Partial<BillingEntity>;
+  items: MediaScheduleItem[];
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface MediaScheduleFilter {
+  search?: string;
+  billingEntityId?: string;
+  clientId?: string;
+  mediaChannel?: string;
+  mediaType?: string;
+  status?: string;
+  startDate?: string;
+  endDate?: string;
+}
+
+export interface MediaScheduleKPIs {
+  totalSchedules: number;
+  draftCount: number;
+  confirmedCount: number;
+  activeCount: number;
+  completedCount: number;
+  convertedCount: number;
+  totalScheduledValue: number;
+  uninvoicedScheduledValue: number;
+  totalSpots: number;
+}
+
 
 

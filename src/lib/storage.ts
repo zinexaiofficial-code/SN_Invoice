@@ -28,7 +28,8 @@ import {
   ServiceCategory,
   AdvertisingReferenceType,
   UserRole,
-  Vendor
+  Vendor,
+  MediaSchedule
 } from '@/types';
 import { generateVerificationToken, computeCanonicalInvoiceHash } from '@/lib/crypto';
 import { formatColomboDateTime, formatDate } from '@/lib/utils';
@@ -1225,7 +1226,8 @@ const STORAGE_KEYS = {
   CHEQUES: 'sn_cheques_v1',
   NOTIFICATION_PREFS: 'sn_notification_preferences_v1',
   MEDIA_CHANNELS: 'sn_media_channels_v1',
-  VENDORS: 'sn_vendors_v1'
+  VENDORS: 'sn_vendors_v1',
+  MEDIA_SCHEDULES: 'sn_media_schedules_v1'
 };
 
 class StorageService {
@@ -2846,7 +2848,7 @@ class StorageService {
    */
   updateFromBootstrap(data: any): void {
     if (!this.isBrowser() || !data) return;
-    const { billingEntities, clients, services, mediaChannels, invoices, cheques, vendors, branding } = data;
+    const { billingEntities, clients, services, mediaChannels, invoices, cheques, vendors, branding, mediaSchedules } = data;
     if (billingEntities !== undefined) localStorage.setItem(STORAGE_KEYS.BILLING_ENTITIES, JSON.stringify(billingEntities));
     if (clients !== undefined) localStorage.setItem(STORAGE_KEYS.CLIENTS, JSON.stringify(clients));
     if (services !== undefined) localStorage.setItem(STORAGE_KEYS.SERVICES, JSON.stringify(services));
@@ -2855,6 +2857,7 @@ class StorageService {
     if (cheques !== undefined) localStorage.setItem(STORAGE_KEYS.CHEQUES, JSON.stringify(cheques));
     if (vendors !== undefined) localStorage.setItem(STORAGE_KEYS.VENDORS, JSON.stringify(vendors));
     if (branding !== undefined) localStorage.setItem(STORAGE_KEYS.BRANDING, JSON.stringify(branding));
+    if (mediaSchedules !== undefined) localStorage.setItem(STORAGE_KEYS.MEDIA_SCHEDULES, JSON.stringify(mediaSchedules));
 
     window.dispatchEvent(new Event('entity-updated'));
     window.dispatchEvent(new Event('client-updated'));
@@ -2863,6 +2866,38 @@ class StorageService {
     window.dispatchEvent(new Event('cheque-updated'));
     window.dispatchEvent(new Event('vendor-updated'));
     window.dispatchEvent(new Event('branding-updated'));
+    window.dispatchEvent(new Event('schedule-updated'));
+  }
+
+  // --- Media Schedules ---
+  getMediaSchedules(): MediaSchedule[] {
+    if (!this.isBrowser()) return [];
+    const data = localStorage.getItem(STORAGE_KEYS.MEDIA_SCHEDULES);
+    if (!data) return [];
+    try {
+      return JSON.parse(data);
+    } catch {
+      return [];
+    }
+  }
+
+  saveMediaScheduleLocally(schedule: MediaSchedule): void {
+    if (!this.isBrowser()) return;
+    const list = this.getMediaSchedules();
+    const idx = list.findIndex(s => s.id === schedule.id);
+    if (idx >= 0) list[idx] = schedule;
+    else list.unshift(schedule);
+    localStorage.setItem(STORAGE_KEYS.MEDIA_SCHEDULES, JSON.stringify(list));
+    window.dispatchEvent(new Event('schedule-updated'));
+    window.dispatchEvent(new Event('storage'));
+  }
+
+  deleteMediaScheduleLocally(id: string): void {
+    if (!this.isBrowser()) return;
+    const list = this.getMediaSchedules().filter(s => s.id !== id);
+    localStorage.setItem(STORAGE_KEYS.MEDIA_SCHEDULES, JSON.stringify(list));
+    window.dispatchEvent(new Event('schedule-updated'));
+    window.dispatchEvent(new Event('storage'));
   }
 
   saveClientLocally(client: Client): void {

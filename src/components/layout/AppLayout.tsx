@@ -23,7 +23,8 @@ import {
   WifiOff,
   ChevronRight,
   Sparkles,
-  CreditCard
+  CreditCard,
+  Radio
 } from "lucide-react";
 import { storage } from "@/lib/storage";
 import { useDatabase } from "@/context/DatabaseContext";
@@ -81,6 +82,7 @@ export function AppLayout({ children }: AppLayoutProps) {
     { name: "Dashboard", href: "/", icon: LayoutDashboard },
     { name: "Clients", href: "/clients", icon: Users },
     { name: "Invoices", href: "/invoices", icon: FileText },
+    { name: "Media Scheduling", href: "/schedules", icon: Radio },
     { name: "Cheque Management", href: "/cheques", icon: CreditCard },
     { name: "Create Invoice", href: "/invoices/new", icon: PlusCircle, isPrimary: true },
     { name: "Monthly History", href: "/history", icon: CalendarDays },

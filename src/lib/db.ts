@@ -395,6 +395,104 @@ export async function initializeDatabase(): Promise<boolean> {
       );
     `);
 
+    // Invoices additions for media schedules
+    await client.query(`
+      ALTER TABLE invoices ADD COLUMN IF NOT EXISTS media_schedule_id TEXT;
+      ALTER TABLE invoices ADD COLUMN IF NOT EXISTS media_schedule_number TEXT;
+    `);
+
+    // 13. Media Schedules
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS media_schedules (
+        id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
+        schedule_number TEXT NOT NULL UNIQUE,
+        billing_entity_id TEXT NOT NULL REFERENCES billing_entities(id) ON DELETE RESTRICT,
+        client_id TEXT NOT NULL REFERENCES clients(id) ON DELETE RESTRICT,
+        media_channel_id TEXT,
+        media_channel_name TEXT NOT NULL,
+        media_type TEXT DEFAULT 'tv',
+        campaign_name TEXT NOT NULL,
+        start_date DATE NOT NULL,
+        end_date DATE NOT NULL,
+        status TEXT DEFAULT 'draft',
+        pricing_mode TEXT DEFAULT 'package',
+        total_spots INTEGER DEFAULT 0,
+        package_amount NUMERIC DEFAULT 0,
+        rate_per_spot NUMERIC DEFAULT 0,
+        gross_amount NUMERIC DEFAULT 0,
+        discount_amount NUMERIC DEFAULT 0,
+        tax_applicable BOOLEAN DEFAULT false,
+        tax_rate NUMERIC DEFAULT 0,
+        tax_amount NUMERIC DEFAULT 0,
+        net_total NUMERIC DEFAULT 0,
+        currency TEXT DEFAULT 'LKR',
+        special_notes TEXT,
+        terms_and_conditions TEXT,
+        pdf_orientation TEXT DEFAULT 'landscape',
+        pdf_paper_size TEXT DEFAULT 'A4',
+        pdf_template_settings JSONB,
+        converted_to_invoice_id TEXT REFERENCES invoices(id) ON DELETE SET NULL,
+        converted_to_invoice_number TEXT,
+        converted_at TIMESTAMPTZ,
+        client_snapshot JSONB,
+        billing_entity_snapshot JSONB,
+        created_at TIMESTAMPTZ DEFAULT NOW(),
+        updated_at TIMESTAMPTZ DEFAULT NOW()
+      );
+      CREATE INDEX IF NOT EXISTS idx_media_schedules_client ON media_schedules(client_id);
+      CREATE INDEX IF NOT EXISTS idx_media_schedules_entity ON media_schedules(billing_entity_id);
+      CREATE INDEX IF NOT EXISTS idx_media_schedules_status ON media_schedules(status);
+    `);
+
+    // 14. Media Schedule Items (Programmes)
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS media_schedule_items (
+        id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
+        schedule_id TEXT NOT NULL REFERENCES media_schedules(id) ON DELETE CASCADE,
+        programme_name TEXT NOT NULL,
+        time_slot TEXT,
+        duration TEXT,
+        ad_type TEXT,
+        rate_per_spot NUMERIC DEFAULT 0,
+        total_spots INTEGER DEFAULT 0,
+        total_amount NUMERIC DEFAULT 0,
+        display_order INTEGER DEFAULT 0,
+        created_at TIMESTAMPTZ DEFAULT NOW()
+      );
+      CREATE INDEX IF NOT EXISTS idx_media_schedule_items_sched ON media_schedule_items(schedule_id);
+    `);
+
+    // 15. Media Schedule Allocations (Daily Spots)
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS media_schedule_allocations (
+        id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
+        schedule_id TEXT NOT NULL REFERENCES media_schedules(id) ON DELETE CASCADE,
+        item_id TEXT NOT NULL REFERENCES media_schedule_items(id) ON DELETE CASCADE,
+        date DATE NOT NULL,
+        spots INTEGER NOT NULL DEFAULT 0,
+        remarks TEXT,
+        created_at TIMESTAMPTZ DEFAULT NOW(),
+        CONSTRAINT uq_schedule_item_date UNIQUE(item_id, date)
+      );
+      CREATE INDEX IF NOT EXISTS idx_media_schedule_alloc_sched ON media_schedule_allocations(schedule_id);
+      CREATE INDEX IF NOT EXISTS idx_media_schedule_alloc_item ON media_schedule_allocations(item_id);
+    `);
+
+    // 16. Media Schedule Templates
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS media_schedule_templates (
+        id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
+        billing_entity_id TEXT REFERENCES billing_entities(id) ON DELETE CASCADE,
+        name TEXT NOT NULL,
+        is_default BOOLEAN DEFAULT false,
+        orientation TEXT DEFAULT 'landscape',
+        paper_size TEXT DEFAULT 'A4',
+        settings JSONB NOT NULL,
+        created_at TIMESTAMPTZ DEFAULT NOW(),
+        updated_at TIMESTAMPTZ DEFAULT NOW()
+      );
+    `);
+
     await client.query('COMMIT');
     isDbInitialized = true;
     console.log('✅ PostgreSQL Schema Verified & Initialized successfully.');

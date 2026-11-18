@@ -11,6 +11,7 @@ import {
   Vendor,
   BrandingSettings,
   UserRole,
+  MediaSchedule,
 } from "@/types";
 import { storage } from "@/lib/storage";
 
@@ -22,6 +23,7 @@ interface DatabaseContextType {
   mediaChannels: MediaChannel[];
   cheques: Cheque[];
   vendors: Vendor[];
+  schedules: MediaSchedule[];
   branding: BrandingSettings | null;
   userRole: UserRole;
   isSuperAdmin: boolean;
@@ -44,6 +46,9 @@ interface DatabaseContextType {
   deleteCheque: (id: string) => Promise<boolean>;
   saveVendor: (vendor: Partial<Vendor>) => Promise<Vendor>;
   deleteVendor: (id: string) => Promise<boolean>;
+  saveSchedule: (schedule: Partial<MediaSchedule>) => Promise<MediaSchedule>;
+  deleteSchedule: (id: string) => Promise<boolean>;
+  convertScheduleToInvoice: (scheduleId: string, mode?: 'itemized' | 'package', options?: any) => Promise<Invoice>;
   saveBranding: (branding: Partial<BrandingSettings>) => Promise<BrandingSettings>;
 }
 
@@ -57,6 +62,7 @@ export function DatabaseProvider({ children }: { children: React.ReactNode }) {
   const [mediaChannels, setMediaChannels] = useState<MediaChannel[]>([]);
   const [cheques, setCheques] = useState<Cheque[]>([]);
   const [vendors, setVendors] = useState<Vendor[]>([]);
+  const [schedules, setSchedules] = useState<MediaSchedule[]>([]);
   const [branding, setBranding] = useState<BrandingSettings | null>(null);
   const [userRole, setUserRoleState] = useState<UserRole>("admin");
   const [isLoading, setIsLoading] = useState<boolean>(true);
@@ -70,8 +76,15 @@ export function DatabaseProvider({ children }: { children: React.ReactNode }) {
       const r = e.detail || storage.getUserRole();
       setUserRoleState(r);
     };
+    const handleScheduleUpdated = () => {
+      setSchedules(storage.getMediaSchedules());
+    };
     window.addEventListener("user-role-changed", handleRoleChanged);
-    return () => window.removeEventListener("user-role-changed", handleRoleChanged);
+    window.addEventListener("schedule-updated", handleScheduleUpdated);
+    return () => {
+      window.removeEventListener("user-role-changed", handleRoleChanged);
+      window.removeEventListener("schedule-updated", handleScheduleUpdated);
+    };
   }, []);
 
   const setUserRole = (role: UserRole) => {
@@ -111,6 +124,7 @@ export function DatabaseProvider({ children }: { children: React.ReactNode }) {
       setInvoices(data.invoices || []);
       setCheques(data.cheques || []);
       setVendors(data.vendors || []);
+      setSchedules(data.mediaSchedules || []);
       setBranding(data.branding || null);
 
       // Cache snapshot into storage for offline PWA fallback
@@ -126,6 +140,7 @@ export function DatabaseProvider({ children }: { children: React.ReactNode }) {
       setInvoices(storage.getInvoices());
       setCheques(storage.getCheques());
       setVendors(storage.getVendors());
+      setSchedules(storage.getMediaSchedules());
       setBranding(storage.getBranding());
     } finally {
       setIsLoading(false);
@@ -561,6 +576,95 @@ export function DatabaseProvider({ children }: { children: React.ReactNode }) {
     return saved;
   };
 
+  const saveSchedule = async (schedule: Partial<MediaSchedule>): Promise<MediaSchedule> => {
+    try {
+      const res = await fetch("/api/schedules", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(schedule),
+      });
+
+      if (!res.ok) {
+        const errJson = await res.json().catch(() => ({}));
+        throw new Error(errJson.error || "Failed to save schedule");
+      }
+
+      const json = await res.json();
+      const saved = json.data as MediaSchedule;
+      setSchedules((prev) => {
+        const idx = prev.findIndex((s) => s.id === saved.id);
+        if (idx >= 0) {
+          const copy = [...prev];
+          copy[idx] = saved;
+          return copy;
+        }
+        return [saved, ...prev];
+      });
+      storage.saveMediaScheduleLocally(saved);
+      return saved;
+    } catch (err: any) {
+      console.error("Error saving schedule via API:", err);
+      const fallback: MediaSchedule = {
+        ...schedule,
+        id: schedule.id || crypto.randomUUID(),
+        updatedAt: new Date().toISOString(),
+      } as MediaSchedule;
+      setSchedules((prev) => [fallback, ...prev.filter((s) => s.id !== fallback.id)]);
+      storage.saveMediaScheduleLocally(fallback);
+      return fallback;
+    }
+  };
+
+  const deleteSchedule = async (id: string): Promise<boolean> => {
+    try {
+      await fetch(`/api/schedules?id=${id}`, { method: "DELETE" });
+    } catch (e) {
+      console.warn("Backend delete schedule failed, falling back to local deletion:", e);
+    }
+    setSchedules((prev) => prev.filter((s) => s.id !== id));
+    storage.deleteMediaScheduleLocally(id);
+    return true;
+  };
+
+  const convertScheduleToInvoice = async (
+    scheduleId: string,
+    mode: "itemized" | "package" = "package",
+    options?: any
+  ): Promise<Invoice> => {
+    const res = await fetch(`/api/schedules/${scheduleId}/convert-to-invoice`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ mode, ...options }),
+    });
+
+    if (!res.ok) {
+      const errJson = await res.json().catch(() => ({}));
+      throw new Error(errJson.error || "Failed to convert schedule to invoice");
+    }
+
+    const json = await res.json();
+    const createdInvoice = json.data as Invoice;
+
+    setInvoices((prev) => [createdInvoice, ...prev.filter((i) => i.id !== createdInvoice.id)]);
+    storage.saveInvoiceLocally(createdInvoice);
+
+    setSchedules((prev) =>
+      prev.map((s) =>
+        s.id === scheduleId
+          ? {
+              ...s,
+              status: "converted",
+              convertedToInvoiceId: createdInvoice.id,
+              convertedToInvoiceNumber: createdInvoice.invoiceNumber,
+              convertedAt: new Date().toISOString(),
+            }
+          : s
+      )
+    );
+
+    return createdInvoice;
+  };
+
   return (
     <DatabaseContext.Provider
       value={{
@@ -571,6 +675,7 @@ export function DatabaseProvider({ children }: { children: React.ReactNode }) {
         mediaChannels,
         cheques,
         vendors,
+        schedules,
         branding,
         userRole,
         isSuperAdmin,
@@ -593,6 +698,9 @@ export function DatabaseProvider({ children }: { children: React.ReactNode }) {
         deleteCheque,
         saveVendor,
         deleteVendor,
+        saveSchedule,
+        deleteSchedule,
+        convertScheduleToInvoice,
         saveBranding,
       }}
     >
