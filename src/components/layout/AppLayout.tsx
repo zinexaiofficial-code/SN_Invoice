@@ -35,9 +35,10 @@ import { RoleSwitchModal } from "@/components/layout/RoleSwitchModal";
 
 interface AppLayoutProps {
   children: React.ReactNode;
+  fullWidth?: boolean;
 }
 
-export function AppLayout({ children }: AppLayoutProps) {
+export function AppLayout({ children, fullWidth = false }: AppLayoutProps) {
   const pathname = usePathname();
   const { branding: dbBranding, billingEntities, userRole: ctxRole, isSuperAdmin, setUserRole: ctxSetUserRole } = useDatabase();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
@@ -287,7 +288,7 @@ export function AppLayout({ children }: AppLayoutProps) {
             {navItems.map((item) => {
               if (item.isPrimary) return null; // Only one New Invoice action in mobile menu
               const Icon = item.icon;
-              const isActive = pathname === item.href;
+              const isActive = pathname === item.href || (item.href !== "/" && pathname.startsWith(item.href) && item.href !== "/invoices/new");
               return (
                 <Link
                   key={item.href}
@@ -387,7 +388,7 @@ export function AppLayout({ children }: AppLayoutProps) {
           </div>
         )}
 
-        <div className="flex-1 p-4 md:p-8 max-w-7xl mx-auto w-full">
+        <div className={cn("flex-1 p-4 md:p-8 w-full", fullWidth ? "max-w-[1700px] mx-auto" : "max-w-7xl mx-auto")}>
           {children}
         </div>
       </main>

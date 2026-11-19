@@ -20,6 +20,7 @@ import {
 } from 'lucide-react';
 import { useDatabase } from '@/context/DatabaseContext';
 import { MediaSchedule, MediaScheduleItem, MediaPricingMode, MediaType } from '@/types';
+import { AppLayout } from '@/components/layout/AppLayout';
 import { ScheduleGrid } from '@/components/schedules/ScheduleGrid';
 import { SchedulePdfViewer } from '@/components/schedules/SchedulePdfViewer';
 import { ScheduleToInvoiceModal } from '@/components/schedules/ScheduleToInvoiceModal';
@@ -183,15 +184,18 @@ export default function ScheduleDetailPage() {
 
   if (!schedule) {
     return (
-      <div className="p-12 text-center text-slate-500">
-        <div className="animate-spin w-8 h-8 border-4 border-emerald-600 border-t-transparent rounded-full mx-auto mb-3"></div>
-        <p className="text-sm font-semibold">Loading media schedule...</p>
-      </div>
+      <AppLayout>
+        <div className="p-12 text-center text-slate-500">
+          <div className="animate-spin w-8 h-8 border-4 border-emerald-600 border-t-transparent rounded-full mx-auto mb-3"></div>
+          <p className="text-sm font-semibold">Loading media schedule...</p>
+        </div>
+      </AppLayout>
     );
   }
 
   return (
-    <div className="space-y-6 pb-12">
+    <AppLayout fullWidth>
+      <div className="space-y-6 pb-12">
       {/* Top Header & Actions Bar */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div className="flex items-center space-x-3">
@@ -494,6 +498,7 @@ export default function ScheduleDetailPage() {
           }}
         />
       )}
-    </div>
+      </div>
+    </AppLayout>
   );
 }

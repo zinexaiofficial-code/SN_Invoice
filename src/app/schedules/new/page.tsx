@@ -18,6 +18,7 @@ import {
 } from 'lucide-react';
 import { useDatabase } from '@/context/DatabaseContext';
 import { MediaSchedule, MediaScheduleItem, MediaPricingMode, MediaType } from '@/types';
+import { AppLayout } from '@/components/layout/AppLayout';
 import { ScheduleGrid } from '@/components/schedules/ScheduleGrid';
 import { ScheduleImportModal } from '@/components/schedules/ScheduleImportModal';
 
@@ -227,7 +228,8 @@ export default function NewSchedulePage() {
   };
 
   return (
-    <div className="space-y-6 pb-12">
+    <AppLayout fullWidth>
+      <div className="space-y-6 pb-12">
       {/* Top Navigation */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div className="flex items-center space-x-3">
@@ -607,6 +609,7 @@ export default function NewSchedulePage() {
           }}
         />
       )}
-    </div>
+      </div>
+    </AppLayout>
   );
 }

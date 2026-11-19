@@ -25,6 +25,7 @@ import {
 } from 'lucide-react';
 import { useDatabase } from '@/context/DatabaseContext';
 import { MediaSchedule, MediaScheduleStatus } from '@/types';
+import { AppLayout } from '@/components/layout/AppLayout';
 import { ScheduleImportModal } from '@/components/schedules/ScheduleImportModal';
 import { ScheduleToInvoiceModal } from '@/components/schedules/ScheduleToInvoiceModal';
 import { SchedulePdfViewer } from '@/components/schedules/SchedulePdfViewer';
@@ -149,7 +150,8 @@ export default function MediaSchedulingPage() {
   };
 
   return (
-    <div className="space-y-6">
+    <AppLayout>
+      <div className="space-y-6">
       {/* Top Header & Page Title */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
@@ -557,6 +559,7 @@ export default function MediaSchedulingPage() {
           onClose={() => setPdfPreviewSchedule(null)}
         />
       )}
-    </div>
+      </div>
+    </AppLayout>
   );
 }

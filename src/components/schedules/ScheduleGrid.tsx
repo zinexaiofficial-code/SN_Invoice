@@ -523,3 +523,4 @@ export function ScheduleGrid({
     </div>
   );
 }
+
