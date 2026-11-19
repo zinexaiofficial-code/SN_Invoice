@@ -24,7 +24,7 @@ import { ScheduleImportModal } from '@/components/schedules/ScheduleImportModal'
 
 export default function NewSchedulePage() {
   const router = useRouter();
-  const { billingEntities, clients, mediaChannels, saveSchedule } = useDatabase();
+  const { billingEntities, clients, mediaChannels, schedules, saveSchedule } = useDatabase();
 
   const [selectedEntityId, setSelectedEntityId] = useState<string>('');
   const [selectedClientId, setSelectedClientId] = useState<string>('');
@@ -98,15 +98,24 @@ export default function NewSchedulePage() {
     }
   }, [clients, selectedClientId]);
 
-  // Auto-generate schedule number
+  // Auto-generate next sequence schedule number
   useEffect(() => {
     if (!scheduleNumber && selectedEntityId) {
       const entity = billingEntities.find((e) => e.id === selectedEntityId);
       const prefix = entity?.prefix || (entity as any)?.invoicePrefix || 'SN';
       const year = new Date().getFullYear();
-      setScheduleNumber(`SCH-${prefix}-${year}-0001`);
+
+      const pattern = new RegExp(`^SCH-${prefix}-${year}-(\\d+)$`, 'i');
+      const numbers = (schedules || []).map((s) => {
+        const m = s.scheduleNumber?.match(pattern);
+        return m ? parseInt(m[1], 10) : 0;
+      }).filter((n) => !isNaN(n) && n > 0);
+
+      const maxSeq = numbers.length > 0 ? Math.max(...numbers) : 0;
+      const nextSeq = String(maxSeq + 1).padStart(4, '0');
+      setScheduleNumber(`SCH-${prefix}-${year}-${nextSeq}`);
     }
-  }, [selectedEntityId, billingEntities, scheduleNumber]);
+  }, [selectedEntityId, billingEntities, schedules, scheduleNumber]);
 
   // Auto-update campaign name when client changes
   useEffect(() => {

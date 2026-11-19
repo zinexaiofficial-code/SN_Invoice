@@ -106,7 +106,11 @@ export default function MediaSchedulingPage() {
 
   const handleDelete = async (id: string, num: string) => {
     if (confirm(`Are you sure you want to delete Schedule #${num}?`)) {
-      await deleteSchedule(id);
+      try {
+        await deleteSchedule(id);
+      } catch (err: any) {
+        alert(err?.message || 'Failed to delete schedule');
+      }
     }
   };
 

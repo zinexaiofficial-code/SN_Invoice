@@ -142,9 +142,9 @@ export default function SupplierPayableDetailPage() {
     try {
       await deleteSupplierPayable(payable.id);
       router.push("/supplier-payments");
-    } catch (err) {
+    } catch (err: any) {
       console.error("Failed to delete payable:", err);
-      alert("Failed to delete payable.");
+      alert(err?.message || "Failed to delete payable.");
     }
   };
 

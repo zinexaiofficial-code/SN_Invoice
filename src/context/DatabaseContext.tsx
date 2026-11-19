@@ -455,6 +455,7 @@ export function DatabaseProvider({ children }: { children: React.ReactNode }) {
   const deleteInvoice = async (id: string): Promise<boolean> => {
     const res = await fetch(`/api/invoices/${encodeURIComponent(id)}`, {
       method: "DELETE",
+      headers: { "x-user-role": userRole },
     });
 
     if (!res.ok) {
@@ -471,7 +472,10 @@ export function DatabaseProvider({ children }: { children: React.ReactNode }) {
     if (!ids || ids.length === 0) return true;
     const res = await fetch("/api/invoices", {
       method: "DELETE",
-      headers: { "Content-Type": "application/json" },
+      headers: { 
+        "Content-Type": "application/json",
+        "x-user-role": userRole,
+      },
       body: JSON.stringify({ ids }),
     });
 
@@ -518,6 +522,7 @@ export function DatabaseProvider({ children }: { children: React.ReactNode }) {
   const deleteCheque = async (id: string): Promise<boolean> => {
     const res = await fetch(`/api/cheques?id=${encodeURIComponent(id)}`, {
       method: "DELETE",
+      headers: { "x-user-role": userRole },
     });
 
     if (!res.ok) {
@@ -594,49 +599,40 @@ export function DatabaseProvider({ children }: { children: React.ReactNode }) {
   };
 
   const saveSchedule = async (schedule: Partial<MediaSchedule>): Promise<MediaSchedule> => {
-    try {
-      const res = await fetch("/api/schedules", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(schedule),
-      });
+    const res = await fetch("/api/schedules", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(schedule),
+    });
 
-      if (!res.ok) {
-        const errJson = await res.json().catch(() => ({}));
-        throw new Error(errJson.error || "Failed to save schedule");
-      }
-
-      const json = await res.json();
-      const saved = json.data as MediaSchedule;
-      setSchedules((prev) => {
-        const idx = prev.findIndex((s) => s.id === saved.id);
-        if (idx >= 0) {
-          const copy = [...prev];
-          copy[idx] = saved;
-          return copy;
-        }
-        return [saved, ...prev];
-      });
-      storage.saveMediaScheduleLocally(saved);
-      return saved;
-    } catch (err: any) {
-      console.error("Error saving schedule via API:", err);
-      const fallback: MediaSchedule = {
-        ...schedule,
-        id: schedule.id || crypto.randomUUID(),
-        updatedAt: new Date().toISOString(),
-      } as MediaSchedule;
-      setSchedules((prev) => [fallback, ...prev.filter((s) => s.id !== fallback.id)]);
-      storage.saveMediaScheduleLocally(fallback);
-      return fallback;
+    if (!res.ok) {
+      const errJson = await res.json().catch(() => ({}));
+      throw new Error(errJson.error || "Failed to save schedule");
     }
+
+    const json = await res.json();
+    const saved = json.data as MediaSchedule;
+    setSchedules((prev) => {
+      const idx = prev.findIndex((s) => s.id === saved.id);
+      if (idx >= 0) {
+        const copy = [...prev];
+        copy[idx] = saved;
+        return copy;
+      }
+      return [saved, ...prev];
+    });
+    storage.saveMediaScheduleLocally(saved);
+    return saved;
   };
 
   const deleteSchedule = async (id: string): Promise<boolean> => {
-    try {
-      await fetch(`/api/schedules?id=${id}`, { method: "DELETE" });
-    } catch (e) {
-      console.warn("Backend delete schedule failed, falling back to local deletion:", e);
+    const res = await fetch(`/api/schedules?id=${encodeURIComponent(id)}`, { 
+      method: "DELETE",
+      headers: { "x-user-role": userRole },
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.error || "Failed to delete schedule");
     }
     setSchedules((prev) => prev.filter((s) => s.id !== id));
     storage.deleteMediaScheduleLocally(id);
@@ -723,10 +719,13 @@ export function DatabaseProvider({ children }: { children: React.ReactNode }) {
   };
 
   const deleteSupplier = async (id: string): Promise<boolean> => {
-    try {
-      await fetch(`/api/suppliers?id=${id}`, { method: "DELETE" });
-    } catch (e) {
-      console.warn("Backend delete supplier failed:", e);
+    const res = await fetch(`/api/suppliers?id=${encodeURIComponent(id)}`, {
+      method: "DELETE",
+      headers: { "x-user-role": userRole },
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.error || "Failed to delete supplier");
     }
     setSuppliers((prev) => prev.filter((s) => s.id !== id));
     return true;
@@ -749,10 +748,13 @@ export function DatabaseProvider({ children }: { children: React.ReactNode }) {
   };
 
   const deleteSupplierPayable = async (id: string): Promise<boolean> => {
-    try {
-      await fetch(`/api/supplier-payables?id=${id}`, { method: "DELETE" });
-    } catch (e) {
-      console.warn("Backend delete supplier payable failed:", e);
+    const res = await fetch(`/api/supplier-payables?id=${encodeURIComponent(id)}`, {
+      method: "DELETE",
+      headers: { "x-user-role": userRole },
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.error || "Failed to delete supplier payable");
     }
     setSupplierPayables((prev) => prev.filter((p) => p.id !== id));
     return true;

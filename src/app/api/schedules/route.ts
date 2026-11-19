@@ -71,6 +71,14 @@ export async function POST(request: NextRequest) {
 
 export async function DELETE(request: NextRequest) {
   try {
+    const userRole = request.headers.get('x-user-role');
+    if (userRole !== 'super_admin') {
+      return NextResponse.json(
+        { success: false, error: 'Permission denied: Super Admin authorization is required to permanently delete media schedules.' },
+        { status: 403, headers: NO_CACHE_HEADERS }
+      );
+    }
+
     const { searchParams } = new URL(request.url);
     const id = searchParams.get('id');
     if (!id) {

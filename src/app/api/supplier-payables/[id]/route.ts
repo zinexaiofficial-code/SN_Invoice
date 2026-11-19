@@ -51,6 +51,14 @@ export async function DELETE(
   { params }: { params: { id: string } }
 ) {
   try {
+    const userRole = request.headers.get('x-user-role');
+    if (userRole !== 'super_admin') {
+      return NextResponse.json(
+        { success: false, error: 'Permission denied: Super Admin authorization is required to permanently delete supplier payables.' },
+        { status: 403, headers: NO_CACHE_HEADERS }
+      );
+    }
+
     const id = params?.id;
     if (!id) {
       return NextResponse.json(

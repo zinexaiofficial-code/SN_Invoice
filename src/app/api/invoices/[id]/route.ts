@@ -44,6 +44,14 @@ export async function DELETE(
   { params }: { params: { id: string } }
 ) {
   try {
+    const userRole = req.headers.get('x-user-role');
+    if (userRole !== 'super_admin') {
+      return NextResponse.json(
+        { error: 'Permission denied: Super Admin authorization is required to permanently delete invoices.' },
+        { status: 403, headers: NO_CACHE_HEADERS }
+      );
+    }
+
     const ok = await deleteInvoice(params.id);
     return NextResponse.json({ success: ok }, { headers: NO_CACHE_HEADERS });
   } catch (err: any) {

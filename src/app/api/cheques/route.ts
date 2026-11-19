@@ -57,6 +57,14 @@ export async function POST(req: NextRequest) {
 
 export async function DELETE(req: NextRequest) {
   try {
+    const userRole = req.headers.get('x-user-role');
+    if (userRole !== 'super_admin') {
+      return NextResponse.json(
+        { error: 'Permission denied: Super Admin authorization is required to permanently delete cheques.' },
+        { status: 403, headers: NO_CACHE_HEADERS }
+      );
+    }
+
     const { searchParams } = new URL(req.url);
     let id = searchParams.get('id');
     if (!id) {

@@ -57,6 +57,24 @@ interface BootstrapData {
   supplierPayables?: SupplierPayable[];
 }
 
+/**
+ * Timezone-safe SQL date formatter.
+ * Prevents UTC conversion from shifting dates backwards by 1 day in local timezones (e.g. UTC+05:30).
+ */
+export function formatDbDate(val: any): string {
+  if (!val) return '';
+  if (typeof val === 'string') {
+    return val.split('T')[0];
+  }
+  if (val instanceof Date) {
+    const year = val.getFullYear();
+    const month = String(val.getMonth() + 1).padStart(2, '0');
+    const day = String(val.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  }
+  return String(val).split('T')[0];
+}
+
 // In-memory fallback cache for development/build when Postgres is not directly reachable
 let localCache: BootstrapData | null = null;
 
@@ -879,24 +897,7 @@ export async function saveInvoice(invoice: Invoice): Promise<Invoice> {
 }
 
 export async function deleteInvoice(id: string): Promise<boolean> {
-  const pool = getDbPool();
-  if (!pool) return false;
-  const client = await pool.connect();
-  try {
-    await client.query('BEGIN');
-    await client.query('DELETE FROM invoice_items WHERE invoice_id = $1', [id]);
-    await client.query('DELETE FROM payments WHERE invoice_id = $1', [id]);
-    await client.query('UPDATE cheques SET invoice_id = NULL WHERE invoice_id = $1', [id]);
-    const res = await client.query('DELETE FROM invoices WHERE id = $1', [id]);
-    await client.query('COMMIT');
-    return (res.rowCount ?? 0) > 0;
-  } catch (err) {
-    await client.query('ROLLBACK');
-    console.error('Failed to delete invoice:', err);
-    throw err;
-  } finally {
-    client.release();
-  }
+  return deleteInvoicesBatch([id]);
 }
 
 export async function deleteInvoicesBatch(ids: string[]): Promise<boolean> {
@@ -906,8 +907,23 @@ export async function deleteInvoicesBatch(ids: string[]): Promise<boolean> {
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
+    
+    // Check if any invoice has recorded payments
+    const pmtCheck = await client.query('SELECT COUNT(*) FROM payments WHERE invoice_id = ANY($1::text[])', [ids]);
+    const pmtCount = Number(pmtCheck.rows[0]?.count) || 0;
+    if (pmtCount > 0) {
+      throw new Error(`Cannot delete invoice(s): ${pmtCount} recorded payment(s) exist. Please remove or reverse payments before deleting.`);
+    }
+
+    // Detach linked media schedules safely
+    await client.query(
+      `UPDATE media_schedules 
+       SET status = 'confirmed', converted_to_invoice_id = NULL, converted_to_invoice_number = NULL, updated_at = NOW() 
+       WHERE converted_to_invoice_id = ANY($1::text[])`,
+      [ids]
+    );
+
     await client.query('DELETE FROM invoice_items WHERE invoice_id = ANY($1::text[])', [ids]);
-    await client.query('DELETE FROM payments WHERE invoice_id = ANY($1::text[])', [ids]);
     await client.query('UPDATE cheques SET invoice_id = NULL WHERE invoice_id = ANY($1::text[])', [ids]);
     const res = await client.query('DELETE FROM invoices WHERE id = ANY($1::text[])', [ids]);
     await client.query('COMMIT');
@@ -1476,8 +1492,8 @@ function mapInvoiceRow(r: any, items: InvoiceItem[], payments: any[]): Invoice {
     status: r.status || 'draft',
     sentStatus: (r.sent_at ? (r.delivery_confirmed ? 'delivery_confirmed' : 'sent') : 'not_sent') as any,
     paymentStatus: r.payment_status || 'unpaid',
-    invoiceDate: r.invoice_date ? new Date(r.invoice_date).toISOString().split('T')[0] : '',
-    dueDate: r.due_date ? new Date(r.due_date).toISOString().split('T')[0] : undefined,
+    invoiceDate: formatDbDate(r.invoice_date),
+    dueDate: r.due_date ? formatDbDate(r.due_date) : undefined,
     sentAt: r.sent_at ? new Date(r.sent_at).toISOString() : undefined,
     subtotal,
     vatApplicable,
@@ -1529,7 +1545,7 @@ function mapPaymentRow(r: any): any {
     id: r.id,
     invoiceId: r.invoice_id,
     amount: Number(r.amount) || 0,
-    paymentDate: r.payment_date ? new Date(r.payment_date).toISOString().split('T')[0] : '',
+    paymentDate: formatDbDate(r.payment_date),
     paymentMethod: r.payment_method,
     reference: r.reference || '',
     notes: r.notes || '',
@@ -1546,11 +1562,11 @@ function mapChequeRow(r: any): Cheque {
     branch: r.bank_branch || '',
     amount: Number(r.amount) || 0,
     currency: 'LKR',
-    chequeDate: r.cheque_date ? new Date(r.cheque_date).toISOString().split('T')[0] : '',
-    receivedOrIssuedDate: r.issue_date ? new Date(r.issue_date).toISOString().split('T')[0] : '',
+    chequeDate: formatDbDate(r.cheque_date),
+    receivedOrIssuedDate: formatDbDate(r.issue_date),
     expectedActionDate: r.expected_action_date
-      ? new Date(r.expected_action_date).toISOString().split('T')[0]
-      : (r.cheque_date ? new Date(r.cheque_date).toISOString().split('T')[0] : ''),
+      ? formatDbDate(r.expected_action_date)
+      : (r.cheque_date ? formatDbDate(r.cheque_date) : ''),
     payerOrPayeeName: r.payee_name || r.drawer_name || '',
     clientId: r.client_id || '',
     vendorId: r.vendor_id || '',
@@ -1895,8 +1911,8 @@ function mapMediaScheduleRow(r: any, items: MediaScheduleItem[] = []): MediaSche
     mediaChannelName: r.media_channel_name,
     mediaType: (r.media_type || 'tv') as MediaType,
     campaignName: r.campaign_name,
-    startDate: r.start_date ? new Date(r.start_date).toISOString().split('T')[0] : '',
-    endDate: r.end_date ? new Date(r.end_date).toISOString().split('T')[0] : '',
+    startDate: formatDbDate(r.start_date),
+    endDate: formatDbDate(r.end_date),
     status: (r.status || 'draft') as MediaScheduleStatus,
     pricingMode: (r.pricing_mode || 'package') as MediaPricingMode,
     totalSpots: Number(r.total_spots) || 0,
@@ -1937,7 +1953,7 @@ export async function getAllMediaSchedules(): Promise<MediaSchedule[]> {
     const allocsByItem: Record<string, Record<string, number>> = {};
     for (const a of allocsRes.rows) {
       if (!allocsByItem[a.item_id]) allocsByItem[a.item_id] = {};
-      const d = a.date ? new Date(a.date).toISOString().split('T')[0] : '';
+      const d = formatDbDate(a.date);
       if (d) allocsByItem[a.item_id][d] = Number(a.spots) || 0;
     }
 
@@ -1988,7 +2004,7 @@ export async function getMediaScheduleById(id: string): Promise<MediaSchedule | 
     const allocsByItem: Record<string, Record<string, number>> = {};
     for (const a of allocsRes.rows) {
       if (!allocsByItem[a.item_id]) allocsByItem[a.item_id] = {};
-      const d = a.date ? new Date(a.date).toISOString().split('T')[0] : '';
+      const d = formatDbDate(a.date);
       if (d) allocsByItem[a.item_id][d] = Number(a.spots) || 0;
     }
 
@@ -2081,13 +2097,43 @@ export async function saveMediaSchedule(schedule: MediaSchedule): Promise<MediaS
   try {
     await client.query('BEGIN');
 
-    // Generate schedule number if missing
+    // Ensure schedule number exists and does not conflict
     let scheduleNumber = schedule.scheduleNumber?.trim();
+    const existingIdRes = await client.query('SELECT id, schedule_number FROM media_schedules WHERE id = $1', [scheduleId]);
+    const isExistingRecord = existingIdRes.rows.length > 0;
+
+    let entityPrefix = 'SN';
+    if (schedule.billingEntityId) {
+      const entRes = await client.query('SELECT invoice_prefix FROM billing_entities WHERE id = $1', [schedule.billingEntityId]);
+      if (entRes.rows.length > 0 && entRes.rows[0].invoice_prefix) {
+        entityPrefix = entRes.rows[0].invoice_prefix;
+      }
+    }
+    const year = new Date().getFullYear();
+
     if (!scheduleNumber) {
-      const year = new Date().getFullYear();
-      const countRes = await client.query('SELECT COUNT(*) FROM media_schedules');
-      const seq = Number(countRes.rows[0].count) + 1;
-      scheduleNumber = `SCH-${year}-${String(seq).padStart(4, '0')}`;
+      const pattern = `SCH-${entityPrefix}-${year}-%`;
+      const maxRes = await client.query('SELECT schedule_number FROM media_schedules WHERE schedule_number LIKE $1', [pattern]);
+      const numbers = maxRes.rows.map((r: any) => {
+        const m = r.schedule_number.match(new RegExp(`^SCH-${entityPrefix}-${year}-(\\d+)$`, 'i'));
+        return m ? parseInt(m[1], 10) : 0;
+      }).filter((n: number) => !isNaN(n) && n > 0);
+      const maxSeq = numbers.length > 0 ? Math.max(...numbers) : 0;
+      scheduleNumber = `SCH-${entityPrefix}-${year}-${String(maxSeq + 1).padStart(4, '0')}`;
+    } else if (!isExistingRecord) {
+      // Check if this scheduleNumber is already taken by another row
+      const dupRes = await client.query('SELECT id FROM media_schedules WHERE schedule_number = $1', [scheduleNumber]);
+      if (dupRes.rows.length > 0) {
+        // Schedule number is already taken! Auto-increment to next available
+        const pattern = `SCH-${entityPrefix}-${year}-%`;
+        const maxRes = await client.query('SELECT schedule_number FROM media_schedules WHERE schedule_number LIKE $1', [pattern]);
+        const numbers = maxRes.rows.map((r: any) => {
+          const m = r.schedule_number.match(new RegExp(`^SCH-${entityPrefix}-${year}-(\\d+)$`, 'i'));
+          return m ? parseInt(m[1], 10) : 0;
+        }).filter((n: number) => !isNaN(n) && n > 0);
+        const maxSeq = numbers.length > 0 ? Math.max(...numbers) : 0;
+        scheduleNumber = `SCH-${entityPrefix}-${year}-${String(maxSeq + 1).padStart(4, '0')}`;
+      }
     }
 
     const schedQuery = `
@@ -2210,7 +2256,8 @@ export async function saveMediaSchedule(schedule: MediaSchedule): Promise<MediaS
           await client.query(
             `INSERT INTO media_schedule_allocations (
               id, schedule_id, item_id, date, spots, created_at
-            ) VALUES ($1, $2, $3, $4, $5, NOW())`,
+            ) VALUES ($1, $2, $3, $4, $5, NOW())
+            ON CONFLICT (item_id, date) DO UPDATE SET spots = EXCLUDED.spots`,
             [
               crypto.randomUUID(),
               scheduleId,
@@ -2256,14 +2303,40 @@ export async function deleteMediaSchedule(id: string): Promise<boolean> {
     return true;
   }
 
+  const client = await pool.connect();
   try {
-    await pool.query('DELETE FROM media_schedules WHERE id = $1', [id]);
-    return true;
+    await client.query('BEGIN');
+
+    // Check if converted to invoice
+    const invCheck = await client.query(
+      'SELECT id, invoice_number FROM invoices WHERE media_schedule_id = $1 OR id IN (SELECT converted_to_invoice_id FROM media_schedules WHERE id = $1 AND converted_to_invoice_id IS NOT NULL)',
+      [id]
+    );
+    if (invCheck.rows.length > 0) {
+      throw new Error(`Cannot delete schedule: It has already been converted to Invoice #${invCheck.rows[0].invoice_number}. Please delete or unlink the invoice first.`);
+    }
+
+    // Check if linked to supplier payables
+    const payCheck = await client.query('SELECT COUNT(*) FROM supplier_payables WHERE schedule_id = $1', [id]);
+    const payCount = Number(payCheck.rows[0]?.count) || 0;
+    if (payCount > 0) {
+      throw new Error(`Cannot delete schedule: There are ${payCount} supplier payable bill(s) linked to this schedule. Remove or unlink them first.`);
+    }
+
+    await client.query('DELETE FROM media_schedule_allocations WHERE schedule_id = $1', [id]);
+    await client.query('DELETE FROM media_schedule_items WHERE schedule_id = $1', [id]);
+    const res = await client.query('DELETE FROM media_schedules WHERE id = $1', [id]);
+    await client.query('COMMIT');
+    return (res.rowCount ?? 0) > 0;
   } catch (err) {
+    await client.query('ROLLBACK');
     console.error('Failed to delete media schedule:', err);
-    return false;
+    throw err;
+  } finally {
+    client.release();
   }
 }
+
 
 export async function convertScheduleToInvoice(
   scheduleId: string,
@@ -2681,12 +2754,24 @@ export async function deleteSupplier(id: string): Promise<boolean> {
     return true;
   }
 
+  const client = await pool.connect();
   try {
-    await pool.query('DELETE FROM suppliers WHERE id = $1', [id]);
-    return true;
+    await client.query('BEGIN');
+    const payCheck = await client.query('SELECT COUNT(*) FROM supplier_payables WHERE supplier_id = $1', [id]);
+    const payCount = Number(payCheck.rows[0]?.count) || 0;
+    if (payCount > 0) {
+      throw new Error(`Cannot delete supplier: There are ${payCount} payable bill(s) associated with this supplier. Remove or reassign them first.`);
+    }
+    await client.query('DELETE FROM supplier_channels WHERE supplier_id = $1', [id]);
+    const res = await client.query('DELETE FROM suppliers WHERE id = $1', [id]);
+    await client.query('COMMIT');
+    return (res.rowCount ?? 0) > 0;
   } catch (err) {
+    await client.query('ROLLBACK');
     console.error('Error deleting supplier:', err);
-    return false;
+    throw err;
+  } finally {
+    client.release();
   }
 }
 
@@ -2742,8 +2827,8 @@ export async function getAllSupplierPayables(filters?: {
         s.bank_name as supplier_bank_name,
         s.account_number as supplier_account_number,
         be.name as billing_entity_name,
-        be.display_name as billing_entity_display_name,
-        cl.name as client_name,
+        be.name as billing_entity_display_name,
+        cl.company_name as client_name,
         cl.company_name as client_company_name,
         ms.schedule_number as linked_schedule_number
       FROM supplier_payables p
@@ -2774,7 +2859,7 @@ export async function getAllSupplierPayables(filters?: {
           id: r.id,
           payableId: r.payable_id,
           paymentReference: r.payment_reference,
-          paymentDate: r.payment_date ? new Date(r.payment_date).toISOString().split('T')[0] : '',
+          paymentDate: formatDbDate(r.payment_date),
           amount: Number(r.amount) || 0,
           paymentMethod: r.payment_method as SupplierPaymentMethod,
           referenceNumber: r.reference_number || '',
@@ -2799,7 +2884,7 @@ export async function getAllSupplierPayables(filters?: {
       const totalAmount = Number(r.total_amount) || 0;
       const totalPaid = Number(r.total_paid) || 0;
       const outstandingAmount = Number(r.outstanding_amount) || 0;
-      const dueDateStr = r.due_date ? new Date(r.due_date).toISOString().split('T')[0] : '';
+      const dueDateStr = formatDbDate(r.due_date);
       const isOverdue = outstandingAmount > 0 && Boolean(dueDateStr && dueDateStr < todayStr);
 
       const supplierObj = r.supplier_name ? {
@@ -2835,7 +2920,7 @@ export async function getAllSupplierPayables(filters?: {
         campaignName: r.campaign_name || '',
         supplierBillNumber: r.supplier_bill_number || '',
         supplierInvoiceNumber: r.supplier_bill_number || '',
-        billDate: r.bill_date ? new Date(r.bill_date).toISOString().split('T')[0] : '',
+        billDate: formatDbDate(r.bill_date),
         dueDate: dueDateStr,
         description: r.description || '',
         subtotal: Number(r.subtotal) || 0,
@@ -2941,14 +3026,19 @@ export async function saveSupplierPayable(payable: Partial<SupplierPayable>): Pr
       const year = new Date().getFullYear();
       let entityPrefix = 'SN';
       if (payable.billingEntityId) {
-        const entRes = await client.query('SELECT prefix FROM billing_entities WHERE id = $1', [payable.billingEntityId]);
-        if (entRes.rows.length > 0 && entRes.rows[0].prefix) {
-          entityPrefix = entRes.rows[0].prefix;
+        const entRes = await client.query('SELECT invoice_prefix FROM billing_entities WHERE id = $1', [payable.billingEntityId]);
+        if (entRes.rows.length > 0 && entRes.rows[0].invoice_prefix) {
+          entityPrefix = entRes.rows[0].invoice_prefix;
         }
       }
-      const countRes = await client.query('SELECT COUNT(*) FROM supplier_payables');
-      const seq = Number(countRes.rows[0].count) + 1;
-      payableReference = `PAY-${entityPrefix}-${year}-${String(seq).padStart(4, '0')}`;
+      const pattern = `PAY-${entityPrefix}-${year}-%`;
+      const maxRes = await client.query('SELECT payable_reference FROM supplier_payables WHERE payable_reference LIKE $1', [pattern]);
+      const numbers = maxRes.rows.map((r: any) => {
+        const m = r.payable_reference.match(new RegExp(`^PAY-${entityPrefix}-${year}-(\\d+)$`, 'i'));
+        return m ? parseInt(m[1], 10) : 0;
+      }).filter((n: number) => !isNaN(n) && n > 0);
+      const maxSeq = numbers.length > 0 ? Math.max(...numbers) : 0;
+      payableReference = `PAY-${entityPrefix}-${year}-${String(maxSeq + 1).padStart(4, '0')}`;
     }
 
     const pmtRes = await client.query(`
@@ -3059,12 +3149,28 @@ export async function deleteSupplierPayable(id: string): Promise<boolean> {
     return true;
   }
 
+  const client = await pool.connect();
   try {
-    await pool.query('DELETE FROM supplier_payables WHERE id = $1', [id]);
-    return true;
+    await client.query('BEGIN');
+    const pmtCheck = await client.query(
+      "SELECT COUNT(*) FROM supplier_payment_transactions WHERE payable_id = $1 AND status = 'posted'",
+      [id]
+    );
+    const pmtCount = Number(pmtCheck.rows[0]?.count) || 0;
+    if (pmtCount > 0) {
+      throw new Error(`Cannot delete supplier payable: There are ${pmtCount} posted payment transaction(s) recorded against this bill. Please void all payments first.`);
+    }
+
+    await client.query('DELETE FROM supplier_payment_transactions WHERE payable_id = $1', [id]);
+    const res = await client.query('DELETE FROM supplier_payables WHERE id = $1', [id]);
+    await client.query('COMMIT');
+    return (res.rowCount ?? 0) > 0;
   } catch (err) {
+    await client.query('ROLLBACK');
     console.error('Error deleting supplier payable:', err);
-    return false;
+    throw err;
+  } finally {
+    client.release();
   }
 }
 
@@ -3162,7 +3268,7 @@ export async function recordSupplierPayment(paymentData: {
       id: r.id,
       payableId: r.payable_id,
       paymentReference: r.payment_reference,
-      paymentDate: r.payment_date ? new Date(r.payment_date).toISOString().split('T')[0] : '',
+      paymentDate: formatDbDate(r.payment_date),
       amount: Number(r.amount) || 0,
       paymentMethod: r.payment_method as SupplierPaymentMethod,
       referenceNumber: r.reference_number || '',

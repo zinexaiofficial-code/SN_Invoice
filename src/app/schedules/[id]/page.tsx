@@ -193,8 +193,12 @@ export default function ScheduleDetailPage() {
   const handleDelete = async () => {
     if (!schedule) return;
     if (confirm(`Are you sure you want to delete Schedule #${schedule.scheduleNumber}?`)) {
-      await deleteSchedule(schedule.id);
-      router.push('/schedules');
+      try {
+        await deleteSchedule(schedule.id);
+        router.push('/schedules');
+      } catch (err: any) {
+        alert(err?.message || 'Failed to delete schedule');
+      }
     }
   };
 

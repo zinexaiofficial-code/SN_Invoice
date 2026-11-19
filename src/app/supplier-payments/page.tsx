@@ -196,9 +196,9 @@ export default function SupplierPaymentsPage() {
     }
     try {
       await deleteSupplierPayable(id);
-    } catch (err) {
+    } catch (err: any) {
       console.error("Failed to delete payable:", err);
-      alert("Failed to delete payable. Please try again.");
+      alert(err?.message || "Failed to delete payable. Please try again.");
     }
   };
 
@@ -213,9 +213,9 @@ export default function SupplierPaymentsPage() {
 
     try {
       await deleteSupplier(id);
-    } catch (err) {
+    } catch (err: any) {
       console.error("Failed to delete supplier:", err);
-      alert("Failed to delete supplier.");
+      alert(err?.message || "Failed to delete supplier.");
     }
   };
 
