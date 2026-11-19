@@ -532,3 +532,4 @@ export function SupplierModal({ supplier, isOpen, onClose, onSaved }: SupplierMo
     </Dialog>
   );
 }
+

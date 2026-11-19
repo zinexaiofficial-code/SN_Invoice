@@ -152,9 +152,20 @@ export function SchedulePdfViewer({
 
   const activeSignaturesCount = [showPreparedBy, showAuthorizedSignatory, showClientAcceptance].filter(Boolean).length;
 
-  // Handle browser direct print
-  const handlePrint = () => {
-    window.print();
+  // Helper to parse time slot into clean start and end components for PDF rendering without clipping
+  const parsePdfTimeSlot = (slotStr?: string) => {
+    if (!slotStr) return { single: '-', start: '', end: '', isRange: false };
+    const trimmed = slotStr.trim();
+    const parts = trimmed.split(/\s*(?:-|–|—|to)\s*/i);
+    if (parts.length >= 2 && parts[0] && parts[1]) {
+      return {
+        single: `${parts[0]} – ${parts[1]}`,
+        start: parts[0],
+        end: parts[1],
+        isRange: true,
+      };
+    }
+    return { single: trimmed, start: trimmed, end: '', isRange: false };
   };
 
   // Reset to defaults
@@ -195,52 +206,103 @@ export function SchedulePdfViewer({
     }
   };
 
-  // Handle 100% Fit-to-Page PDF export without bottom clipping
+  // Shared High-Fidelity PDF Generation Engine for A4 Landscape (297mm x 210mm)
+  const buildScheduleJsPdf = async () => {
+    if (!printRef.current) return null;
+    const element = printRef.current;
+
+    const canvas = await html2canvas(element, {
+      scale: 2,
+      useCORS: true,
+      logging: false,
+      backgroundColor: '#ffffff',
+      windowWidth: 1200,
+    });
+
+    const imgData = canvas.toDataURL('image/png');
+    const isLandscape = schedule.pdfOrientation !== 'portrait';
+    const pdf = new jsPDF({
+      orientation: isLandscape ? 'landscape' : 'portrait',
+      unit: 'mm',
+      format: schedule.pdfPaperSize === 'A3' ? 'a3' : 'a4',
+    });
+
+    const pdfWidth = pdf.internal.pageSize.getWidth(); // 297mm for A4 Landscape
+    const pdfHeight = pdf.internal.pageSize.getHeight(); // 210mm for A4 Landscape
+
+    // Intelligent Page Margins: Left: 6mm, Right: 6mm, Top: 8mm, Bottom: 8mm
+    const marginX = 6;
+    const marginY = 8;
+    const maxAvailableWidth = pdfWidth - marginX * 2; // 285mm Usable Width
+    const maxAvailableHeight = pdfHeight - marginY * 2; // 194mm Usable Height
+
+    // Scale proportionally so the entire document fits within available width AND height
+    const scale = Math.min(
+      maxAvailableWidth / canvas.width,
+      maxAvailableHeight / canvas.height
+    );
+
+    const finalWidth = canvas.width * scale;
+    const finalHeight = canvas.height * scale;
+
+    // Center horizontally within 6mm margins and vertically within 8mm margins
+    const posX = marginX + (maxAvailableWidth - finalWidth) / 2;
+    const posY = marginY + Math.max(0, (maxAvailableHeight - finalHeight) / 2);
+
+    pdf.addImage(imgData, 'PNG', posX, posY, finalWidth, finalHeight, undefined, 'FAST');
+    return pdf;
+  };
+
+  // Handle 100% Fit-to-Page PDF export without wasted margins or text clipping
   const handleDownloadPdf = async () => {
-    if (!printRef.current) return;
     setIsExporting(true);
     try {
-      const element = printRef.current;
-      const canvas = await html2canvas(element, {
-        scale: 2,
-        useCORS: true,
-        logging: false,
-        backgroundColor: '#ffffff',
-      });
-
-      const imgData = canvas.toDataURL('image/png');
-      const isLandscape = schedule.pdfOrientation !== 'portrait';
-      const pdf = new jsPDF({
-        orientation: isLandscape ? 'landscape' : 'portrait',
-        unit: 'mm',
-        format: schedule.pdfPaperSize === 'A3' ? 'a3' : 'a4',
-      });
-
-      const pdfWidth = pdf.internal.pageSize.getWidth();
-      const pdfHeight = pdf.internal.pageSize.getHeight();
-
-      const margin = 8; // 8mm margin all around
-      const maxAvailableWidth = pdfWidth - margin * 2;
-      const maxAvailableHeight = pdfHeight - margin * 2;
-
-      // Scale proportionally so the entire document fits within available width AND height
-      const scale = Math.min(
-        maxAvailableWidth / canvas.width,
-        maxAvailableHeight / canvas.height
-      );
-
-      const finalWidth = canvas.width * scale;
-      const finalHeight = canvas.height * scale;
-
-      // Center perfectly on the page
-      const posX = margin + (maxAvailableWidth - finalWidth) / 2;
-      const posY = margin + (maxAvailableHeight - finalHeight) / 2;
-
-      pdf.addImage(imgData, 'PNG', posX, posY, finalWidth, finalHeight);
+      const pdf = await buildScheduleJsPdf();
+      if (!pdf) return;
       pdf.save(`Schedule_${schedule.scheduleNumber || 'export'}.pdf`);
     } catch (err) {
       console.error('PDF export error:', err);
       alert('Failed to generate PDF. You can also use the browser Print button.');
+    } finally {
+      setIsExporting(false);
+    }
+  };
+
+  // FIX 3: Print EXACTLY the Generated PDF Document via Hidden Iframe
+  // Never prints website navigation, action buttons, or form controls
+  const handlePrint = async () => {
+    setIsExporting(true);
+    try {
+      const pdf = await buildScheduleJsPdf();
+      if (!pdf) return;
+      const blob = pdf.output('blob');
+      const blobUrl = URL.createObjectURL(blob);
+      const printFrame = document.createElement('iframe');
+      printFrame.style.position = 'fixed';
+      printFrame.style.right = '0';
+      printFrame.style.bottom = '0';
+      printFrame.style.width = '0';
+      printFrame.style.height = '0';
+      printFrame.style.border = '0';
+      printFrame.src = blobUrl;
+      document.body.appendChild(printFrame);
+
+      printFrame.onload = () => {
+        setTimeout(() => {
+          printFrame.contentWindow?.focus();
+          printFrame.contentWindow?.print();
+          setTimeout(() => {
+            try {
+              document.body.removeChild(printFrame);
+            } catch {
+              // Ignore cleanup error
+            }
+          }, 60000);
+        }, 300);
+      };
+    } catch (err) {
+      console.error('PDF print generation error:', err);
+      window.print();
     } finally {
       setIsExporting(false);
     }
@@ -475,18 +537,19 @@ export function SchedulePdfViewer({
         </div>
       )}
 
-      {/* Printable Paper Surface */}
-      <div className="max-w-6xl w-full mx-auto bg-white rounded-b-2xl shadow-2xl p-6 sm:p-8 md:p-10 text-slate-900 font-sans print:shadow-none print:p-2 print:max-w-full">
+      {/* Printable Paper Surface - Optimized for A4 Landscape (297mm x 210mm) */}
+      <div className="max-w-6xl w-full mx-auto bg-white rounded-b-2xl shadow-2xl p-3 sm:p-5 text-slate-900 font-sans print:shadow-none print:p-0 print:max-w-full overflow-x-auto">
         <div
+          id="schedule-pdf-print-surface"
           ref={printRef}
-          className="space-y-5 pb-8"
+          className="space-y-3.5 pb-4 min-w-[1100px] bg-white p-3.5"
           style={{
             transform: fontScale !== 100 ? `scale(${fontScale / 100})` : undefined,
             transformOrigin: 'top center',
           }}
         >
           {/* Header Section: Organization Logo, Entity Details, and Schedule Meta */}
-          <div className="border-b-2 border-navy-950 pb-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+          <div className="border-b-2 border-navy-950 pb-3 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
             {/* Left: Organization Logo & Legal Details */}
             <div className="flex items-start space-x-3.5 max-w-xl">
               {showLogo && (
@@ -525,7 +588,7 @@ export function SchedulePdfViewer({
             </div>
 
             {/* Right: Schedule Reference & Issue Info */}
-            <div className="text-left sm:text-right bg-slate-50 border border-slate-200 rounded-xl p-3 min-w-[220px] shadow-2xs">
+            <div className="text-left sm:text-right bg-slate-50 border border-slate-200 rounded-xl p-2.5 min-w-[210px] shadow-2xs">
               <div className="text-[10px] font-bold uppercase tracking-wider text-slate-500">
                 Schedule Reference
               </div>
@@ -542,7 +605,7 @@ export function SchedulePdfViewer({
           </div>
 
           {/* Schedule Metadata Table */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3 bg-slate-50 rounded-xl p-3 border border-slate-200 text-xs shadow-2xs">
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-2.5 bg-slate-50 rounded-xl p-2.5 border border-slate-200 text-xs shadow-2xs">
             <div>
               <span className="text-slate-500 font-semibold block uppercase text-[10px]">Client / Advertiser:</span>
               <strong className="text-slate-900 text-sm block mt-0.5">{clientName}</strong>
@@ -564,14 +627,14 @@ export function SchedulePdfViewer({
           </div>
 
           {/* Broadcast Allocation Grid */}
-          <div className="overflow-x-auto border border-slate-300 rounded-xl shadow-2xs">
+          <div className="border border-slate-300 rounded-xl shadow-2xs overflow-hidden">
             <table className="w-full text-left border-collapse text-[11px]">
               <thead>
                 <tr className="bg-navy-950 text-white font-bold border-b border-navy-900">
                   <th className="px-2.5 py-1.5 min-w-[140px] border-r border-navy-800">PROGRAMME</th>
-                  <th className="px-2 py-1.5 min-w-[110px] border-r border-navy-800">TIME SLOT</th>
-                  <th className="px-1.5 py-1.5 min-w-[50px] text-center border-r border-navy-800">DUR.</th>
-                  <th className="px-1.5 py-1.5 min-w-[70px] border-r border-navy-800">TYPE</th>
+                  <th className="px-2 py-1.5 min-w-[120px] text-center border-r border-navy-800">TIME SLOT</th>
+                  <th className="px-1 py-1.5 min-w-[44px] text-center border-r border-navy-800">DUR.</th>
+                  <th className="px-1.5 py-1.5 min-w-[65px] text-center border-r border-navy-800">TYPE</th>
                   {dates.map((dStr) => {
                     const d = new Date(dStr);
                     const letter = ['S', 'M', 'T', 'W', 'T', 'F', 'S'][d.getDay()];
@@ -579,7 +642,7 @@ export function SchedulePdfViewer({
                     return (
                       <th
                         key={`th-letter-${dStr}`}
-                        className={`text-center py-1 px-0.5 min-w-[24px] max-w-[28px] border-r border-navy-800 text-[10px] ${
+                        className={`text-center py-1 px-0.5 min-w-[24px] border-r border-navy-800 text-[10px] ${
                           isWk ? 'bg-navy-900 text-amber-300 font-black' : ''
                         }`}
                       >
@@ -587,7 +650,7 @@ export function SchedulePdfViewer({
                       </th>
                     );
                   })}
-                  <th className="px-2 py-1.5 text-center font-black min-w-[55px] bg-navy-950">SPOTS</th>
+                  <th className="px-2 py-1.5 text-center font-black min-w-[50px] bg-navy-950">SPOTS</th>
                 </tr>
 
                 <tr className="bg-slate-100 text-slate-700 font-black border-b border-slate-300 text-[10px]">
@@ -617,16 +680,38 @@ export function SchedulePdfViewer({
                   const allocs = item.allocations || {};
                   return (
                     <tr key={item.id || idx} className="hover:bg-slate-50">
-                      <td className="px-2 py-1.5 font-bold text-slate-900 border-r border-slate-200">
+                      <td className="px-2 py-1.5 font-bold text-slate-900 border-r border-slate-200 align-middle break-words">
                         {item.programmeName}
                       </td>
-                      <td className="px-2 py-1.5 text-slate-600 font-mono text-[10px] border-r border-slate-200">
-                        {item.timeSlot}
+                      <td className="px-1.5 py-1.5 text-slate-700 font-mono border-r border-slate-200 align-middle">
+                        {(() => {
+                          const parsed = parsePdfTimeSlot(item.timeSlot);
+                          if (parsed.isRange) {
+                            return (
+                              <div className="flex flex-col items-center justify-center leading-tight py-0.5">
+                                <span className="font-semibold text-[9.5px] text-slate-800 tracking-tight whitespace-nowrap">
+                                  {parsed.start}
+                                </span>
+                                <span className="text-[7.5px] text-slate-400 font-sans leading-none my-0.5 uppercase tracking-widest font-bold">
+                                  to
+                                </span>
+                                <span className="font-semibold text-[9.5px] text-slate-800 tracking-tight whitespace-nowrap">
+                                  {parsed.end}
+                                </span>
+                              </div>
+                            );
+                          }
+                          return (
+                            <div className="text-[9.5px] font-semibold text-slate-800 text-center leading-tight whitespace-nowrap">
+                              {parsed.single}
+                            </div>
+                          );
+                        })()}
                       </td>
-                      <td className="px-1.5 py-1.5 text-center text-slate-700 font-medium border-r border-slate-200">
+                      <td className="px-1 py-1.5 text-center text-slate-700 font-medium border-r border-slate-200 align-middle whitespace-nowrap">
                         {item.duration}
                       </td>
-                      <td className="px-1.5 py-1.5 text-slate-600 text-[10px] border-r border-slate-200">
+                      <td className="px-1.5 py-1.5 text-center text-slate-600 text-[10px] border-r border-slate-200 align-middle whitespace-nowrap">
                         {item.adType || 'Spot'}
                       </td>
                       {dates.map((dStr) => {
@@ -635,7 +720,7 @@ export function SchedulePdfViewer({
                         return (
                           <td
                             key={`td-${item.id}-${dStr}`}
-                            className={`text-center py-1 px-0.5 border-r border-slate-200 font-bold ${
+                            className={`text-center py-1 px-0.5 border-r border-slate-200 font-bold align-middle ${
                               isWk ? 'bg-amber-50/40' : ''
                             } ${count > 0 ? 'text-emerald-800 font-black bg-emerald-50/60' : 'text-slate-300'}`}
                           >
@@ -643,7 +728,7 @@ export function SchedulePdfViewer({
                           </td>
                         );
                       })}
-                      <td className="px-2 py-1.5 text-center font-black text-xs text-navy-950 bg-slate-50">
+                      <td className="px-2 py-1.5 text-center font-black text-xs text-navy-950 bg-slate-50 align-middle">
                         {item.totalSpots}
                       </td>
                     </tr>

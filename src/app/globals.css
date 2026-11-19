@@ -67,4 +67,45 @@
   scrollbar-width: none;  /* Firefox */
 }
 
+/* ===================================================
+   PRINT STYLESHEET: PROFESSIONAL SCHEDULE & INVOICE PRINT
+   =================================================== */
+@media print {
+  @page {
+    size: landscape A4;
+    margin: 6mm 6mm 8mm 6mm;
+  }
+
+  html, body {
+    background: #ffffff !important;
+    color: #000000 !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    font-size: 11pt !important;
+  }
+
+  /* Hide entire application navigation, menus, forms, buttons */
+  nav,
+  header,
+  aside,
+  button,
+  .print\:hidden,
+  [role="dialog"] > div:not(:has(#schedule-pdf-print-surface)) {
+    display: none !important;
+  }
+
+  /* If printing schedule from viewer, isolate surface */
+  #schedule-pdf-print-surface {
+    display: block !important;
+    position: static !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    box-shadow: none !important;
+    background: white !important;
+    border: none !important;
+  }
+}
+
 

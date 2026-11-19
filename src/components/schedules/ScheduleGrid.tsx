@@ -1,9 +1,11 @@
 "use client";
 
-import React, { useMemo } from 'react';
+import React, { useMemo, useState } from 'react';
 import { Plus, Trash2, Copy, Sparkles, Clock, Film, Radio, ArrowUpDown } from 'lucide-react';
 import { MediaScheduleItem, MediaPricingMode } from '@/types';
 import { cn } from '@/lib/utils';
+import { TimeSlotModal } from './TimeSlotModal';
+import { SmartFillModal } from './SmartFillModal';
 
 interface ScheduleGridProps {
   dates: string[]; // List of YYYY-MM-DD
@@ -22,6 +24,10 @@ export function ScheduleGrid({
   readOnly = false,
   onChange,
 }: ScheduleGridProps) {
+  // Modal states
+  const [timeSlotTargetItemIndex, setTimeSlotTargetItemIndex] = useState<number | null>(null);
+  const [smartFillTargetItemIndex, setSmartFillTargetItemIndex] = useState<number | null>(null);
+
   // Parse date details for headers
   const dateMeta = useMemo(() => {
     return dates.map((dStr) => {
@@ -149,34 +155,25 @@ export function ScheduleGrid({
     onChange(items.filter((_, idx) => idx !== index));
   };
 
-  // Bulk fill row (e.g. 1 on all weekdays)
-  const handleBulkFill = (index: number, mode: 'weekdays' | 'all' | 'clear') => {
-    if (readOnly) return;
+  // Apply Smart Frequency Fill allocations
+  const handleSmartFillApply = (newAllocs: Record<string, number>) => {
+    if (smartFillTargetItemIndex === null || readOnly) return;
     const newItems = [...items];
-    const item = { ...newItems[index] };
-    const allocs = { ...(item.allocations || {}) };
-
-    dates.forEach((dStr) => {
-      const d = new Date(dStr);
-      const isWeekend = d.getDay() === 0 || d.getDay() === 6;
-      if (mode === 'clear') {
-        delete allocs[dStr];
-      } else if (mode === 'weekdays') {
-        if (!isWeekend) allocs[dStr] = 1;
-        else delete allocs[dStr];
-      } else if (mode === 'all') {
-        allocs[dStr] = 1;
-      }
-    });
-
-    const totalSpots = Object.values(allocs).reduce((sum, n) => sum + n, 0);
+    const item = { ...newItems[smartFillTargetItemIndex] };
+    const totalSpots = Object.values(newAllocs).reduce((sum, n) => sum + (Number(n) || 0), 0);
     const rate = item.ratePerSpot || defaultRate || 0;
 
-    item.allocations = allocs;
+    item.allocations = newAllocs;
     item.totalSpots = totalSpots;
     item.totalAmount = totalSpots * rate;
-    newItems[index] = item;
+    newItems[smartFillTargetItemIndex] = item;
     onChange(newItems);
+  };
+
+  // Apply formatted Time Slot string
+  const handleTimeSlotApply = (timeSlotStr: string) => {
+    if (timeSlotTargetItemIndex === null || readOnly) return;
+    handleItemFieldChange(timeSlotTargetItemIndex, 'timeSlot', timeSlotStr);
   };
 
   return (
@@ -218,17 +215,17 @@ export function ScheduleGrid({
               <th className="sticky left-0 z-40 bg-navy-950 px-3 py-2 font-bold min-w-[180px] border-r border-navy-800">
                 PROGRAMME / PLACEMENT
               </th>
-              <th className="sticky left-[180px] z-40 bg-navy-950 px-2 py-2 font-bold min-w-[130px] border-r border-navy-800">
+              <th className="sticky left-[180px] z-40 bg-navy-950 px-2 py-2 font-bold min-w-[170px] border-r border-navy-800">
                 TIME SLOT
               </th>
-              <th className="sticky left-[310px] z-40 bg-navy-950 px-2 py-2 font-bold min-w-[70px] border-r border-navy-800">
+              <th className="sticky left-[350px] z-40 bg-navy-950 px-2 py-2 font-bold min-w-[70px] border-r border-navy-800">
                 DUR.
               </th>
-              <th className="sticky left-[380px] z-40 bg-navy-950 px-2 py-2 font-bold min-w-[85px] border-r border-navy-800">
+              <th className="sticky left-[420px] z-40 bg-navy-950 px-2 py-2 font-bold min-w-[85px] border-r border-navy-800">
                 TYPE
               </th>
               {pricingMode === 'spot_rate' && (
-                <th className="sticky left-[465px] z-40 bg-navy-950 px-2 py-2 font-bold min-w-[85px] border-r border-navy-800 text-right">
+                <th className="sticky left-[505px] z-40 bg-navy-950 px-2 py-2 font-bold min-w-[85px] border-r border-navy-800 text-right">
                   RATE (LKR)
                 </th>
               )}
@@ -320,20 +317,30 @@ export function ScheduleGrid({
                   {/* Left Column 2: Time Slot */}
                   <td className="sticky left-[180px] z-10 bg-white group-hover:bg-blue-50/50 px-2 py-1.5 border-r border-slate-200">
                     {readOnly ? (
-                      <span className="text-slate-600 font-mono text-[11px]">{item.timeSlot}</span>
+                      <span className="text-slate-700 font-mono text-[11px] font-semibold">{item.timeSlot}</span>
                     ) : (
-                      <input
-                        type="text"
-                        value={item.timeSlot || ''}
-                        onChange={(e) => handleItemFieldChange(itemIdx, 'timeSlot', e.target.value)}
-                        placeholder="08:00 PM - 08:30 PM"
-                        className="w-full px-1.5 py-1 bg-transparent hover:bg-white focus:bg-white rounded border border-transparent hover:border-slate-300 focus:border-emerald-500 font-mono text-[11px] text-slate-600 outline-hidden"
-                      />
+                      <div className="flex items-center space-x-1 w-full min-w-[155px]">
+                        <input
+                          type="text"
+                          value={item.timeSlot || ''}
+                          onChange={(e) => handleItemFieldChange(itemIdx, 'timeSlot', e.target.value)}
+                          placeholder="08:00 PM – 08:30 PM"
+                          className="w-full px-1.5 py-1 bg-transparent hover:bg-white focus:bg-white rounded border border-transparent hover:border-slate-300 focus:border-emerald-500 font-mono text-[11px] text-slate-700 outline-hidden"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => setTimeSlotTargetItemIndex(itemIdx)}
+                          title="Pick 30-min interval time slot"
+                          className="p-1 text-slate-400 hover:text-emerald-600 rounded hover:bg-slate-100 transition-colors shrink-0"
+                        >
+                          <Clock className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
                     )}
                   </td>
 
                   {/* Left Column 3: Duration */}
-                  <td className="sticky left-[310px] z-10 bg-white group-hover:bg-blue-50/50 px-1 py-1.5 border-r border-slate-200 text-center">
+                  <td className="sticky left-[350px] z-10 bg-white group-hover:bg-blue-50/50 px-1 py-1.5 border-r border-slate-200 text-center">
                     {readOnly ? (
                       <span className="font-bold text-slate-700">{item.duration}</span>
                     ) : (
@@ -348,7 +355,7 @@ export function ScheduleGrid({
                   </td>
 
                   {/* Left Column 4: Ad Type */}
-                  <td className="sticky left-[380px] z-10 bg-white group-hover:bg-blue-50/50 px-1 py-1.5 border-r border-slate-200">
+                  <td className="sticky left-[420px] z-10 bg-white group-hover:bg-blue-50/50 px-1 py-1.5 border-r border-slate-200">
                     {readOnly ? (
                       <span className="text-[11px] text-slate-600">{item.adType || 'Spot'}</span>
                     ) : (
@@ -369,7 +376,7 @@ export function ScheduleGrid({
 
                   {/* Optional Left Column 5: Rate */}
                   {pricingMode === 'spot_rate' && (
-                    <td className="sticky left-[465px] z-10 bg-white group-hover:bg-blue-50/50 px-2 py-1.5 border-r border-slate-200 text-right">
+                    <td className="sticky left-[505px] z-10 bg-white group-hover:bg-blue-50/50 px-2 py-1.5 border-r border-slate-200 text-right">
                       {readOnly ? (
                         <span className="font-mono text-slate-800">
                           {rowRate.toLocaleString('en-US')}
@@ -445,11 +452,11 @@ export function ScheduleGrid({
                       <div className="flex items-center justify-center space-x-1">
                         <button
                           type="button"
-                          onClick={() => handleBulkFill(itemIdx, 'weekdays')}
-                          title="Fill all weekdays with 1 spot"
-                          className="p-1 text-slate-400 hover:text-emerald-600 rounded hover:bg-slate-100"
+                          onClick={() => setSmartFillTargetItemIndex(itemIdx)}
+                          title="Smart Fill Programme Frequencies"
+                          className="p-1 text-slate-400 hover:text-emerald-600 rounded hover:bg-emerald-50 transition-colors"
                         >
-                          <Sparkles className="w-3.5 h-3.5" />
+                          <Sparkles className="w-3.5 h-3.5 text-emerald-600" />
                         </button>
                         <button
                           type="button"
@@ -520,6 +527,29 @@ export function ScheduleGrid({
           </tfoot>
         </table>
       </div>
+
+      {/* Time Slot Interval Selector Modal */}
+      {timeSlotTargetItemIndex !== null && (
+        <TimeSlotModal
+          isOpen={timeSlotTargetItemIndex !== null}
+          currentTimeSlot={items[timeSlotTargetItemIndex]?.timeSlot}
+          programmeName={items[timeSlotTargetItemIndex]?.programmeName || 'Programme'}
+          onApply={handleTimeSlotApply}
+          onClose={() => setTimeSlotTargetItemIndex(null)}
+        />
+      )}
+
+      {/* Smart Frequency Fill Modal */}
+      {smartFillTargetItemIndex !== null && (
+        <SmartFillModal
+          isOpen={smartFillTargetItemIndex !== null}
+          programmeName={items[smartFillTargetItemIndex]?.programmeName || 'Programme'}
+          dates={dates}
+          currentAllocations={items[smartFillTargetItemIndex]?.allocations || {}}
+          onApply={handleSmartFillApply}
+          onClose={() => setSmartFillTargetItemIndex(null)}
+        />
+      )}
     </div>
   );
 }
