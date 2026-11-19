@@ -21,6 +21,14 @@ import {
   MediaPricingMode,
   MediaPdfOrientation,
   MediaPdfPaperSize,
+  Supplier,
+  SupplierType,
+  SupplierStatus,
+  SupplierPayable,
+  SupplierPaymentStatus,
+  SupplierPaymentMethod,
+  SupplierPaymentTransaction,
+  SupplierTransactionStatus,
 } from '@/types';
 import {
   DEFAULT_CHEQUE_TEMPLATES,
@@ -45,6 +53,8 @@ interface BootstrapData {
   vendors: Vendor[];
   branding: BrandingSettings;
   mediaSchedules?: MediaSchedule[];
+  suppliers?: Supplier[];
+  supplierPayables?: SupplierPayable[];
 }
 
 // In-memory fallback cache for development/build when Postgres is not directly reachable
@@ -180,6 +190,18 @@ export async function getBootstrapData(): Promise<BootstrapData> {
       mediaSchedules = [];
     }
 
+    // 10. Suppliers & Supplier Payables
+    let suppliers: Supplier[] = [];
+    let supplierPayables: SupplierPayable[] = [];
+    try {
+      suppliers = await getAllSuppliers();
+      supplierPayables = await getAllSupplierPayables();
+    } catch (e) {
+      console.error('Failed to get suppliers/payables in bootstrap:', e);
+      suppliers = [];
+      supplierPayables = [];
+    }
+
     return {
       billingEntities,
       clients,
@@ -190,6 +212,8 @@ export async function getBootstrapData(): Promise<BootstrapData> {
       vendors,
       branding,
       mediaSchedules,
+      suppliers,
+      supplierPayables,
     };
   } catch (err) {
     console.error('Failed to get bootstrap data from Postgres:', err);
@@ -2403,3 +2427,826 @@ export async function convertScheduleToInvoice(
 
   return savedInvoice;
 }
+
+// ==========================================
+// SUPPLIERS SERVICE
+// ==========================================
+
+export async function getAllSuppliers(): Promise<Supplier[]> {
+  await initializeDatabase();
+  const pool = getDbPool();
+  if (!pool) {
+    const data = readFallbackDb();
+    return data.suppliers || [];
+  }
+
+  try {
+    const res = await pool.query(`
+      SELECT s.*, 
+             COALESCE(array_agg(sc.channel_name) FILTER (WHERE sc.channel_name IS NOT NULL), '{}') as channel_names
+      FROM suppliers s
+      LEFT JOIN supplier_channels sc ON s.id = sc.supplier_id
+      GROUP BY s.id
+      ORDER BY s.name ASC
+    `);
+
+    return res.rows.map((r) => ({
+      id: r.id,
+      supplierCode: r.supplier_code,
+      name: r.name,
+      type: r.type as SupplierType,
+      businessAddress: r.business_address || '',
+      contactPerson: r.contact_person || '',
+      phone: r.phone || '',
+      email: r.email || '',
+      taxNumber: r.tax_number || '',
+      bankName: r.bank_name || '',
+      branch: r.branch || '',
+      accountName: r.account_name || '',
+      accountNumber: r.account_number || '',
+      swiftCode: r.swift_code || '',
+      paymentTerms: r.payment_terms || 'Net 30',
+      status: r.status as SupplierStatus,
+      notes: r.notes || '',
+      channelNames: r.channel_names || [],
+      createdAt: r.created_at ? new Date(r.created_at).toISOString() : new Date().toISOString(),
+      updatedAt: r.updated_at ? new Date(r.updated_at).toISOString() : new Date().toISOString(),
+    }));
+  } catch (err) {
+    console.error('Error fetching suppliers:', err);
+    return [];
+  }
+}
+
+export async function getSupplierById(id: string): Promise<Supplier | null> {
+  await initializeDatabase();
+  const pool = getDbPool();
+  if (!pool) {
+    const data = readFallbackDb();
+    return (data.suppliers || []).find((s: any) => s.id === id) || null;
+  }
+
+  try {
+    const res = await pool.query(`
+      SELECT s.*, 
+             COALESCE(array_agg(sc.channel_name) FILTER (WHERE sc.channel_name IS NOT NULL), '{}') as channel_names
+      FROM suppliers s
+      LEFT JOIN supplier_channels sc ON s.id = sc.supplier_id
+      WHERE s.id = $1
+      GROUP BY s.id
+    `, [id]);
+
+    if (res.rows.length === 0) return null;
+    const r = res.rows[0];
+    return {
+      id: r.id,
+      supplierCode: r.supplier_code,
+      name: r.name,
+      type: r.type as SupplierType,
+      businessAddress: r.business_address || '',
+      contactPerson: r.contact_person || '',
+      phone: r.phone || '',
+      email: r.email || '',
+      taxNumber: r.tax_number || '',
+      bankName: r.bank_name || '',
+      branch: r.branch || '',
+      accountName: r.account_name || '',
+      accountNumber: r.account_number || '',
+      swiftCode: r.swift_code || '',
+      paymentTerms: r.payment_terms || 'Net 30',
+      status: r.status as SupplierStatus,
+      notes: r.notes || '',
+      channelNames: r.channel_names || [],
+      createdAt: r.created_at ? new Date(r.created_at).toISOString() : new Date().toISOString(),
+      updatedAt: r.updated_at ? new Date(r.updated_at).toISOString() : new Date().toISOString(),
+    };
+  } catch (err) {
+    console.error('Error fetching supplier by id:', err);
+    return null;
+  }
+}
+
+export async function saveSupplier(supplier: Partial<Supplier>): Promise<Supplier> {
+  await initializeDatabase();
+  const pool = getDbPool();
+  const supplierId = (supplier.id && String(supplier.id).trim()) || crypto.randomUUID();
+
+  if (!pool) {
+    const data = readFallbackDb();
+    if (!data.suppliers) data.suppliers = [];
+    const updated: Supplier = {
+      id: supplierId,
+      supplierCode: supplier.supplierCode || `SUP-${String(data.suppliers.length + 1).padStart(3, '0')}`,
+      name: supplier.name || 'Unnamed Supplier',
+      type: supplier.type || 'tv',
+      businessAddress: supplier.businessAddress || '',
+      contactPerson: supplier.contactPerson || '',
+      phone: supplier.phone || '',
+      email: supplier.email || '',
+      taxNumber: supplier.taxNumber || '',
+      bankName: supplier.bankName || '',
+      branch: supplier.branch || '',
+      accountName: supplier.accountName || '',
+      accountNumber: supplier.accountNumber || '',
+      swiftCode: supplier.swiftCode || '',
+      paymentTerms: supplier.paymentTerms || 'Net 30',
+      status: supplier.status || 'active',
+      notes: supplier.notes || '',
+      channelNames: supplier.channelNames || [],
+      createdAt: supplier.createdAt || new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    };
+    const idx = data.suppliers.findIndex((s: any) => s.id === supplierId);
+    if (idx >= 0) data.suppliers[idx] = updated;
+    else data.suppliers.push(updated);
+    writeFallbackDb(data);
+    return updated;
+  }
+
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+
+    let supplierCode = supplier.supplierCode?.trim();
+    if (!supplierCode) {
+      const countRes = await client.query('SELECT COUNT(*) FROM suppliers');
+      const seq = Number(countRes.rows[0].count) + 1;
+      supplierCode = `SUP-${String(seq).padStart(3, '0')}`;
+    }
+
+    const query = `
+      INSERT INTO suppliers (
+        id, supplier_code, name, type, business_address, contact_person,
+        phone, email, tax_number, bank_name, branch, account_name,
+        account_number, swift_code, payment_terms, status, notes, updated_at
+      ) VALUES (
+        $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, NOW()
+      )
+      ON CONFLICT (id) DO UPDATE SET
+        name = EXCLUDED.name,
+        type = EXCLUDED.type,
+        business_address = EXCLUDED.business_address,
+        contact_person = EXCLUDED.contact_person,
+        phone = EXCLUDED.phone,
+        email = EXCLUDED.email,
+        tax_number = EXCLUDED.tax_number,
+        bank_name = EXCLUDED.bank_name,
+        branch = EXCLUDED.branch,
+        account_name = EXCLUDED.account_name,
+        account_number = EXCLUDED.account_number,
+        swift_code = EXCLUDED.swift_code,
+        payment_terms = EXCLUDED.payment_terms,
+        status = EXCLUDED.status,
+        notes = EXCLUDED.notes,
+        updated_at = NOW()
+      RETURNING *;
+    `;
+
+    const values = [
+      supplierId,
+      supplierCode,
+      supplier.name || 'Unnamed Supplier',
+      supplier.type || 'tv',
+      supplier.businessAddress || '',
+      supplier.contactPerson || '',
+      supplier.phone || '',
+      supplier.email || '',
+      supplier.taxNumber || '',
+      supplier.bankName || '',
+      supplier.branch || '',
+      supplier.accountName || '',
+      supplier.accountNumber || '',
+      supplier.swiftCode || '',
+      supplier.paymentTerms || 'Net 30',
+      supplier.status || 'active',
+      supplier.notes || '',
+    ];
+
+    const res = await client.query(query, values);
+
+    // Update linked broadcast channels
+    await client.query('DELETE FROM supplier_channels WHERE supplier_id = $1', [supplierId]);
+    if (supplier.channelNames && supplier.channelNames.length > 0) {
+      for (const ch of supplier.channelNames) {
+        if (ch && ch.trim()) {
+          await client.query(
+            'INSERT INTO supplier_channels (supplier_id, channel_name) VALUES ($1, $2) ON CONFLICT DO NOTHING',
+            [supplierId, ch.trim()]
+          );
+        }
+      }
+    }
+
+    await client.query('COMMIT');
+    const r = res.rows[0];
+    return {
+      id: r.id,
+      supplierCode: r.supplier_code,
+      name: r.name,
+      type: r.type as SupplierType,
+      businessAddress: r.business_address || '',
+      contactPerson: r.contact_person || '',
+      phone: r.phone || '',
+      email: r.email || '',
+      taxNumber: r.tax_number || '',
+      bankName: r.bank_name || '',
+      branch: r.branch || '',
+      accountName: r.account_name || '',
+      accountNumber: r.account_number || '',
+      swiftCode: r.swift_code || '',
+      paymentTerms: r.payment_terms || 'Net 30',
+      status: r.status as SupplierStatus,
+      notes: r.notes || '',
+      channelNames: supplier.channelNames || [],
+      createdAt: r.created_at ? new Date(r.created_at).toISOString() : new Date().toISOString(),
+      updatedAt: r.updated_at ? new Date(r.updated_at).toISOString() : new Date().toISOString(),
+    };
+  } catch (err) {
+    await client.query('ROLLBACK');
+    console.error('Error saving supplier:', err);
+    throw err;
+  } finally {
+    client.release();
+  }
+}
+
+export async function deleteSupplier(id: string): Promise<boolean> {
+  await initializeDatabase();
+  const pool = getDbPool();
+  if (!pool) {
+    const data = readFallbackDb();
+    if (!data.suppliers) return false;
+    data.suppliers = data.suppliers.filter((s: any) => s.id !== id);
+    writeFallbackDb(data);
+    return true;
+  }
+
+  try {
+    await pool.query('DELETE FROM suppliers WHERE id = $1', [id]);
+    return true;
+  } catch (err) {
+    console.error('Error deleting supplier:', err);
+    return false;
+  }
+}
+
+// ==========================================
+// SUPPLIER PAYABLES & TRANSACTIONS SERVICE
+// ==========================================
+
+export async function getAllSupplierPayables(filters?: {
+  billingEntityId?: string;
+  supplierId?: string;
+  scheduleId?: string;
+  status?: string;
+}): Promise<SupplierPayable[]> {
+  await initializeDatabase();
+  const pool = getDbPool();
+  if (!pool) {
+    const data = readFallbackDb();
+    return data.supplierPayables || [];
+  }
+
+  try {
+    let whereClauses: string[] = [];
+    let queryParams: any[] = [];
+    let paramIdx = 1;
+
+    if (filters?.billingEntityId && filters.billingEntityId !== 'all') {
+      whereClauses.push(`p.billing_entity_id = $${paramIdx++}`);
+      queryParams.push(filters.billingEntityId);
+    }
+    if (filters?.supplierId && filters.supplierId !== 'all') {
+      whereClauses.push(`p.supplier_id = $${paramIdx++}`);
+      queryParams.push(filters.supplierId);
+    }
+    if (filters?.scheduleId) {
+      whereClauses.push(`p.schedule_id = $${paramIdx++}`);
+      queryParams.push(filters.scheduleId);
+    }
+    if (filters?.status && filters.status !== 'all') {
+      whereClauses.push(`p.status = $${paramIdx++}`);
+      queryParams.push(filters.status);
+    }
+
+    const whereStr = whereClauses.length > 0 ? `WHERE ${whereClauses.join(' AND ')}` : '';
+
+    const query = `
+      SELECT 
+        p.*,
+        s.name as supplier_name,
+        s.supplier_code as supplier_code,
+        s.type as supplier_type,
+        s.phone as supplier_phone,
+        s.email as supplier_email,
+        s.bank_name as supplier_bank_name,
+        s.account_number as supplier_account_number,
+        be.name as billing_entity_name,
+        be.display_name as billing_entity_display_name,
+        cl.name as client_name,
+        cl.company_name as client_company_name,
+        ms.schedule_number as linked_schedule_number
+      FROM supplier_payables p
+      LEFT JOIN suppliers s ON p.supplier_id = s.id
+      LEFT JOIN billing_entities be ON p.billing_entity_id = be.id
+      LEFT JOIN clients cl ON p.client_id = cl.id
+      LEFT JOIN media_schedules ms ON p.schedule_id = ms.id
+      ${whereStr}
+      ORDER BY p.bill_date DESC, p.created_at DESC
+    `;
+
+    const res = await pool.query(query, queryParams);
+    const payables = res.rows;
+
+    const payableIds = payables.map((p) => p.id);
+    let paymentsByPayable: Record<string, SupplierPaymentTransaction[]> = {};
+
+    if (payableIds.length > 0) {
+      const pmtsRes = await pool.query(`
+        SELECT * FROM supplier_payment_transactions 
+        WHERE payable_id = ANY($1)
+        ORDER BY payment_date ASC, created_at ASC
+      `, [payableIds]);
+
+      pmtsRes.rows.forEach((r) => {
+        if (!paymentsByPayable[r.payable_id]) paymentsByPayable[r.payable_id] = [];
+        paymentsByPayable[r.payable_id].push({
+          id: r.id,
+          payableId: r.payable_id,
+          paymentReference: r.payment_reference,
+          paymentDate: r.payment_date ? new Date(r.payment_date).toISOString().split('T')[0] : '',
+          amount: Number(r.amount) || 0,
+          paymentMethod: r.payment_method as SupplierPaymentMethod,
+          referenceNumber: r.reference_number || '',
+          chequeId: r.cheque_id || undefined,
+          bankAccountInfo: r.bank_account_info || '',
+          receiptUrl: r.receipt_url || '',
+          notes: r.notes || '',
+          status: r.status as SupplierTransactionStatus,
+          recordedBy: r.recorded_by || '',
+          voidReason: r.void_reason || '',
+          voidedAt: r.voided_at ? new Date(r.voided_at).toISOString() : undefined,
+          voidedBy: r.voided_by || undefined,
+          createdAt: r.created_at ? new Date(r.created_at).toISOString() : new Date().toISOString(),
+          updatedAt: r.updated_at ? new Date(r.updated_at).toISOString() : new Date().toISOString(),
+        });
+      });
+    }
+
+    const todayStr = new Date().toISOString().split('T')[0];
+
+    return payables.map((r) => {
+      const totalAmount = Number(r.total_amount) || 0;
+      const totalPaid = Number(r.total_paid) || 0;
+      const outstandingAmount = Number(r.outstanding_amount) || 0;
+      const dueDateStr = r.due_date ? new Date(r.due_date).toISOString().split('T')[0] : '';
+      const isOverdue = outstandingAmount > 0 && Boolean(dueDateStr && dueDateStr < todayStr);
+
+      const supplierObj = r.supplier_name ? {
+        id: r.supplier_id,
+        supplierCode: r.supplier_code || '',
+        code: r.supplier_code || '',
+        name: r.supplier_name,
+        type: (r.supplier_type || 'tv') as SupplierType,
+        phone: r.supplier_phone || '',
+        email: r.supplier_email || '',
+        bankName: r.supplier_bank_name || '',
+        defaultBank: r.supplier_bank_name || '',
+        accountNumber: r.supplier_account_number || '',
+        defaultAccountNo: r.supplier_account_number || '',
+        status: 'active' as SupplierStatus,
+        createdAt: '',
+        updatedAt: '',
+      } : undefined;
+
+      const pmtList = paymentsByPayable[r.id] || [];
+
+      return {
+        id: r.id,
+        payableReference: r.payable_reference,
+        payableNumber: r.payable_reference,
+        billingEntityId: r.billing_entity_id,
+        supplierId: r.supplier_id,
+        scheduleId: r.schedule_id || undefined,
+        mediaScheduleId: r.schedule_id || undefined,
+        clientId: r.client_id || undefined,
+        broadcastChannel: r.broadcast_channel || '',
+        channelName: r.broadcast_channel || '',
+        campaignName: r.campaign_name || '',
+        supplierBillNumber: r.supplier_bill_number || '',
+        supplierInvoiceNumber: r.supplier_bill_number || '',
+        billDate: r.bill_date ? new Date(r.bill_date).toISOString().split('T')[0] : '',
+        dueDate: dueDateStr,
+        description: r.description || '',
+        subtotal: Number(r.subtotal) || 0,
+        discount: Number(r.discount) || 0,
+        taxApplicable: Boolean(r.tax_applicable),
+        taxRate: Number(r.tax_rate) || 0,
+        taxAmount: Number(r.tax_amount) || 0,
+        totalAmount,
+        totalPaid,
+        outstandingAmount,
+        status: r.status as SupplierPaymentStatus,
+        notes: r.notes || '',
+        attachmentUrl: r.attachment_url || '',
+        createdBy: r.created_by || '',
+        createdAt: r.created_at ? new Date(r.created_at).toISOString() : new Date().toISOString(),
+        updatedAt: r.updated_at ? new Date(r.updated_at).toISOString() : new Date().toISOString(),
+        supplier: supplierObj,
+        supplierSnapshot: supplierObj,
+        scheduleNumber: r.linked_schedule_number || undefined,
+        clientName: r.client_name || r.client_company_name || undefined,
+        billingEntityName: r.billing_entity_display_name || r.billing_entity_name || undefined,
+        payments: pmtList,
+        transactions: pmtList,
+        isOverdue,
+      };
+    });
+  } catch (err) {
+    console.error('Error fetching supplier payables:', err);
+    return [];
+  }
+}
+
+export async function getSupplierPayableById(id: string): Promise<SupplierPayable | null> {
+  const payables = await getAllSupplierPayables();
+  return payables.find((p) => p.id === id) || null;
+}
+
+export async function saveSupplierPayable(payable: Partial<SupplierPayable>): Promise<SupplierPayable> {
+  await initializeDatabase();
+  const pool = getDbPool();
+  const payableId = (payable.id && String(payable.id).trim()) || crypto.randomUUID();
+
+  const subtotal = Math.max(0, Number(payable.subtotal) || 0);
+  const discount = Math.max(0, Number(payable.discount) || 0);
+  const taxableBase = Math.max(0, subtotal - discount);
+  const taxApplicable = Boolean(payable.taxApplicable);
+  const taxRate = taxApplicable ? (Number(payable.taxRate) || 18) : 0;
+  const taxAmount = taxApplicable ? Math.round(taxableBase * (taxRate / 100)) : 0;
+  const totalAmount = taxableBase + taxAmount;
+
+  if (!pool) {
+    const data = readFallbackDb();
+    if (!data.supplierPayables) data.supplierPayables = [];
+    const totalPaid = Number(payable.totalPaid) || 0;
+    const outstandingAmount = Math.max(0, totalAmount - totalPaid);
+    let status: SupplierPaymentStatus = 'unpaid';
+    if (totalPaid >= totalAmount && totalAmount > 0) status = 'fully_paid';
+    else if (totalPaid > 0) status = 'partially_paid';
+
+    const ref = payable.payableReference || payable.payableNumber || `PAY-SN-${new Date().getFullYear()}-${String(data.supplierPayables.length + 1).padStart(4, '0')}`;
+    const updated: SupplierPayable = {
+      id: payableId,
+      payableReference: ref,
+      payableNumber: ref,
+      billingEntityId: payable.billingEntityId || '',
+      supplierId: payable.supplierId || '',
+      scheduleId: payable.scheduleId || undefined,
+      clientId: payable.clientId || undefined,
+      broadcastChannel: payable.broadcastChannel || '',
+      campaignName: payable.campaignName || '',
+      supplierBillNumber: payable.supplierBillNumber || '',
+      billDate: payable.billDate || new Date().toISOString().split('T')[0],
+      dueDate: payable.dueDate || new Date().toISOString().split('T')[0],
+      description: payable.description || '',
+      subtotal,
+      discount,
+      taxApplicable,
+      taxRate,
+      taxAmount,
+      totalAmount,
+      totalPaid,
+      outstandingAmount,
+      status: payable.status || status,
+      notes: payable.notes || '',
+      attachmentUrl: payable.attachmentUrl || '',
+      createdBy: payable.createdBy || '',
+      createdAt: payable.createdAt || new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    };
+    const idx = data.supplierPayables.findIndex((p: any) => p.id === payableId);
+    if (idx >= 0) data.supplierPayables[idx] = updated;
+    else data.supplierPayables.push(updated);
+    writeFallbackDb(data);
+    return updated;
+  }
+
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+
+    let payableReference = (payable.payableReference || payable.payableNumber)?.trim();
+    if (!payableReference) {
+      const year = new Date().getFullYear();
+      let entityPrefix = 'SN';
+      if (payable.billingEntityId) {
+        const entRes = await client.query('SELECT prefix FROM billing_entities WHERE id = $1', [payable.billingEntityId]);
+        if (entRes.rows.length > 0 && entRes.rows[0].prefix) {
+          entityPrefix = entRes.rows[0].prefix;
+        }
+      }
+      const countRes = await client.query('SELECT COUNT(*) FROM supplier_payables');
+      const seq = Number(countRes.rows[0].count) + 1;
+      payableReference = `PAY-${entityPrefix}-${year}-${String(seq).padStart(4, '0')}`;
+    }
+
+    const pmtRes = await client.query(`
+      SELECT COALESCE(SUM(amount), 0) as paid_sum 
+      FROM supplier_payment_transactions 
+      WHERE payable_id = $1 AND status = 'posted'
+    `, [payableId]);
+
+    const totalPaid = Number(pmtRes.rows[0]?.paid_sum) || Number(payable.totalPaid) || 0;
+    const outstandingAmount = Math.max(0, totalAmount - totalPaid);
+    let status: SupplierPaymentStatus = payable.status || 'unpaid';
+    if (status !== 'void') {
+      if (totalPaid >= totalAmount && totalAmount > 0) {
+        status = 'fully_paid';
+      } else if (totalPaid > 0) {
+        status = 'partially_paid';
+      } else {
+        status = 'unpaid';
+      }
+    }
+
+    const query = `
+      INSERT INTO supplier_payables (
+        id, payable_reference, billing_entity_id, supplier_id, schedule_id,
+        client_id, broadcast_channel, campaign_name, supplier_bill_number,
+        bill_date, due_date, description, subtotal, discount, tax_applicable,
+        tax_rate, tax_amount, total_amount, total_paid, outstanding_amount,
+        status, notes, attachment_url, created_by, updated_at
+      ) VALUES (
+        $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15,
+        $16, $17, $18, $19, $20, $21, $22, $23, $24, NOW()
+      )
+      ON CONFLICT (id) DO UPDATE SET
+        billing_entity_id = EXCLUDED.billing_entity_id,
+        supplier_id = EXCLUDED.supplier_id,
+        schedule_id = EXCLUDED.schedule_id,
+        client_id = EXCLUDED.client_id,
+        broadcast_channel = EXCLUDED.broadcast_channel,
+        campaign_name = EXCLUDED.campaign_name,
+        supplier_bill_number = EXCLUDED.supplier_bill_number,
+        bill_date = EXCLUDED.bill_date,
+        due_date = EXCLUDED.due_date,
+        description = EXCLUDED.description,
+        subtotal = EXCLUDED.subtotal,
+        discount = EXCLUDED.discount,
+        tax_applicable = EXCLUDED.tax_applicable,
+        tax_rate = EXCLUDED.tax_rate,
+        tax_amount = EXCLUDED.tax_amount,
+        total_amount = EXCLUDED.total_amount,
+        total_paid = EXCLUDED.total_paid,
+        outstanding_amount = EXCLUDED.outstanding_amount,
+        status = EXCLUDED.status,
+        notes = EXCLUDED.notes,
+        attachment_url = EXCLUDED.attachment_url,
+        updated_at = NOW()
+      RETURNING *;
+    `;
+
+    const values = [
+      payableId,
+      payableReference,
+      payable.billingEntityId,
+      payable.supplierId,
+      payable.scheduleId || payable.mediaScheduleId || null,
+      payable.clientId || null,
+      payable.broadcastChannel || payable.channelName || '',
+      payable.campaignName || '',
+      payable.supplierBillNumber || payable.supplierInvoiceNumber || '',
+      payable.billDate || new Date().toISOString().split('T')[0],
+      payable.dueDate || new Date().toISOString().split('T')[0],
+      payable.description || '',
+      subtotal,
+      discount,
+      taxApplicable,
+      taxRate,
+      taxAmount,
+      totalAmount,
+      totalPaid,
+      outstandingAmount,
+      status,
+      payable.notes || '',
+      payable.attachmentUrl || '',
+      payable.createdBy || '',
+    ];
+
+    await client.query(query, values);
+    await client.query('COMMIT');
+
+    const full = await getSupplierPayableById(payableId);
+    return full!;
+  } catch (err) {
+    await client.query('ROLLBACK');
+    console.error('Error saving supplier payable:', err);
+    throw err;
+  } finally {
+    client.release();
+  }
+}
+
+export async function deleteSupplierPayable(id: string): Promise<boolean> {
+  await initializeDatabase();
+  const pool = getDbPool();
+  if (!pool) {
+    const data = readFallbackDb();
+    if (!data.supplierPayables) return false;
+    data.supplierPayables = data.supplierPayables.filter((p: any) => p.id !== id);
+    writeFallbackDb(data);
+    return true;
+  }
+
+  try {
+    await pool.query('DELETE FROM supplier_payables WHERE id = $1', [id]);
+    return true;
+  } catch (err) {
+    console.error('Error deleting supplier payable:', err);
+    return false;
+  }
+}
+
+export async function recordSupplierPayment(paymentData: {
+  payableId: string;
+  amount: number;
+  paymentDate: string;
+  paymentMethod: SupplierPaymentMethod;
+  referenceNumber?: string;
+  chequeId?: string;
+  bankAccountInfo?: string;
+  receiptUrl?: string;
+  notes?: string;
+  recordedBy?: string;
+}): Promise<SupplierPaymentTransaction> {
+  await initializeDatabase();
+  const pool = getDbPool();
+  const amount = Number(paymentData.amount);
+
+  if (!amount || amount <= 0) {
+    throw new Error('Payment amount must be greater than zero.');
+  }
+
+  if (!pool) {
+    throw new Error('PostgreSQL database required to record financial transactions.');
+  }
+
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+
+    const payRes = await client.query(`
+      SELECT * FROM supplier_payables WHERE id = $1 FOR UPDATE
+    `, [paymentData.payableId]);
+
+    if (payRes.rows.length === 0) {
+      throw new Error('Supplier payable not found.');
+    }
+
+    const payable = payRes.rows[0];
+    const totalAmount = Number(payable.total_amount) || 0;
+    const currentPaid = Number(payable.total_paid) || 0;
+    const outstanding = Math.max(0, totalAmount - currentPaid);
+
+    if (amount > outstanding) {
+      throw new Error(`Payment amount (Rs. ${amount.toLocaleString()}) exceeds outstanding balance of Rs. ${outstanding.toLocaleString()}.`);
+    }
+
+    const txId = crypto.randomUUID();
+    const year = new Date().getFullYear();
+    const countRes = await client.query('SELECT COUNT(*) FROM supplier_payment_transactions');
+    const seq = Number(countRes.rows[0].count) + 1;
+    const paymentRef = `SPAY-${year}-${String(seq).padStart(4, '0')}`;
+
+    const insQuery = `
+      INSERT INTO supplier_payment_transactions (
+        id, payable_id, payment_reference, payment_date, amount, payment_method,
+        reference_number, cheque_id, bank_account_info, receipt_url, notes,
+        status, recorded_by, created_at, updated_at
+      ) VALUES (
+        $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, 'posted', $12, NOW(), NOW()
+      ) RETURNING *;
+    `;
+
+    const insValues = [
+      txId,
+      paymentData.payableId,
+      paymentRef,
+      paymentData.paymentDate || new Date().toISOString().split('T')[0],
+      amount,
+      paymentData.paymentMethod || 'bank_transfer',
+      paymentData.referenceNumber || '',
+      paymentData.chequeId || null,
+      paymentData.bankAccountInfo || '',
+      paymentData.receiptUrl || '',
+      paymentData.notes || '',
+      paymentData.recordedBy || 'Admin',
+    ];
+
+    const insRes = await client.query(insQuery, insValues);
+
+    const newPaid = currentPaid + amount;
+    const newOutstanding = Math.max(0, totalAmount - newPaid);
+    const newStatus: SupplierPaymentStatus = newPaid >= totalAmount ? 'fully_paid' : 'partially_paid';
+
+    await client.query(`
+      UPDATE supplier_payables 
+      SET total_paid = $1, outstanding_amount = $2, status = $3, updated_at = NOW()
+      WHERE id = $4
+    `, [newPaid, newOutstanding, newStatus, paymentData.payableId]);
+
+    await client.query('COMMIT');
+    const r = insRes.rows[0];
+    return {
+      id: r.id,
+      payableId: r.payable_id,
+      paymentReference: r.payment_reference,
+      paymentDate: r.payment_date ? new Date(r.payment_date).toISOString().split('T')[0] : '',
+      amount: Number(r.amount) || 0,
+      paymentMethod: r.payment_method as SupplierPaymentMethod,
+      referenceNumber: r.reference_number || '',
+      chequeId: r.cheque_id || undefined,
+      bankAccountInfo: r.bank_account_info || '',
+      receiptUrl: r.receipt_url || '',
+      notes: r.notes || '',
+      status: r.status as SupplierTransactionStatus,
+      recordedBy: r.recorded_by || '',
+      createdAt: r.created_at ? new Date(r.created_at).toISOString() : new Date().toISOString(),
+      updatedAt: r.updated_at ? new Date(r.updated_at).toISOString() : new Date().toISOString(),
+    };
+  } catch (err) {
+    await client.query('ROLLBACK');
+    console.error('Error recording supplier payment:', err);
+    throw err;
+  } finally {
+    client.release();
+  }
+}
+
+export async function voidSupplierPayment(
+  transactionId: string,
+  voidReason?: string,
+  voidedBy?: string
+): Promise<boolean> {
+  await initializeDatabase();
+  const pool = getDbPool();
+  if (!pool) return false;
+
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+
+    const txRes = await client.query(`
+      SELECT * FROM supplier_payment_transactions WHERE id = $1 FOR UPDATE
+    `, [transactionId]);
+
+    if (txRes.rows.length === 0) {
+      throw new Error('Payment transaction not found.');
+    }
+
+    const tx = txRes.rows[0];
+    if (tx.status === 'void') {
+      await client.query('COMMIT');
+      return true;
+    }
+
+    await client.query(`
+      UPDATE supplier_payment_transactions
+      SET status = 'void', void_reason = $1, voided_by = $2, voided_at = NOW(), updated_at = NOW()
+      WHERE id = $3
+    `, [voidReason || 'Voided by user', voidedBy || 'Admin', transactionId]);
+
+    const pmtSumRes = await client.query(`
+      SELECT COALESCE(SUM(amount), 0) as paid_sum 
+      FROM supplier_payment_transactions 
+      WHERE payable_id = $1 AND status = 'posted'
+    `, [tx.payable_id]);
+
+    const activePaid = Number(pmtSumRes.rows[0]?.paid_sum) || 0;
+
+    const payRes = await client.query(`
+      SELECT total_amount FROM supplier_payables WHERE id = $1
+    `, [tx.payable_id]);
+
+    const totalAmount = Number(payRes.rows[0]?.total_amount) || 0;
+    const newOutstanding = Math.max(0, totalAmount - activePaid);
+    const newStatus: SupplierPaymentStatus = activePaid >= totalAmount && totalAmount > 0 ? 'fully_paid' : activePaid > 0 ? 'partially_paid' : 'unpaid';
+
+    await client.query(`
+      UPDATE supplier_payables 
+      SET total_paid = $1, outstanding_amount = $2, status = $3, updated_at = NOW()
+      WHERE id = $4
+    `, [activePaid, newOutstanding, newStatus, tx.payable_id]);
+
+    await client.query('COMMIT');
+    return true;
+  } catch (err) {
+    await client.query('ROLLBACK');
+    console.error('Error voiding supplier payment:', err);
+    throw err;
+  } finally {
+    client.release();
+  }
+}
+

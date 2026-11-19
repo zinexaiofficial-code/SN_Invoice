@@ -493,6 +493,110 @@ export async function initializeDatabase(): Promise<boolean> {
       );
     `);
 
+    // 17. Suppliers
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS suppliers (
+        id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
+        supplier_code TEXT NOT NULL UNIQUE,
+        name TEXT NOT NULL,
+        type TEXT NOT NULL DEFAULT 'tv',
+        business_address TEXT,
+        contact_person TEXT,
+        phone TEXT,
+        email TEXT,
+        tax_number TEXT,
+        bank_name TEXT,
+        branch TEXT,
+        account_name TEXT,
+        account_number TEXT,
+        swift_code TEXT,
+        payment_terms TEXT DEFAULT 'Net 30',
+        status TEXT DEFAULT 'active',
+        notes TEXT,
+        created_at TIMESTAMPTZ DEFAULT NOW(),
+        updated_at TIMESTAMPTZ DEFAULT NOW()
+      );
+      CREATE INDEX IF NOT EXISTS idx_suppliers_name ON suppliers(name);
+      CREATE INDEX IF NOT EXISTS idx_suppliers_status ON suppliers(status);
+    `);
+
+    // 18. Supplier Channels Link
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS supplier_channels (
+        id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
+        supplier_id TEXT NOT NULL REFERENCES suppliers(id) ON DELETE CASCADE,
+        channel_name TEXT NOT NULL,
+        created_at TIMESTAMPTZ DEFAULT NOW(),
+        CONSTRAINT uq_supplier_channel UNIQUE(supplier_id, channel_name)
+      );
+      CREATE INDEX IF NOT EXISTS idx_supplier_channels_supp ON supplier_channels(supplier_id);
+      CREATE INDEX IF NOT EXISTS idx_supplier_channels_chan ON supplier_channels(channel_name);
+    `);
+
+    // 19. Supplier Payables
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS supplier_payables (
+        id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
+        payable_reference TEXT NOT NULL UNIQUE,
+        billing_entity_id TEXT NOT NULL REFERENCES billing_entities(id) ON DELETE RESTRICT,
+        supplier_id TEXT NOT NULL REFERENCES suppliers(id) ON DELETE RESTRICT,
+        schedule_id TEXT REFERENCES media_schedules(id) ON DELETE SET NULL,
+        client_id TEXT REFERENCES clients(id) ON DELETE SET NULL,
+        broadcast_channel TEXT,
+        campaign_name TEXT,
+        supplier_bill_number TEXT,
+        bill_date DATE NOT NULL,
+        due_date DATE NOT NULL,
+        description TEXT,
+        subtotal NUMERIC NOT NULL DEFAULT 0,
+        discount NUMERIC DEFAULT 0,
+        tax_applicable BOOLEAN DEFAULT false,
+        tax_rate NUMERIC DEFAULT 0,
+        tax_amount NUMERIC DEFAULT 0,
+        total_amount NUMERIC NOT NULL DEFAULT 0,
+        total_paid NUMERIC NOT NULL DEFAULT 0,
+        outstanding_amount NUMERIC NOT NULL DEFAULT 0,
+        status TEXT NOT NULL DEFAULT 'unpaid',
+        notes TEXT,
+        attachment_url TEXT,
+        created_by TEXT,
+        created_at TIMESTAMPTZ DEFAULT NOW(),
+        updated_at TIMESTAMPTZ DEFAULT NOW()
+      );
+      CREATE INDEX IF NOT EXISTS idx_supplier_payables_entity ON supplier_payables(billing_entity_id);
+      CREATE INDEX IF NOT EXISTS idx_supplier_payables_supplier ON supplier_payables(supplier_id);
+      CREATE INDEX IF NOT EXISTS idx_supplier_payables_schedule ON supplier_payables(schedule_id);
+      CREATE INDEX IF NOT EXISTS idx_supplier_payables_status ON supplier_payables(status);
+      CREATE INDEX IF NOT EXISTS idx_supplier_payables_due_date ON supplier_payables(due_date);
+    `);
+
+    // 20. Supplier Payment Transactions
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS supplier_payment_transactions (
+        id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
+        payable_id TEXT NOT NULL REFERENCES supplier_payables(id) ON DELETE CASCADE,
+        payment_reference TEXT NOT NULL,
+        payment_date DATE NOT NULL,
+        amount NUMERIC NOT NULL,
+        payment_method TEXT NOT NULL DEFAULT 'bank_transfer',
+        reference_number TEXT,
+        cheque_id TEXT REFERENCES cheques(id) ON DELETE SET NULL,
+        bank_account_info TEXT,
+        receipt_url TEXT,
+        notes TEXT,
+        status TEXT NOT NULL DEFAULT 'posted',
+        recorded_by TEXT,
+        void_reason TEXT,
+        voided_at TIMESTAMPTZ,
+        voided_by TEXT,
+        created_at TIMESTAMPTZ DEFAULT NOW(),
+        updated_at TIMESTAMPTZ DEFAULT NOW()
+      );
+      CREATE INDEX IF NOT EXISTS idx_supplier_pmts_payable ON supplier_payment_transactions(payable_id);
+      CREATE INDEX IF NOT EXISTS idx_supplier_pmts_cheque ON supplier_payment_transactions(cheque_id);
+      CREATE INDEX IF NOT EXISTS idx_supplier_pmts_date ON supplier_payment_transactions(payment_date);
+    `);
+
     await client.query('COMMIT');
     isDbInitialized = true;
     console.log('✅ PostgreSQL Schema Verified & Initialized successfully.');

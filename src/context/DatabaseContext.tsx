@@ -12,6 +12,9 @@ import {
   BrandingSettings,
   UserRole,
   MediaSchedule,
+  Supplier,
+  SupplierPayable,
+  SupplierPaymentTransaction,
 } from "@/types";
 import { storage } from "@/lib/storage";
 
@@ -24,6 +27,8 @@ interface DatabaseContextType {
   cheques: Cheque[];
   vendors: Vendor[];
   schedules: MediaSchedule[];
+  suppliers: Supplier[];
+  supplierPayables: SupplierPayable[];
   branding: BrandingSettings | null;
   userRole: UserRole;
   isSuperAdmin: boolean;
@@ -50,6 +55,14 @@ interface DatabaseContextType {
   deleteSchedule: (id: string) => Promise<boolean>;
   convertScheduleToInvoice: (scheduleId: string, mode?: 'itemized' | 'package', options?: any) => Promise<Invoice>;
   saveBranding: (branding: Partial<BrandingSettings>) => Promise<BrandingSettings>;
+  saveSupplier: (supplier: Partial<Supplier>) => Promise<Supplier>;
+  deleteSupplier: (id: string) => Promise<boolean>;
+  saveSupplierPayable: (payable: Partial<SupplierPayable>) => Promise<SupplierPayable>;
+  deleteSupplierPayable: (id: string) => Promise<boolean>;
+  recordSupplierPayment: (arg1: any, arg2?: any) => Promise<SupplierPaymentTransaction>;
+  voidSupplierPayment: (transactionId: string, reason?: string) => Promise<boolean>;
+  refreshSuppliers: () => Promise<void>;
+  refreshSupplierPayables: () => Promise<void>;
 }
 
 const DatabaseContext = createContext<DatabaseContextType | null>(null);
@@ -63,6 +76,8 @@ export function DatabaseProvider({ children }: { children: React.ReactNode }) {
   const [cheques, setCheques] = useState<Cheque[]>([]);
   const [vendors, setVendors] = useState<Vendor[]>([]);
   const [schedules, setSchedules] = useState<MediaSchedule[]>([]);
+  const [suppliers, setSuppliers] = useState<Supplier[]>([]);
+  const [supplierPayables, setSupplierPayables] = useState<SupplierPayable[]>([]);
   const [branding, setBranding] = useState<BrandingSettings | null>(null);
   const [userRole, setUserRoleState] = useState<UserRole>("admin");
   const [isLoading, setIsLoading] = useState<boolean>(true);
@@ -125,6 +140,8 @@ export function DatabaseProvider({ children }: { children: React.ReactNode }) {
       setCheques(data.cheques || []);
       setVendors(data.vendors || []);
       setSchedules(data.mediaSchedules || []);
+      setSuppliers(data.suppliers || []);
+      setSupplierPayables(data.supplierPayables || []);
       setBranding(data.branding || null);
 
       // Cache snapshot into storage for offline PWA fallback
@@ -665,6 +682,120 @@ export function DatabaseProvider({ children }: { children: React.ReactNode }) {
     return createdInvoice;
   };
 
+  const refreshSuppliers = async () => {
+    try {
+      const res = await fetch("/api/suppliers", { cache: "no-store" });
+      if (res.ok) {
+        const json = await res.json();
+        if (json.success && json.data) setSuppliers(json.data);
+      }
+    } catch (e) {
+      console.error("Failed to refresh suppliers:", e);
+    }
+  };
+
+  const refreshSupplierPayables = async () => {
+    try {
+      const res = await fetch("/api/supplier-payables", { cache: "no-store" });
+      if (res.ok) {
+        const json = await res.json();
+        if (json.success && json.data) setSupplierPayables(json.data);
+      }
+    } catch (e) {
+      console.error("Failed to refresh supplier payables:", e);
+    }
+  };
+
+  const saveSupplier = async (supplier: Partial<Supplier>): Promise<Supplier> => {
+    const res = await fetch("/api/suppliers", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(supplier),
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.error || "Failed to save supplier");
+    }
+    const json = await res.json();
+    const saved = json.data as Supplier;
+    setSuppliers((prev) => [saved, ...prev.filter((s) => s.id !== saved.id)]);
+    return saved;
+  };
+
+  const deleteSupplier = async (id: string): Promise<boolean> => {
+    try {
+      await fetch(`/api/suppliers?id=${id}`, { method: "DELETE" });
+    } catch (e) {
+      console.warn("Backend delete supplier failed:", e);
+    }
+    setSuppliers((prev) => prev.filter((s) => s.id !== id));
+    return true;
+  };
+
+  const saveSupplierPayable = async (payable: Partial<SupplierPayable>): Promise<SupplierPayable> => {
+    const res = await fetch("/api/supplier-payables", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payable),
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.error || "Failed to save supplier payable");
+    }
+    const json = await res.json();
+    const saved = json.data as SupplierPayable;
+    setSupplierPayables((prev) => [saved, ...prev.filter((p) => p.id !== saved.id)]);
+    return saved;
+  };
+
+  const deleteSupplierPayable = async (id: string): Promise<boolean> => {
+    try {
+      await fetch(`/api/supplier-payables?id=${id}`, { method: "DELETE" });
+    } catch (e) {
+      console.warn("Backend delete supplier payable failed:", e);
+    }
+    setSupplierPayables((prev) => prev.filter((p) => p.id !== id));
+    return true;
+  };
+
+  const recordSupplierPayment = async (arg1: any, arg2?: any): Promise<SupplierPaymentTransaction> => {
+    let paymentData: any = {};
+    if (typeof arg1 === 'string' && arg2) {
+      paymentData = { ...arg2, payableId: arg1 };
+    } else {
+      paymentData = { ...arg1 };
+    }
+    const res = await fetch(`/api/supplier-payables/${paymentData.payableId}/payments`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(paymentData),
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.error || "Failed to record payment");
+    }
+    const json = await res.json();
+    const tx = json.data as SupplierPaymentTransaction;
+
+    await refreshSupplierPayables();
+    return tx;
+  };
+
+  const voidSupplierPayment = async (transactionId: string, reason?: string): Promise<boolean> => {
+    const res = await fetch(
+      `/api/supplier-payables/void/payments?transactionId=${transactionId}&reason=${encodeURIComponent(
+        reason || "Voided by user"
+      )}`,
+      { method: "DELETE" }
+    );
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.error || "Failed to void payment");
+    }
+    await refreshSupplierPayables();
+    return true;
+  };
+
   return (
     <DatabaseContext.Provider
       value={{
@@ -676,6 +807,8 @@ export function DatabaseProvider({ children }: { children: React.ReactNode }) {
         cheques,
         vendors,
         schedules,
+        suppliers,
+        supplierPayables,
         branding,
         userRole,
         isSuperAdmin,
@@ -702,6 +835,14 @@ export function DatabaseProvider({ children }: { children: React.ReactNode }) {
         deleteSchedule,
         convertScheduleToInvoice,
         saveBranding,
+        saveSupplier,
+        deleteSupplier,
+        saveSupplierPayable,
+        deleteSupplierPayable,
+        recordSupplierPayment,
+        voidSupplierPayment,
+        refreshSuppliers,
+        refreshSupplierPayables,
       }}
     >
       {children}

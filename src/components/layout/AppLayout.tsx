@@ -24,7 +24,8 @@ import {
   ChevronRight,
   Sparkles,
   CreditCard,
-  Radio
+  Radio,
+  Wallet
 } from "lucide-react";
 import { storage } from "@/lib/storage";
 import { useDatabase } from "@/context/DatabaseContext";
@@ -84,6 +85,7 @@ export function AppLayout({ children, fullWidth = false }: AppLayoutProps) {
     { name: "Clients", href: "/clients", icon: Users },
     { name: "Invoices", href: "/invoices", icon: FileText },
     { name: "Media Scheduling", href: "/schedules", icon: Radio },
+    { name: "Supplier Payments", href: "/supplier-payments", icon: Wallet },
     { name: "Cheque Management", href: "/cheques", icon: CreditCard },
     { name: "Create Invoice", href: "/invoices/new", icon: PlusCircle, isPrimary: true },
     { name: "Monthly History", href: "/history", icon: CalendarDays },

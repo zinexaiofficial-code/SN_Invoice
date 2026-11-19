@@ -818,5 +818,140 @@ export interface MediaScheduleKPIs {
   totalSpots: number;
 }
 
+// ==========================================
+// SUPPLIER PAYMENTS & PAYABLES MODULE TYPES
+// ==========================================
+
+export type SupplierType = 'tv' | 'radio' | 'media_house' | 'print' | 'digital' | 'other';
+export type SupplierStatus = 'active' | 'inactive';
+export type SupplierPaymentStatus = 'unpaid' | 'partially_paid' | 'fully_paid' | 'paid' | 'overdue' | 'void';
+export type SupplierPaymentMethod = 'bank_transfer' | 'cash' | 'cheque' | 'online_transfer' | 'other';
+export type SupplierTransactionStatus = 'posted' | 'void' | 'voided';
+
+export interface Supplier {
+  id: string;
+  supplierCode: string;
+  name: string;
+  type: SupplierType;
+  businessAddress?: string;
+  contactPerson?: string;
+  phone?: string;
+  email?: string;
+  taxNumber?: string;
+  bankName?: string;
+  branch?: string;
+  accountName?: string;
+  accountNumber?: string;
+  swiftCode?: string;
+  paymentTerms?: string;
+  status: SupplierStatus;
+  notes?: string;
+  channelNames?: string[];
+  createdAt: string;
+  updatedAt: string;
+
+  // Interoperability aliases
+  code?: string;
+  address?: string;
+  defaultBank?: string;
+  defaultBranch?: string;
+  defaultAccountNo?: string;
+  defaultAccountName?: string;
+  channels?: string[];
+  isActive?: boolean;
+}
+
+export interface SupplierPaymentTransaction {
+  id: string;
+  payableId: string;
+  paymentReference: string;
+  paymentDate: string; // YYYY-MM-DD
+  amount: number;
+  paymentMethod: SupplierPaymentMethod;
+  referenceNumber?: string;
+  chequeId?: string;
+  bankAccountInfo?: string;
+  receiptUrl?: string;
+  notes?: string;
+  status: SupplierTransactionStatus;
+  recordedBy?: string;
+  paidBy?: string;
+  voidReason?: string;
+  voidedAt?: string;
+  voidedBy?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface SupplierPayable {
+  id: string;
+  payableReference: string;
+  billingEntityId: string;
+  supplierId: string;
+  scheduleId?: string;
+  clientId?: string;
+  broadcastChannel?: string;
+  campaignName?: string;
+  supplierBillNumber?: string;
+  billDate: string;
+  dueDate: string;
+  description?: string;
+  subtotal: number;
+  discount: number;
+  taxApplicable: boolean;
+  taxRate: number;
+  taxAmount: number;
+  totalAmount: number;
+  totalPaid: number;
+  outstandingAmount: number;
+  status: SupplierPaymentStatus;
+  notes?: string;
+  attachmentUrl?: string;
+  createdBy?: string;
+  createdAt: string;
+  updatedAt: string;
+
+  // Joined presentation fields
+  supplier?: Supplier;
+  scheduleNumber?: string;
+  clientName?: string;
+  billingEntityName?: string;
+  payments?: SupplierPaymentTransaction[];
+  isOverdue?: boolean;
+
+  // Interoperability aliases
+  payableNumber?: string;
+  mediaScheduleId?: string;
+  broadcastChannelName?: string;
+  channelName?: string;
+  supplierInvoiceNumber?: string;
+  transactions?: SupplierPaymentTransaction[];
+  paymentTerms?: string;
+  supplierSnapshot?: {
+    name: string;
+    code?: string;
+    type?: string;
+    contactPerson?: string;
+    phone?: string;
+    email?: string;
+    bankName?: string;
+    bankBranch?: string;
+    accountNumber?: string;
+  };
+}
+
+export interface SupplierPayableKPIs {
+  totalPayables: number;
+  totalAmount: number;
+  totalPaid: number;
+  outstandingAmount: number;
+  overdueAmount: number;
+  overdueCount: number;
+  unpaidCount: number;
+  partiallyPaidCount: number;
+  fullyPaidCount: number;
+}
+
+
 
 

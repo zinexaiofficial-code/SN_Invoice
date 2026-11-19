@@ -22,6 +22,7 @@ import {
   AlertCircle,
   Building2,
   Tv,
+  Wallet,
 } from 'lucide-react';
 import { useDatabase } from '@/context/DatabaseContext';
 import { MediaSchedule, MediaScheduleStatus } from '@/types';
@@ -29,10 +30,11 @@ import { AppLayout } from '@/components/layout/AppLayout';
 import { ScheduleImportModal } from '@/components/schedules/ScheduleImportModal';
 import { ScheduleToInvoiceModal } from '@/components/schedules/ScheduleToInvoiceModal';
 import { SchedulePdfViewer } from '@/components/schedules/SchedulePdfViewer';
+import { SupplierPayableModal } from '@/components/supplier-payments/SupplierPayableModal';
 
 export default function MediaSchedulingPage() {
   const router = useRouter();
-  const { schedules, billingEntities, clients, invoices, deleteSchedule, userRole, isSuperAdmin } = useDatabase();
+  const { schedules, billingEntities, clients, invoices, supplierPayables, deleteSchedule, userRole, isSuperAdmin } = useDatabase();
 
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedEntityId, setSelectedEntityId] = useState('all');
@@ -43,6 +45,7 @@ export default function MediaSchedulingPage() {
   const [isImportModalOpen, setIsImportModalOpen] = useState(false);
   const [convertTargetSchedule, setConvertTargetSchedule] = useState<MediaSchedule | null>(null);
   const [pdfPreviewSchedule, setPdfPreviewSchedule] = useState<MediaSchedule | null>(null);
+  const [supplierPayableTargetSchedule, setSupplierPayableTargetSchedule] = useState<MediaSchedule | null>(null);
 
   // Filter schedules
   const filteredSchedules = useMemo(() => {
@@ -378,6 +381,7 @@ export default function MediaSchedulingPage() {
                   <th className="px-4 py-3 text-center">SPOTS</th>
                   <th className="px-4 py-3 text-right">COMMERCIAL (LKR)</th>
                   <th className="px-4 py-3 text-center">INVOICE LINK</th>
+                  <th className="px-4 py-3 text-center">SUPPLIER PAYMENT</th>
                   <th className="px-4 py-3 text-center">STATUS</th>
                   <th className="px-4 py-3 text-right">ACTIONS</th>
                 </tr>
@@ -479,6 +483,62 @@ export default function MediaSchedulingPage() {
                         )}
                       </td>
 
+                      {/* Supplier Payment Status */}
+                      <td className="px-4 py-3 text-center">
+                        {(() => {
+                          const linked = supplierPayables.filter((p) => p.mediaScheduleId === schedule.id);
+                          if (linked.length === 0) {
+                            return (
+                              <button
+                                type="button"
+                                onClick={() => setSupplierPayableTargetSchedule(schedule)}
+                                className="inline-flex items-center gap-1 text-[11px] text-slate-400 hover:text-emerald-700 font-medium transition-colors"
+                                title="Set Broadcaster Cost"
+                              >
+                                <span className="px-1.5 py-0.5 rounded bg-slate-100 text-slate-500 font-semibold text-[10px]">
+                                  Not Set
+                                </span>
+                              </button>
+                            );
+                          }
+
+                          const totalCost = linked.reduce((sum, p) => sum + p.totalAmount, 0);
+                          const totalPaid = linked.reduce((sum, p) => sum + p.totalPaid, 0);
+                          const isAllPaid = totalPaid >= totalCost && totalCost > 0;
+                          const hasOverdue = linked.some(
+                            (p) =>
+                              p.outstandingAmount > 0 &&
+                              p.dueDate &&
+                              new Date(p.dueDate) < new Date(new Date().toDateString())
+                          );
+
+                          return (
+                            <div className="space-y-0.5">
+                              {isAllPaid ? (
+                                <span className="inline-flex items-center gap-0.5 px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-800">
+                                  <CheckCircle className="w-3 h-3" /> Fully Paid
+                                </span>
+                              ) : hasOverdue ? (
+                                <span className="inline-flex items-center gap-0.5 px-2 py-0.5 rounded-full text-[10px] font-bold bg-rose-100 text-rose-800">
+                                  <AlertCircle className="w-3 h-3" /> Overdue
+                                </span>
+                              ) : totalPaid > 0 ? (
+                                <span className="inline-flex items-center gap-0.5 px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 text-amber-800">
+                                  <Clock className="w-3 h-3" /> Partially Paid
+                                </span>
+                              ) : (
+                                <span className="inline-flex items-center gap-0.5 px-2 py-0.5 rounded-full text-[10px] font-bold bg-slate-100 text-slate-700">
+                                  <Clock className="w-3 h-3" /> Unpaid
+                                </span>
+                              )}
+                              <span className="block font-mono text-[10px] text-slate-500 font-bold">
+                                Cost: Rs. {totalCost.toLocaleString()}
+                              </span>
+                            </div>
+                          );
+                        })()}
+                      </td>
+
                       {/* Status */}
                       <td className="px-4 py-3 text-center">
                         {getStatusBadge(schedule.status, isConverted)}
@@ -487,6 +547,16 @@ export default function MediaSchedulingPage() {
                       {/* Actions */}
                       <td className="px-4 py-3 text-right whitespace-nowrap">
                         <div className="flex items-center justify-end space-x-1">
+                          {/* Manage Supplier Payment */}
+                          <button
+                            type="button"
+                            onClick={() => setSupplierPayableTargetSchedule(schedule)}
+                            className="p-1.5 text-slate-500 hover:text-emerald-700 rounded-lg hover:bg-emerald-50 transition-colors"
+                            title="Manage Supplier Payment"
+                          >
+                            <Wallet className="w-4 h-4" />
+                          </button>
+
                           {/* View/Edit */}
                           <Link
                             href={`/schedules/${schedule.id}`}
@@ -557,6 +627,18 @@ export default function MediaSchedulingPage() {
           billingEntity={billingEntities.find((e) => e.id === pdfPreviewSchedule.billingEntityId)}
           client={clients.find((c) => c.id === pdfPreviewSchedule.clientId)}
           onClose={() => setPdfPreviewSchedule(null)}
+        />
+      )}
+
+      {/* Supplier Payable Modal */}
+      {supplierPayableTargetSchedule && (
+        <SupplierPayableModal
+          preselectedSchedule={supplierPayableTargetSchedule}
+          isOpen={Boolean(supplierPayableTargetSchedule)}
+          onClose={() => setSupplierPayableTargetSchedule(null)}
+          onSaved={() => {
+            setSupplierPayableTargetSchedule(null);
+          }}
         />
       )}
       </div>

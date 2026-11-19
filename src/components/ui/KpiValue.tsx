@@ -2,7 +2,8 @@ import React from "react";
 import { formatKpiCurrency } from "@/lib/utils";
 
 interface KpiCurrencyValueProps {
-  amount: number | string | null | undefined;
+  amount?: number | string | null | undefined;
+  value?: number | string | null | undefined;
   className?: string;
   colorClass?: string;
   size?: "sm" | "md" | "lg";
@@ -15,11 +16,13 @@ interface KpiCurrencyValueProps {
  */
 export function KpiCurrencyValue({
   amount,
+  value,
   className = "",
   colorClass = "text-navy-950",
   size = "md",
 }: KpiCurrencyValueProps) {
-  const { prefix, whole, decimal, full } = formatKpiCurrency(amount);
+  const resolvedAmount = amount !== undefined ? amount : value;
+  const { prefix, whole, decimal, full } = formatKpiCurrency(resolvedAmount);
 
   // Adapt font sizes dynamically based on number length
   const numLength = whole.length;
