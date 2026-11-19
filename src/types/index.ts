@@ -741,13 +741,19 @@ export interface MediaScheduleTemplateSettings {
   headerTitle?: string;
   agencyName?: string;
   showSignatures?: boolean;
-  preparedByName?: string;
-  approvedByName?: string;
-  clientContactName?: string;
+  showPreparedBy?: boolean;
+  showAuthorizedSignatory?: boolean;
+  showClientAcceptance?: boolean;
+  preparedByTitle?: string;
+  authorizedSignatoryTitle?: string;
+  clientAcceptanceTitle?: string;
+  showAmountInWords?: boolean;
+  showBankDetails?: boolean;
   showDailyTotals?: boolean;
   showWeekDayLetters?: boolean;
   showNotes?: boolean;
   fontSize?: 'compact' | 'standard' | 'large';
+  scalePercent?: number;
   customNotes?: string;
 }
 
